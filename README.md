@@ -44,10 +44,18 @@ SQL Server 账套，把当月的销售明细汇总成 `data/YYYY-MM.json`，接�
 
 ```bat
 pip install openpyxl pyodbc
-copy autocount.example.json autocount.json
+python scripts\autocount_setup.py
 ```
 
-编辑 `autocount.json`，填入：
+`autocount_setup.py` 会自动侦测这台机器上的 ODBC 驱动、逐一尝试常见的 SQL Server
+执行个体（AutoCount 预设是 `A2006`）、列出所有账套让你选，然后把连线资料写进
+`autocount.json`。若已知位址，也可以在提示时直接输入（照抄 AutoCount 登入画面上的
+Server 名称即可）。
+
+连不上时它会印出实际的错误与该检查什么，不会只丢一个 traceback。
+
+要手动设定的话：`copy autocount.example.json autocount.json` 后自行编辑。
+`autocount.json` 内含：
 
 | 项目 | 说明 |
 |---|---|
@@ -56,7 +64,7 @@ copy autocount.example.json autocount.json
 | `channel_rules` | 报表的渠道栏（Shopee / Lazada / Cash / 水工 / Southern / Tiktok / Shopify）在 AutoCount 里怎么分辨 —— 通常是不同的客户账号（Debtor Code） |
 | `brand_filter` | 第二张汇总表 (Hemos & Hemos X only) 的品牌筛选条件 |
 
-`autocount.json` 内含密码，已被 `.gitignore` 排除，不会被提交。
+`autocount.json` 内含密码（用 Windows 验证则没有），已被 `.gitignore` 排除，不会被提交。
 
 ### 先确认账套结构
 
@@ -118,6 +126,7 @@ Jan–Dec 的表和折线图就自动往前推进一格，不需要手动重打�
 autocount.example.json         # AutoCount 连线与栏位对应设定（复制为 autocount.json）
 config.json                    # SKU 清单、渠道栏位、月份名称等设定
 run_monthly.bat                # 每月一键（Windows 工作排程器用这个）
+scripts/autocount_setup.py     # 自动侦测 SQL Server 与账套，产生 autocount.json
 scripts/autocount_discover.py  # 探查 AutoCount 账套结构
 scripts/autocount_extract.py   # 从 AutoCount 抓当月数据 → data/YYYY-MM.json
 scripts/generate_report.py     # data/YYYY-MM.json → Excel 报表
