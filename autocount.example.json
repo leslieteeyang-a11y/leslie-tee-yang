@@ -1,0 +1,71 @@
+{
+  "_说明": "复制为 autocount.json 并填入你们的实际设定。autocount.json 已被 .gitignore 排除，不会上传（内含数据库密码）。",
+
+  "connection": {
+    "_说明": "AutoCount 的数据是存在 Microsoft SQL Server 里的。server 通常是「电脑名\\A2006」或「电脑名\\SQLEXPRESS」；database 是账套名（AutoCount 里 Tools > Manage Account Book 可看到，常见如 AED_XXXX）。",
+    "driver": "ODBC Driver 17 for SQL Server",
+    "server": "SERVERPC\\A2006",
+    "database": "AED_YOURCOMPANY",
+    "username": "sa",
+    "password": "",
+    "trusted_connection": false
+  },
+
+  "schema": {
+    "_说明": "AutoCount 各版本表名/栏名略有不同。先跑 scripts/autocount_discover.py 确认，再修改这里。",
+    "sales_documents": [
+      {"header": "Invoice",    "detail": "InvoiceDtl",    "sign": 1},
+      {"header": "CashSale",   "detail": "CashSaleDtl",   "sign": 1},
+      {"header": "CreditNote", "detail": "CreditNoteDtl", "sign": -1}
+    ],
+    "header_key": "DocKey",
+    "header_date": "DocDate",
+    "header_debtor": "DebtorCode",
+    "detail_item": "ItemCode",
+    "detail_qty": "Qty",
+    "detail_amount": "SubTotal",
+    "item_table": "Item",
+    "item_code": "ItemCode",
+    "item_category": "ItemGroup",
+    "item_brand": "Brand"
+  },
+
+  "channel_rules": {
+    "_说明": "报表的渠道栏怎么从 AutoCount 分辨出来。mode 可选 debtor / project / salesagent / custom_sql。debtor 模式下，把每个渠道对应的客户账号（Debtor Code）列出来即可。",
+    "mode": "debtor",
+    "default_channel": "cash",
+    "map": {
+      "shopee":   ["300-S001"],
+      "lazada":   ["300-L001"],
+      "cash":     ["300-C001"],
+      "online":   [],
+      "referral": [],
+      "shuigong": [],
+      "southern": [],
+      "tiktok":   [],
+      "shopify":  []
+    },
+    "custom_sql_case": "CASE WHEN h.DebtorCode LIKE '300-S%' THEN 'shopee' ELSE 'cash' END"
+  },
+
+  "brand_filter": {
+    "_说明": "第二张汇总表 (Hemos & Hemos X only) 的品牌筛选条件。",
+    "field": "Brand",
+    "values": ["HEMOS", "HEMOS X"]
+  },
+
+  "sku_trend": {
+    "_说明": "SKU 趋势表要追踪的 SKU 与其对应的渠道，沿用 config.json 的 sku_trend_list。",
+    "platform_channels": {"SHOPEE": "shopee", "LAZADA": "lazada"}
+  },
+
+  "top10": {
+    "_说明": "TOP 10 UP = 当月销量最高的十个 SKU；TOP 10 DOWN = 当月有销售但销量最低的十个 SKU（与你 8 月纸本的呈现方式一致）。",
+    "count": 10
+  },
+
+  "manual_sections": {
+    "_说明": "以下数据不在 AutoCount 里（属于 Shopee/Lazada 后台的广告与直播数据），脚本会保留 data/YYYY-MM.json 内既有的数值，不会覆盖。",
+    "keys": ["ads", "live_sales"]
+  }
+}
