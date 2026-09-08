@@ -75,3 +75,11 @@ pip install openpyxl
 （Shopee / Lazada SKU 月度表、Shopee Ads、Lazada Sponsored Affiliate、Shopee AMS、
 Live Sales、Top 10 Up/Down、Sales Forecast Summary 两张表）。
 2026-01 至 2026-07 只含 SKU 月度销量（纸本上只有这部分历史数据）。
+
+## 待核对的一笔数字
+
+`SHOPEE ADS` 四周的 ADS EXPENSE 加总为 **36,064.50**，但纸本 TOTAL 印的是 **36,064.70**，
+相差 0.20 —— 推测是 `9~15` 那周应为 `8812.90` 而不是 `8812.70`（纸本该处不易辨认）。
+请核对后修改 `data/2026-08.json`，报表的 TOTAL 是公式会自动更新。
+除此之外，两张销售汇总的所有渠道合计、QTY、SKU 各月合计、Lazada 广告合计，
+都与纸本报表**完全一致**。
