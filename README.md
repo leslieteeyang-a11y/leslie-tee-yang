@@ -31,11 +31,14 @@ python3 scripts/generate_report.py 2026-09   # 3. 生成报表
 SQL Server 账套，把当月的销售明细汇总成 `data/YYYY-MM.json`，接着
 `scripts/generate_report.py` 产生 Excel。
 
-### 装在哪里
+### 你们的情况（已确认）
 
-AutoCount 装在你们办公室的 Windows 机器上，数据库在内网，所以**这套脚本必须
-装在那台连得到 AutoCount 的电脑上**（或同一个内网的任一台电脑）。装好以后可以
-完全自动，不需要人工介入。
+- AutoCount 装在**办公室本地服务器**上，数据库在内网 → 脚本要装在那台机器上
+  （或同内网的任一台电脑），再用 Windows 工作排程器每月自动跑。
+- 渠道栏（Shopee / Lazada / Cash / 水工 / Southern / Tiktok / Shopify）靠**不同的
+  客户账号（Debtor Code）**分辨 → `channel_rules.mode` 用预设的 `debtor` 即可。
+- Shopee / Lazada 订单**逐笔含 SKU 明细**入账 → SKU 月度趋势表与 Top 10
+  都能直接从 AutoCount 算出来，不必另外从卖家后台汇出。
 
 ### 安装（只做一次）
 
