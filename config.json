@@ -1,0 +1,26 @@
+{
+  "year": 2026,
+  "months": ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"],
+  "sku_trend_list": [
+    "HM-YKR05-MB",
+    "HM-YKR06-MB",
+    "HM-YKR07-MB",
+    "HM-YKR08-MB",
+    "HM-YKS4050-MB",
+    "HM-YKS5070-MB",
+    "HM-YKS7090-MB"
+  ],
+  "sku_trend_platforms": ["SHOPEE", "LAZADA"],
+  "forecast_channels": [
+    {"key": "shopee",   "header": "Shopee RM"},
+    {"key": "lazada",   "header": "Lazada RM"},
+    {"key": "cash",     "header": "Cash RM"},
+    {"key": "online",   "header": "Online RM"},
+    {"key": "referral", "header": "Referral RM"},
+    {"key": "shuigong", "header": "水工 RM"},
+    {"key": "southern", "header": "Southern RM"},
+    {"key": "tiktok",   "header": "Tiktok RM"},
+    {"key": "shopify",  "header": "Shopify RM"}
+  ],
+  "live_sales_channels": ["SHOPEE", "TIKTOK"]
+}

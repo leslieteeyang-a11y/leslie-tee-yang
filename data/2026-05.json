@@ -1,0 +1,23 @@
+{
+  "month": "2026-05",
+  "sku_qty": {
+    "SHOPEE": {
+      "HM-YKR05-MB": 0,
+      "HM-YKR06-MB": 7,
+      "HM-YKR07-MB": 1,
+      "HM-YKR08-MB": 0,
+      "HM-YKS4050-MB": 2,
+      "HM-YKS5070-MB": 6,
+      "HM-YKS7090-MB": 10
+    },
+    "LAZADA": {
+      "HM-YKR05-MB": 0,
+      "HM-YKR06-MB": 2,
+      "HM-YKR07-MB": 2,
+      "HM-YKR08-MB": 4,
+      "HM-YKS4050-MB": 1,
+      "HM-YKS5070-MB": 0,
+      "HM-YKS7090-MB": 1
+    }
+  }
+}

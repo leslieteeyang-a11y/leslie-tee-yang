@@ -1,0 +1,66 @@
+{
+  "_说明": "复制本文件为 data/YYYY-MM.json（例如 data/2026-09.json），填入当月数字后执行 python3 scripts/generate_report.py YYYY-MM。没有数字的项目填 0 或整段留空即可，报表会显示为空白。",
+  "month": "2026-09",
+
+  "_sku_qty": "SKU 月度销量（趋势表用）。SKU 清单在 config.json 的 sku_trend_list 维护。",
+  "sku_qty": {
+    "SHOPEE": {
+      "HM-YKR05-MB": 0,
+      "HM-YKR06-MB": 0,
+      "HM-YKR07-MB": 0,
+      "HM-YKR08-MB": 0,
+      "HM-YKS4050-MB": 0,
+      "HM-YKS5070-MB": 0,
+      "HM-YKS7090-MB": 0
+    },
+    "LAZADA": {
+      "HM-YKR05-MB": 0,
+      "HM-YKR06-MB": 0,
+      "HM-YKR07-MB": 0,
+      "HM-YKR08-MB": 0,
+      "HM-YKS4050-MB": 0,
+      "HM-YKS5070-MB": 0,
+      "HM-YKS7090-MB": 0
+    }
+  },
+
+  "_ads": "广告数据，按周区间填写；% 由报表自动计算（expense ÷ gmv）。",
+  "ads": {
+    "SHOPEE ADS": [
+      {"period": "1~8",   "gmv": 0, "expense": 0},
+      {"period": "9~15",  "gmv": 0, "expense": 0},
+      {"period": "16~22", "gmv": 0, "expense": 0},
+      {"period": "23~30", "gmv": 0, "expense": 0}
+    ],
+    "LAZADA SPONSORED AFFILIATE": [
+      {"period": "1~8",   "gmv": 0, "expense": 0},
+      {"period": "9~15",  "gmv": 0, "expense": 0},
+      {"period": "16~22", "gmv": 0, "expense": 0},
+      {"period": "23~30", "gmv": 0, "expense": 0}
+    ],
+    "SHOPEE AMS": [
+      {"period": "1~30", "gmv": 0, "expense": 0}
+    ]
+  },
+
+  "live_sales": {
+    "SHOPEE": 0,
+    "TIKTOK": 0
+  },
+
+  "_top10": "当月销量上升 / 下降前十，按顺序排列；TOTAL 由报表自动相加。",
+  "top10_up": [
+    {"sku": "HM-XXXX-MS", "lazada": 0, "shopee": 0}
+  ],
+  "top10_down": [
+    {"sku": "HM-XXXX-MS", "lazada": 0, "shopee": 0}
+  ],
+
+  "_forecast": "销售汇总。渠道键：shopee / lazada / cash / online / referral / shuigong(水工) / southern / tiktok / shopify。用不到的渠道直接省略该键。Total RM、Contribution、Avg. Price 由报表公式计算。",
+  "forecast_all": [
+    {"category": "Sanitary", "qty": 0, "shopee": 0.00, "lazada": 0.00, "cash": 0.00, "online": 0.00, "referral": 0.00, "shuigong": 0.00, "southern": 0.00, "tiktok": 0.00, "shopify": 0.00}
+  ],
+  "forecast_hemos": [
+    {"category": "Sanitary", "qty": 0, "shopee": 0.00, "lazada": 0.00, "cash": 0.00, "online": 0.00, "referral": 0.00, "shuigong": 0.00, "southern": 0.00, "tiktok": 0.00, "shopify": 0.00}
+  ]
+}
