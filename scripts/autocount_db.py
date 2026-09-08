@@ -14,8 +14,9 @@ def load_autocount_config():
     if not CONFIG_PATH.exists():
         sys.exit(
             "找不到 autocount.json。\n"
-            "请先复制模板：copy autocount.example.json autocount.json\n"
-            "然后填入 SQL Server 连线资料。"
+            "请先执行：python scripts\\autocount_setup.py\n"
+            "（它会自动侦测 SQL Server 与账套并产生这个档案）\n"
+            "要手动设定的话：copy autocount.example.json autocount.json 后自行编辑。"
         )
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
@@ -23,8 +24,17 @@ def load_autocount_config():
 def connect(cfg):
     try:
         import pyodbc
-    except ImportError:
-        sys.exit("缺少 pyodbc，请先执行：pip install pyodbc")
+    except ImportError as exc:
+        msg = str(exc)
+        if "No module named" in msg:
+            sys.exit("缺少 pyodbc，请先执行：pip install pyodbc")
+        sys.exit(
+            f"pyodbc 已安装，但载入失败：{msg}\n\n"
+            "这代表缺的是系统层的 ODBC 元件，不是 pyodbc 本身，再 pip install 也没用：\n"
+            "  Windows：安装微软的「ODBC Driver 17 for SQL Server」\n"
+            "  Linux  ：apt install unixodbc  （或 yum install unixODBC）\n"
+            "  macOS  ：brew install unixodbc"
+        )
 
     c = cfg["connection"]
     parts = [f"DRIVER={{{c['driver']}}}", f"SERVER={c['server']}", f"DATABASE={c['database']}"]

@@ -74,8 +74,17 @@ def choose(prompt, options):
 def main():
     try:
         import pyodbc                                    # noqa: F401
-    except ImportError:
-        sys.exit("缺少 pyodbc，请先执行：pip install pyodbc")
+    except ImportError as exc:
+        msg = str(exc)
+        if "No module named" in msg:
+            sys.exit("缺少 pyodbc，请先执行：pip install pyodbc")
+        sys.exit(
+            f"pyodbc 已安装，但载入失败：{msg}\n\n"
+            "这代表缺的是系统层的 ODBC 元件，不是 pyodbc 本身，再 pip install 也没用：\n"
+            "  Windows：安装微软的「ODBC Driver 17 for SQL Server」\n"
+            "  Linux  ：apt install unixodbc  （或 yum install unixODBC）\n"
+            "  macOS  ：brew install unixodbc"
+        )
 
     drv = drivers()
     if not drv:
