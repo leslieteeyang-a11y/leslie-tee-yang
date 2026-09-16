@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}HomeWorks{% endblock %} · HomeWorks 营运入口</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="side">
+  <div class="brand">HomeWorks<br><small>营运入口 v0.1</small></div>
+  <a href="/inventory" class="{{ 'on' if nav == 'inventory' else '' }}">库存</a>
+  <a href="/deliveries" class="{{ 'on' if nav == 'deliveries' else '' }}">出货跟踪</a>
+  <div class="src">资料来源：{{ source_name }}</div>
+</nav>
+<main>
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

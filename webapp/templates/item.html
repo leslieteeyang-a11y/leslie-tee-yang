@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ item.code }}{% endblock %}
+{% block body %}
+<p class="crumb"><a href="/inventory">库存</a> › {{ item.code }}</p>
+<h1>{{ item.code }} <small>{{ item.description }}</small></h1>
+<div class="tiles">
+  <div class="tile"><b>{{ '%.0f'|format(item.on_hand) }}</b><span>现有 ({{ item.uom }})</span></div>
+  <div class="tile"><b>{{ '%.0f'|format(item.reserved) }}</b><span>订单待出</span></div>
+  <div class="tile {{ 'warn' if item.is_low else '' }}"><b>{{ '%.0f'|format(item.available) }}</b><span>可用{{ '（低于安全库存 %.0f）'|format(item.reorder_level) if item.is_low else '' }}</span></div>
+</div>
+<div class="cols">
+  <section>
+    <h2>各仓库存</h2>
+    <table>
+      <thead><tr><th>仓库</th><th class="r">数量</th></tr></thead>
+      <tbody>
+      {% for l in locations %}<tr><td>{{ l.location }}</td><td class="r">{{ '%.0f'|format(l.qty) }}</td></tr>
+      {% else %}<tr><td colspan="2" class="empty">无库存</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>近 {{ days }} 天异动</h2>
+    <table>
+      <thead><tr><th>日期</th><th>类型</th><th>单号</th><th>对象</th><th class="r">数量</th></tr></thead>
+      <tbody>
+      {% for m in moves %}
+      <tr><td>{{ m.doc_date }}</td><td>{{ m.doc_type }}</td>
+          <td>{% if m.doc_type == '出货' %}<a href="/deliveries/{{ m.doc_no }}">{{ m.doc_no }}</a>{% else %}{{ m.doc_no }}{% endif %}</td>
+          <td>{{ m.party }}</td>
+          <td class="r {{ 'neg' if m.qty < 0 else 'pos' }}">{{ '%+.0f'|format(m.qty) }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">近 {{ days }} 天没有异动</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

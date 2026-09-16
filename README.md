@@ -1,4 +1,57 @@
-# 月度电商报表 / Monthly E-Commerce Report
+# HomeWorks 营运系统
+
+两个部分，共用同一套 AutoCount 连线与渠道对照：
+
+1. **营运入口（网页）** —— 库存 / 出货跟踪，v0.1，只读
+2. **月度电商报表** —— 从 AutoCount 抓数自动产生 Excel 月报
+
+---
+
+# 一、营运入口（网页）
+
+库存查询、各仓库存、近期异动、出货单跟踪（待出货 / 部分出货 / 已完成）。
+
+| 库存 | 出货跟踪 |
+|---|---|
+| ![](docs/screenshots/inventory.png) | ![](docs/screenshots/deliveries.png) |
+| ![](docs/screenshots/item.png) | ![](docs/screenshots/delivery.png) |
+
+## 启动
+
+```bat
+pip install -r requirements.txt
+run_web.bat
+```
+
+浏览器开 `http://localhost:8000`；同网络的其他电脑、手机用这台机器的 IP（例如 `http://192.168.1.20:8000`）。
+
+## 资料来源：两套实作，随时切换
+
+| 来源 | 什么时候用 | 怎么选 |
+|---|---|---|
+| **示范资料 (mock)** | 开发、测试、展示；任何机器都能跑 | 没有 `autocount.json` 时自动使用，或 `set HW_SOURCE=mock` |
+| **AutoCount（只读）** | 正式使用 | 有 `autocount.json` 时自动使用（先跑 `scripts\autocount_setup.py`） |
+
+网页层只认 `webapp/sources/__init__.py` 定义的介面，不直接碰资料库，所以两边行为一致；
+示范资料是固定种子产生的，每次内容相同，测试都建立在它上面。
+
+**AutoCount 那套的 SQL（`webapp/sources/autocount.py`）用的是常见表名，尚未在你们账套上验证**，
+跑过 `autocount_discover.py` 后依结果修正；也可以在 `autocount.json` 加 `"webapp": {"sql": {...}}` 覆写任何一条，不必改程式。
+这个模组只做 SELECT，不会对 AutoCount 写入任何东西。
+
+## 测试
+
+```bat
+python -m pytest tests -q
+```
+
+## JSON API
+
+`/api/inventory`、`/api/deliveries` 回传与网页相同的资料（给之后的手机版或其他系统用）；`/health` 显示目前接的资料来源。
+
+---
+
+# 二、月度电商报表 / Monthly E-Commerce Report
 
 把每个月要整理的那几张表（Shopee / Lazada SKU 趋势、广告、直播、Top 10、销售汇总）
 做成一条可重复执行的流水线：**直接从 AutoCount 抓数 → 自动排版、自动算合计与图表 → 输出 Excel。**
@@ -123,6 +176,13 @@ Jan–Dec 的表和折线图就自动往前推进一格，不需要手动重打�
 ## 文件结构
 
 ```
+webapp/                        # 营运入口网页（FastAPI）
+  main.py                      #   路由
+  sources/                     #   资料来源：__init__(介面) / mock(示范) / autocount(只读)
+  templates/ static/           #   页面与样式
+tests/test_webapp.py           # 网页与资料层的行为测试
+run_web.bat                    # 启动网页
+docs/screenshots/              # 画面截图
 autocount.example.json         # AutoCount 连线与栏位对应设定（复制为 autocount.json）
 config.json                    # SKU 清单、渠道栏位、月份名称等设定
 run_monthly.bat                # 每月一键（Windows 工作排程器用这个）

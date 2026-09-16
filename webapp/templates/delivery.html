@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ d.doc_no }}{% endblock %}
+{% block body %}
+<p class="crumb"><a href="/deliveries">出货跟踪</a> › {{ d.doc_no }}</p>
+<h1>{{ d.doc_no }} <span class="st st-{{ d.status }}">{{ d.status_label }}</span></h1>
+<dl class="kv">
+  <dt>日期</dt><dd>{{ d.doc_date }}</dd>
+  <dt>客户</dt><dd>{{ d.debtor_name }} <span class="muted">({{ d.debtor_code }})</span></dd>
+  <dt>渠道</dt><dd>{{ d.channel }}</dd>
+  <dt>备注</dt><dd>{{ d.remark or '—' }}</dd>
+</dl>
+<table>
+  <thead><tr><th>SKU</th><th>品名</th><th class="r">数量</th><th class="r">已出货</th><th class="r">未出货</th></tr></thead>
+  <tbody>
+  {% for l in d.lines %}
+  <tr class="{{ 'low' if l.delivered < l.qty and d.status != 'cancelled' else '' }}">
+    <td><a href="/inventory/{{ l.item_code }}">{{ l.item_code }}</a></td>
+    <td>{{ l.description }}</td>
+    <td class="r">{{ '%.0f'|format(l.qty) }}</td>
+    <td class="r">{{ '%.0f'|format(l.delivered) }}</td>
+    <td class="r"><b>{{ '%.0f'|format(l.qty - l.delivered) }}</b></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><th colspan="2">合计</th><th class="r">{{ '%.0f'|format(d.total_qty) }}</th><th class="r">{{ '%.0f'|format(d.delivered_qty) }}</th><th class="r">{{ '%.0f'|format(d.total_qty - d.delivered_qty) }}</th></tr></tfoot>
+</table>
+{% endblock %}

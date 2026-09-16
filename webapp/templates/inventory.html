@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}库存{% endblock %}
+{% block body %}
+<h1>库存</h1>
+<div class="tiles">
+  <div class="tile"><b>{{ rows|length }}</b><span>显示项目</span></div>
+  <div class="tile warn"><b>{{ low_count }}</b><span>低于安全库存</span></div>
+  <div class="tile"><b>{{ '%.0f'|format(total_reserved) }}</b><span>订单待出货数量</span></div>
+</div>
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="搜寻 SKU 或品名">
+  <select name="group">
+    <option value="">全部类别</option>
+    {% for g in groups %}<option value="{{ g }}" {{ 'selected' if g == group else '' }}>{{ g }}</option>{% endfor %}
+  </select>
+  <label><input type="checkbox" name="low" value="1" {{ 'checked' if low_only else '' }}> 只看低库存</label>
+  <button>筛选</button>
+</form>
+<table>
+  <thead><tr><th>SKU</th><th>品名</th><th>类别</th><th>品牌</th><th class="r">现有</th><th class="r">订单待出</th><th class="r">可用</th><th class="r">安全库存</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr class="{{ 'low' if r.is_low else '' }}">
+    <td><a href="/inventory/{{ r.code }}">{{ r.code }}</a></td>
+    <td>{{ r.description }}</td><td>{{ r.group }}</td><td>{{ r.brand }}</td>
+    <td class="r">{{ '%.0f'|format(r.on_hand) }}</td>
+    <td class="r">{{ '%.0f'|format(r.reserved) }}</td>
+    <td class="r"><b>{{ '%.0f'|format(r.available) }}</b></td>
+    <td class="r">{{ '%.0f'|format(r.reorder_level) }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="empty">没有符合的项目</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

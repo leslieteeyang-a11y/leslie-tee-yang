@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}出货跟踪{% endblock %}
+{% block body %}
+<h1>出货跟踪</h1>
+<div class="tiles">
+  <div class="tile warn"><b>{{ counts.open }}</b><span>待出货</span></div>
+  <div class="tile"><b>{{ counts.partial }}</b><span>部分出货</span></div>
+  <div class="tile ok"><b>{{ counts.done }}</b><span>已完成（近 {{ days }} 天）</span></div>
+</div>
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="单号 / 客户 / SKU">
+  <select name="status">
+    <option value="">全部状态</option>
+    {% for k, v in status_labels.items() %}<option value="{{ k }}" {{ 'selected' if k == status else '' }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="channel">
+    <option value="">全部渠道</option>
+    {% for c in channels %}<option value="{{ c }}" {{ 'selected' if c == channel else '' }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="days">
+    {% for d in (7, 30, 90) %}<option value="{{ d }}" {{ 'selected' if d == days else '' }}>近 {{ d }} 天</option>{% endfor %}
+  </select>
+  <button>筛选</button>
+</form>
+<table>
+  <thead><tr><th>单号</th><th>日期</th><th>客户</th><th>渠道</th><th>状态</th><th class="r">项目</th><th class="r">已出 / 总数</th><th>备注</th></tr></thead>
+  <tbody>
+  {% for d in rows %}
+  <tr>
+    <td><a href="/deliveries/{{ d.doc_no }}">{{ d.doc_no }}</a></td>
+    <td>{{ d.doc_date }}</td><td>{{ d.debtor_name }}</td><td>{{ d.channel }}</td>
+    <td><span class="st st-{{ d.status }}">{{ d.status_label }}</span></td>
+    <td class="r">{{ d.lines|length }}</td>
+    <td class="r">{{ '%.0f'|format(d.delivered_qty) }} / {{ '%.0f'|format(d.total_qty) }}</td>
+    <td class="muted">{{ d.remark }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="empty">没有符合的出货单</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
