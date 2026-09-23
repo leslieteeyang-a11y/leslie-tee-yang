@@ -12,6 +12,8 @@ AutoCount 的资料在内网的 SQL Server（具名执行个体常为 `A2006`）
 
 ## 第一次打开时要做的事（照顺序）
 
+（使用者也可能已经双击过 `setup_autocount.bat`，它等于第 1、3、4 步；先看有没有 `autocount.json` 与 `discovery_*.txt`。）
+
 1. `python -m pip install -r requirements.txt`
 2. `run_web.bat` → 浏览器开 http://localhost:8000 看到库存页（示范资料）即通过。
    确认后停掉它（关视窗或 Ctrl+C）。

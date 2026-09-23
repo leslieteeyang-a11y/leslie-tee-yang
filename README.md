@@ -97,9 +97,15 @@ SQL Server 账套，把当月的销售明细汇总成 `data/YYYY-MM.json`，接�
 
 ### 安装（只做一次）
 
+最简单：**双击 `setup_autocount.bat`**。它会依序装套件、侦测 SQL Server、让你选账套、
+探查账套结构，最后用记事本打开 `discovery_*.txt`——把内容贴给 Claude 即可。
+
+手动的话等同于：
+
 ```bat
-pip install openpyxl pyodbc
+pip install -r requirements.txt
 python scripts\autocount_setup.py
+python scripts\autocount_discover.py
 ```
 
 `autocount_setup.py` 会自动侦测这台机器上的 ODBC 驱动、逐一尝试常见的 SQL Server
