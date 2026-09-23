@@ -7,7 +7,10 @@ import random
 from datetime import date, timedelta
 from typing import Optional
 
-from . import Delivery, DeliveryLine, LocationQty, Movement, StockRow
+from collections import defaultdict
+
+from . import (ChannelSales, Delivery, DeliveryLine, LocationQty, Movement,
+               SalesPoint, SkuSales, StockRow)
 
 LOCATIONS = ["HQ", "WH2", "SHOWROOM"]
 CHANNELS = ["Shopee", "Lazada", "Cash", "水工", "Southern", "Tiktok", "Shopify"]
@@ -108,6 +111,23 @@ class MockSource:
             remark = rnd.choice(["", "", "客户要求下午送", "安装师傅：阿明", "自取"])
             self._dos[doc_no] = Delivery(doc_no, d, dcode, dname, channel, status, remark, lines)
 
+        # 销售明细：最近 180 天，(日期, 渠道, SKU, 数量, 金额)。Shopee 量大单价低，
+        # Southern（经销商）单大量多，其余零散。
+        self._sales: list[tuple[date, str, str, float, float]] = []
+        price = {code: float(rnd.choice([18, 29, 45, 79, 120, 189, 260, 420, 690, 1280]))
+                 for code in codes}
+        weight = {"Shopee": 7, "Lazada": 2, "Cash": 3, "水工": 2, "Southern": 1,
+                  "Tiktok": 1, "Shopify": 1}
+        chan_pool = [c for c, w in weight.items() for _ in range(w)]
+        for back in range(180):
+            d = self.today - timedelta(days=back)
+            n_orders = rnd.randint(4, 14) if d.weekday() < 6 else rnd.randint(1, 5)
+            for _ in range(n_orders):
+                chan = rnd.choice(chan_pool)
+                for code in rnd.sample(codes, rnd.randint(1, 3)):
+                    qty = float(rnd.randint(1, 4) if chan != "Southern" else rnd.randint(5, 40))
+                    self._sales.append((d, chan, code, qty, round(qty * price[code], 2)))
+
         # 库存异动：出货单已出货的部分 + 随机进货
         for do in self._dos.values():
             for l in do.lines:
@@ -163,3 +183,39 @@ class MockSource:
 
     def channels(self) -> list[str]:
         return list(CHANNELS)
+
+    # ---------------------------------------------------------------- 仪表板
+    def _window(self, days: int):
+        cutoff = self.today - timedelta(days=days - 1)
+        return [r for r in self._sales if r[0] >= cutoff]
+
+    def sales_daily(self, days: int = 30) -> list[SalesPoint]:
+        acc: dict[date, list] = defaultdict(lambda: [0.0, 0.0, set()])
+        for d, chan, code, qty, amt in self._window(days):
+            acc[d][0] += amt; acc[d][1] += qty; acc[d][2].add((d, chan, code))
+        out = []
+        for back in range(days - 1, -1, -1):
+            d = self.today - timedelta(days=back)
+            a = acc.get(d, [0.0, 0.0, set()])
+            out.append(SalesPoint(d, round(a[0], 2), a[1], len(a[2])))
+        return out
+
+    def sales_by_channel(self, days: int = 30) -> list[ChannelSales]:
+        acc: dict[str, list] = defaultdict(lambda: [0.0, 0.0, 0])
+        for d, chan, code, qty, amt in self._window(days):
+            acc[chan][0] += amt; acc[chan][1] += qty; acc[chan][2] += 1
+        return sorted((ChannelSales(c, round(v[0], 2), v[1], v[2]) for c, v in acc.items()),
+                      key=lambda x: -x.amount)
+
+    def sales_by_group(self, days: int = 30) -> list[tuple[str, float]]:
+        acc: dict[str, float] = defaultdict(float)
+        for d, chan, code, qty, amt in self._window(days):
+            acc[self._items[code].group] += amt
+        return sorted(((g, round(v, 2)) for g, v in acc.items()), key=lambda x: -x[1])
+
+    def top_skus(self, days: int = 30, n: int = 10) -> list[SkuSales]:
+        acc: dict[str, list] = defaultdict(lambda: [0.0, 0.0])
+        for d, chan, code, qty, amt in self._window(days):
+            acc[code][0] += qty; acc[code][1] += amt
+        rows = [SkuSales(c, self._items[c].description, v[0], round(v[1], 2)) for c, v in acc.items()]
+        return sorted(rows, key=lambda x: (-x.qty, x.code))[:n]

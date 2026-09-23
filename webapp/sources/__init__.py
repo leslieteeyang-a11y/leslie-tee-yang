@@ -93,6 +93,30 @@ class Delivery:
         return STATUS_LABEL.get(self.status, self.status)
 
 
+@dataclass
+class SalesPoint:
+    day: date
+    amount: float
+    qty: float
+    orders: int
+
+
+@dataclass
+class ChannelSales:
+    channel: str
+    amount: float
+    qty: float
+    orders: int
+
+
+@dataclass
+class SkuSales:
+    code: str
+    description: str
+    qty: float
+    amount: float
+
+
 class DataSource(Protocol):
     name: str
 
@@ -105,6 +129,12 @@ class DataSource(Protocol):
                    days: int = 30) -> list[Delivery]: ...
     def delivery(self, doc_no: str) -> Optional[Delivery]: ...
     def channels(self) -> list[str]: ...
+
+    # 仪表板（销售来自 Invoice / CashSale − CreditNote，与月报口径一致）
+    def sales_daily(self, days: int = 30) -> list[SalesPoint]: ...
+    def sales_by_channel(self, days: int = 30) -> list[ChannelSales]: ...
+    def sales_by_group(self, days: int = 30) -> list[tuple[str, float]]: ...
+    def top_skus(self, days: int = 30, n: int = 10) -> list[SkuSales]: ...
 
 
 _source: Optional[DataSource] = None

@@ -41,18 +41,18 @@ AutoCount 的资料在内网的 SQL Server（具名执行个体常为 `A2006`）
 
 | 路径 | 用途 |
 |---|---|
-| `webapp/` | 营运入口网页（FastAPI + Jinja2）。`sources/` 是资料层：`__init__` 定义介面，`mock` 示范资料，`autocount` 只读实作 |
+| `webapp/` | 营运入口网页（FastAPI + Jinja2；`charts.py` 是纯 SVG 图表）。`sources/` 是资料层：`__init__` 定义介面，`mock` 示范资料，`autocount` 只读实作 |
 | `scripts/autocount_*.py` | 连线、侦测、探查、抓月报数据 |
 | `scripts/generate_report.py` | `data/YYYY-MM.json` → `output/月度报表_YYYY-MM.xlsx` |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，14 个行为测试（用示范资料，不需 AutoCount） |
+| `tests/` | `python -m pytest tests -q`，17 个行为测试（用示范资料，不需 AutoCount） |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）
 
 1. 真实数据接通（上面第 3–7 步）
-2. 管理仪表板：各渠道销量、Top / Bottom SKU、低库存警示（月报逻辑搬上网页）
+2. ~~管理仪表板~~（已完成 v0.2：`/dashboard`，销售来自 Invoice+CashSale−CreditNote）
 3. 登入与权限（开到办公室以外之前必须有）
 4. 写入 AutoCount 的 POC：一条流程、测试账套、证明失败时不留半张单、重跑不重复过账
 

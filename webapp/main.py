@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .charts import bar_chart, line_chart
 from .sources import STATUS_LABEL, get_source
 
 HERE = Path(__file__).resolve().parent
@@ -29,7 +30,36 @@ def render(request: Request, name: str, nav: str, **ctx):
 
 @app.get("/")
 def home():
-    return RedirectResponse("/inventory")
+    return RedirectResponse("/dashboard")
+
+
+# ---------------------------------------------------------------- 仪表板
+@app.get("/dashboard")
+def dashboard(request: Request, days: int = 30):
+    days = days if days in (7, 30, 90) else 30
+    src = get_source()
+    daily = src.sales_daily(days)
+    prev = src.sales_daily(days * 2)[:days]          # 前一个同长度区间
+    amount = sum(p.amount for p in daily)
+    prev_amount = sum(p.amount for p in prev)
+    orders = sum(p.orders for p in daily)
+    channels = src.sales_by_channel(days)
+    groups = src.sales_by_group(days)
+    skus = src.top_skus(days, 10)
+    low = src.stock_list(low_only=True)
+    open_do = sorted(src.deliveries(status="open", days=365), key=lambda d: d.doc_date)
+    kpi = dict(amount=amount, orders=orders,
+               avg_order=amount / orders if orders else 0.0,
+               delta=(amount - prev_amount) / prev_amount if prev_amount else 0.0,
+               open_do=len(open_do), low_stock=len(low))
+    return render(request, "dashboard.html", "dashboard", days=days, kpi=kpi, daily=daily,
+                  channels=channels, skus=skus, low=low[:10], open_do=open_do[:10],
+                  daily_svg=line_chart(daily, title=f"近 {days} 天每日销售额"),
+                  channel_svg=bar_chart([(c.channel, c.amount, f"{c.channel} · RM {c.amount:,.0f} · {c.orders} 张单")
+                                         for c in channels], title="各渠道销售额"),
+                  group_svg=bar_chart([(g, v, f"{g} · RM {v:,.0f}") for g, v in groups], title="各类别销售额"),
+                  sku_svg=bar_chart([(s.code, s.qty, f"{s.code} {s.description} · {s.qty:.0f} 件 · RM {s.amount:,.0f}")
+                                     for s in skus], value_fmt=lambda v: f"{v:.0f} 件", title="Top 10 SKU"))
 
 
 @app.get("/health")

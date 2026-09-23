@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}仪表板{% endblock %}
+{% block body %}
+<div class="head">
+  <h1>仪表板</h1>
+  <form class="filters" method="get">
+    {% for d in (7, 30, 90) %}<a class="pill {{ 'on' if d == days else '' }}" href="/dashboard?days={{ d }}">近 {{ d }} 天</a>{% endfor %}
+  </form>
+</div>
+
+<div class="tiles">
+  <div class="tile big"><b>RM {{ '{:,.0f}'.format(kpi.amount) }}</b><span>销售额（近 {{ days }} 天）</span>
+    <em class="{{ 'up' if kpi.delta >= 0 else 'down' }}">{{ '%+.0f%%'|format(kpi.delta * 100) }} vs 前 {{ days }} 天</em></div>
+  <div class="tile"><b>{{ kpi.orders }}</b><span>订单数</span></div>
+  <div class="tile"><b>RM {{ '{:,.0f}'.format(kpi.avg_order) }}</b><span>平均客单价</span></div>
+  <div class="tile {{ 'warn' if kpi.open_do else '' }}"><b>{{ kpi.open_do }}</b><span><a href="/deliveries?status=open">待出货单</a></span></div>
+  <div class="tile {{ 'warn' if kpi.low_stock else '' }}"><b>{{ kpi.low_stock }}</b><span><a href="/inventory?low=1">低库存 SKU</a></span></div>
+</div>
+
+<section class="card">
+  <h2>每日销售额</h2>
+  {{ daily_svg|safe }}
+  <details><summary>表格</summary>
+    <table class="compact"><thead><tr><th>日期</th><th class="r">销售额</th><th class="r">数量</th><th class="r">订单</th></tr></thead>
+    <tbody>{% for p in daily %}<tr><td>{{ p.day }}</td><td class="r">{{ '{:,.2f}'.format(p.amount) }}</td><td class="r">{{ '%.0f'|format(p.qty) }}</td><td class="r">{{ p.orders }}</td></tr>{% endfor %}</tbody></table>
+  </details>
+</section>
+
+<div class="cols2">
+  <section class="card">
+    <h2>各渠道销售额</h2>
+    {{ channel_svg|safe }}
+    <details><summary>表格</summary>
+      <table class="compact"><thead><tr><th>渠道</th><th class="r">销售额</th><th class="r">占比</th><th class="r">订单</th><th class="r">数量</th></tr></thead>
+      <tbody>{% for c in channels %}<tr><td>{{ c.channel }}</td><td class="r">{{ '{:,.2f}'.format(c.amount) }}</td><td class="r">{{ '%.1f%%'|format(c.amount / kpi.amount * 100 if kpi.amount else 0) }}</td><td class="r">{{ c.orders }}</td><td class="r">{{ '%.0f'|format(c.qty) }}</td></tr>{% endfor %}</tbody></table>
+    </details>
+  </section>
+  <section class="card">
+    <h2>各类别销售额</h2>
+    {{ group_svg|safe }}
+  </section>
+</div>
+
+<div class="cols2">
+  <section class="card">
+    <h2>Top 10 SKU（按数量）</h2>
+    {{ sku_svg|safe }}
+    <details><summary>表格</summary>
+      <table class="compact"><thead><tr><th>SKU</th><th>品名</th><th class="r">数量</th><th class="r">销售额</th></tr></thead>
+      <tbody>{% for s in skus %}<tr><td><a href="/inventory/{{ s.code }}">{{ s.code }}</a></td><td>{{ s.description }}</td><td class="r">{{ '%.0f'|format(s.qty) }}</td><td class="r">{{ '{:,.2f}'.format(s.amount) }}</td></tr>{% endfor %}</tbody></table>
+    </details>
+  </section>
+  <section class="card">
+    <h2>低库存 <small class="muted">可用量 ≤ 安全库存</small></h2>
+    <table class="compact">
+      <thead><tr><th>SKU</th><th>品名</th><th class="r">可用</th><th class="r">安全</th></tr></thead>
+      <tbody>{% for r in low %}<tr class="low"><td><a href="/inventory/{{ r.code }}">{{ r.code }}</a></td><td>{{ r.description }}</td><td class="r"><b>{{ '%.0f'|format(r.available) }}</b></td><td class="r">{{ '%.0f'|format(r.reorder_level) }}</td></tr>
+      {% else %}<tr><td colspan="4" class="empty">没有低于安全库存的项目</td></tr>{% endfor %}</tbody>
+    </table>
+    <h2 style="margin-top:16px">待出货 <small class="muted">最旧的在前</small></h2>
+    <table class="compact">
+      <thead><tr><th>单号</th><th>日期</th><th>客户</th><th class="r">未出</th></tr></thead>
+      <tbody>{% for d in open_do %}<tr><td><a href="/deliveries/{{ d.doc_no }}">{{ d.doc_no }}</a></td><td>{{ d.doc_date }}</td><td>{{ d.debtor_name }}</td><td class="r">{{ '%.0f'|format(d.total_qty - d.delivered_qty) }}</td></tr>
+      {% else %}<tr><td colspan="4" class="empty">没有待出货的单</td></tr>{% endfor %}</tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

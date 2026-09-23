@@ -15,7 +15,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from . import Delivery, DeliveryLine, LocationQty, Movement, StockRow
+from . import (ChannelSales, Delivery, DeliveryLine, LocationQty, Movement,
+               SalesPoint, SkuSales, StockRow)
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -57,6 +58,21 @@ DEFAULT_SQL = {
         FROM [GR] h JOIN [GRDtl] d ON d.DocKey = h.DocKey
         WHERE d.ItemCode = ? AND h.DocDate >= ? AND h.Cancelled = 'F'
         ORDER BY 1 DESC
+    """,
+    # 销售明细（仪表板用）：Invoice + CashSale − CreditNote，与月报口径一致。
+    # 回传：DocDate, DocKey, DebtorCode, ItemCode, Qty, Amount
+    "sales_lines": """
+        SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, d.Qty, d.SubTotal
+        FROM [Invoice] h JOIN [InvoiceDtl] d ON d.DocKey = h.DocKey
+        WHERE h.DocDate >= ? AND h.Cancelled = 'F'
+        UNION ALL
+        SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, d.Qty, d.SubTotal
+        FROM [CashSale] h JOIN [CashSaleDtl] d ON d.DocKey = h.DocKey
+        WHERE h.DocDate >= ? AND h.Cancelled = 'F'
+        UNION ALL
+        SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, -d.Qty, -d.SubTotal
+        FROM [CreditNote] h JOIN [CreditNoteDtl] d ON d.DocKey = h.DocKey
+        WHERE h.DocDate >= ? AND h.Cancelled = 'F'
     """,
     # 出货单表头
     "deliveries": """
@@ -182,6 +198,50 @@ class AutoCountSource:
 
     def channels(self) -> list[str]:
         return [self._chan_label.get(k, k) for k in dict.fromkeys(self._chan.values())]
+
+    # ---------------------------------------------------------------- 仪表板
+    def _sales(self, days: int):
+        since = date.today() - timedelta(days=days - 1)
+        return [(_d(dt), key, (dc or "").strip(), (item or "").strip(), float(q or 0), float(a or 0))
+                for dt, key, dc, item, q, a in self._q("sales_lines", (since, since, since))]
+
+    def sales_daily(self, days: int = 30) -> list[SalesPoint]:
+        from collections import defaultdict
+        acc: dict = defaultdict(lambda: [0.0, 0.0, set()])
+        for d, key, dc, item, q, a in self._sales(days):
+            acc[d][0] += a; acc[d][1] += q; acc[d][2].add(key)
+        out = []
+        for back in range(days - 1, -1, -1):
+            d = date.today() - timedelta(days=back)
+            v = acc.get(d, [0.0, 0.0, set()])
+            out.append(SalesPoint(d, round(v[0], 2), v[1], len(v[2])))
+        return out
+
+    def sales_by_channel(self, days: int = 30) -> list[ChannelSales]:
+        from collections import defaultdict
+        acc: dict = defaultdict(lambda: [0.0, 0.0, set()])
+        for d, key, dc, item, q, a in self._sales(days):
+            c = self._channel(dc)
+            acc[c][0] += a; acc[c][1] += q; acc[c][2].add(key)
+        return sorted((ChannelSales(c, round(v[0], 2), v[1], len(v[2])) for c, v in acc.items()),
+                      key=lambda x: -x.amount)
+
+    def sales_by_group(self, days: int = 30) -> list[tuple[str, float]]:
+        from collections import defaultdict
+        group = {r.code: r.group for r in self._all_stock()}
+        acc: dict = defaultdict(float)
+        for d, key, dc, item, q, a in self._sales(days):
+            acc[group.get(item, "(未分类)")] += a
+        return sorted(((g, round(v, 2)) for g, v in acc.items()), key=lambda x: -x[1])
+
+    def top_skus(self, days: int = 30, n: int = 10) -> list[SkuSales]:
+        from collections import defaultdict
+        desc = {r.code: r.description for r in self._all_stock()}
+        acc: dict = defaultdict(lambda: [0.0, 0.0])
+        for d, key, dc, item, q, a in self._sales(days):
+            acc[item][0] += q; acc[item][1] += a
+        rows = [SkuSales(c, desc.get(c, ""), v[0], round(v[1], 2)) for c, v in acc.items() if v[0] > 0]
+        return sorted(rows, key=lambda x: (-x.qty, x.code))[:n]
 
 
 def _base_config() -> dict:

@@ -76,9 +76,38 @@ def test_search_matches_code_description_and_sku_in_lines():
 
 
 # ------------------------------------------------------------- 网页层
-def test_home_redirects_to_inventory(client):
+def test_home_redirects_to_dashboard(client):
     r = client.get("/", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"] == "/inventory"
+    assert r.status_code in (302, 307) and r.headers["location"] == "/dashboard"
+
+
+# ------------------------------------------------------------- 仪表板
+def test_sales_summaries_agree_with_each_other():
+    src = MockSource()
+    for days in (7, 30, 90):
+        daily = src.sales_daily(days)
+        assert len(daily) == days and daily[-1].day == src.today
+        total = round(sum(p.amount for p in daily), 2)
+        assert round(sum(c.amount for c in src.sales_by_channel(days)), 2) == total
+        assert round(sum(v for _, v in src.sales_by_group(days)), 2) == total
+    top = src.top_skus(30, 10)
+    assert len(top) == 10 and all(top[i].qty >= top[i + 1].qty for i in range(9))
+
+
+def test_dashboard_page(client):
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    for text in ("每日销售额", "各渠道销售额", "Top 10 SKU", "低库存", "待出货", "<svg"):
+        assert text in r.text
+    assert client.get("/dashboard", params={"days": 7}).status_code == 200
+    assert "近 90 天" in client.get("/dashboard", params={"days": 999}).text   # 非法值回落到 30，页面仍含 90 天的切换钮
+
+
+def test_charts_handle_empty_and_extremes():
+    from webapp.charts import bar_chart, line_chart
+    assert "没有资料" in line_chart([]) and "没有资料" in bar_chart([])
+    svg = bar_chart([("A", 0, "a"), ("B", 0, "b")])           # 全为 0 不可除以零
+    assert svg.count("<rect") == 4
 
 
 def test_health_reports_source(client):

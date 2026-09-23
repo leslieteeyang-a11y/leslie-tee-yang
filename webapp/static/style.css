@@ -35,3 +35,20 @@ td a{color:var(--blue);text-decoration:none}
 dl.kv{display:grid;grid-template-columns:70px 1fr;gap:4px 12px;margin:0 0 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
 dl.kv dt{color:var(--muted)}dl.kv dd{margin:0}
 @media(max-width:800px){body{flex-direction:column}nav.side{width:auto;flex-direction:row;align-items:center}nav.side .src{margin-left:auto}main{padding:16px}.cols{grid-template-columns:1fr}.tiles{flex-wrap:wrap}}
+/* ---- 仪表板 ---- */
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
+.head h1{margin:0}
+.pill{padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);text-decoration:none;font-size:13px}
+.pill.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.tile.big b{font-size:26px}.tile em{display:block;font-style:normal;font-size:12px;margin-top:2px}
+.tile em.up{color:var(--ok)}.tile em.down{color:var(--red)}
+.tile span a{color:inherit;text-decoration:underline dotted}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0 0 16px}
+.card h2{font-size:14px;margin:0 0 10px}.card h2 small{font-weight:400;margin-left:6px}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.chart{width:100%;height:auto;display:block;font-family:inherit}
+.chart .pt circle{opacity:0;transition:opacity .1s}.chart .pt:hover circle{opacity:1}
+.chart .bar:hover rect{fill:#1d5fb0}
+details{margin-top:8px}summary{cursor:pointer;color:var(--muted);font-size:12px}
+table.compact{border:0;border-radius:0}table.compact th,table.compact td{padding:5px 8px;font-size:12.5px}
+@media(max-width:800px){.cols2{grid-template-columns:1fr}.head{flex-direction:column;align-items:flex-start}}
