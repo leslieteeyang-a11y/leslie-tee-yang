@@ -21,6 +21,20 @@ def load_autocount_config():
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
+def build_conn_str(driver: str, server: str, database: str,
+                   user: str | None = None, password: str | None = None) -> str:
+    """组 ODBC 连线字串。旧版「SQL Server」驱动不认得 TrustServerCertificate，
+    只有 ODBC Driver 17/18 才加（18 预设强制加密，没这个会连不上自签凭证的服务器）。"""
+    parts = [f"DRIVER={{{driver}}}", f"SERVER={server}", f"DATABASE={database}"]
+    if user:
+        parts += [f"UID={user}", f"PWD={password or ''}"]
+    else:
+        parts.append("Trusted_Connection=yes")
+    if "ODBC Driver" in driver:
+        parts.append("TrustServerCertificate=yes")
+    return ";".join(parts)
+
+
 def connect(cfg):
     try:
         import pyodbc
@@ -37,13 +51,9 @@ def connect(cfg):
         )
 
     c = cfg["connection"]
-    parts = [f"DRIVER={{{c['driver']}}}", f"SERVER={c['server']}", f"DATABASE={c['database']}"]
-    if c.get("trusted_connection"):
-        parts.append("Trusted_Connection=yes")
-    else:
-        parts += [f"UID={c['username']}", f"PWD={c['password']}"]
-    parts.append("TrustServerCertificate=yes")
-    conn_str = ";".join(parts)
+    conn_str = build_conn_str(c["driver"], c["server"], c["database"],
+                              None if c.get("trusted_connection") else c.get("username"),
+                              c.get("password"))
     try:
         return pyodbc.connect(conn_str, timeout=30)
     except Exception as exc:                       # noqa: BLE001

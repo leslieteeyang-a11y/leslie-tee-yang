@@ -20,6 +20,9 @@ import sys
 from getpass import getpass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from autocount_db import build_conn_str   # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "autocount.example.json"
 TARGET = ROOT / "autocount.json"
@@ -44,15 +47,41 @@ def drivers():
     return found
 
 
+def local_instances() -> list[str]:
+    """从 Windows 登录档读出这台机器上安装的 SQL Server 执行个体（最可靠的来源）。"""
+    try:
+        import winreg
+    except ImportError:
+        return []
+    found = []
+    for view in (0, getattr(__import__("winreg"), "KEY_WOW64_32KEY", 0)):
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                 r"SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL",
+                                 0, winreg.KEY_READ | view)
+        except OSError:
+            continue
+        i = 0
+        while True:
+            try:
+                name, _, _ = winreg.EnumValue(key, i)
+            except OSError:
+                break
+            found.append(name)
+            i += 1
+    servers = []
+    for name in found:
+        servers += ["." if name == "MSSQLSERVER" else f".\\{name}"]
+    return list(dict.fromkeys(servers))
+
+
 def try_connect(driver, server, user=None, password=None, database="master"):
     import pyodbc
-    parts = [f"DRIVER={{{driver}}}", f"SERVER={server}", f"DATABASE={database}",
-             "TrustServerCertificate=yes"]
-    if user:
-        parts += [f"UID={user}", f"PWD={password or ''}"]
-    else:
-        parts.append("Trusted_Connection=yes")
-    return pyodbc.connect(";".join(parts), timeout=5)
+    return pyodbc.connect(build_conn_str(driver, server, database, user, password), timeout=5)
+
+
+def short_err(exc) -> str:
+    return str(exc).split("]")[-1].strip()[:90]
 
 
 def list_databases(conn):
@@ -95,39 +124,47 @@ def main():
     if len(drv) > 1:
         print(f"（另外侦测到：{', '.join(drv[1:])}）")
 
-    servers = list(INSTANCES)
-    extra = input("\n若已知 SQL Server 位址请直接输入（例如 SERVERPC\\A2006），"
-                  "留空则自动尝试常见位址：\n> ").strip()
+    servers = local_instances()
+    if servers:
+        print(f"这台机器上装的 SQL Server 执行个体：{', '.join(servers)}")
+    servers += [x for x in INSTANCES if x not in servers]
+    extra = input("\n若已知 SQL Server 位址请直接输入（照抄 AutoCount 登入画面上的 Server），"
+                  "留空则自动尝试：\n> ").strip()
     if extra:
         servers.insert(0, extra)
 
     conn = server = user = password = None
-    for s in servers:
-        print(f"\n尝试 {s} …", end=" ")
-        try:                                             # 先试 Windows 验证
-            conn, server = try_connect(driver, s), s
-            print("成功（Windows 验证）")
+    print("\n第一轮：用 Windows 验证试每个位址…")
+    for s_ in servers:
+        try:
+            conn, server = try_connect(driver, s_), s_
+            print(f"  {s_} … 成功")
             break
         except Exception as exc:                         # noqa: BLE001
-            msg = str(exc).split("]")[-1].strip()[:90]
-            print(f"Windows 验证失败：{msg}")
-        try:                                             # 再试 sa
-            if user is None:
-                user = input("  改用 SQL 帐号登入，帐号（预设 sa，留空跳过此位址）: ").strip() or None
-                if user:
-                    password = getpass("  密码: ")
-            if user:
-                conn, server = try_connect(driver, s, user, password), s
-                print(f"  成功（SQL 帐号 {user}）")
-                break
-        except Exception as exc:                         # noqa: BLE001
-            print(f"  SQL 帐号失败：{str(exc).split(']')[-1].strip()[:90]}")
+            print(f"  {s_} … 失败：{short_err(exc)}")
+
+    if not conn:
+        print("\n第二轮：改用 SQL Server 帐号。")
+        print("  （这是 SQL Server 的登入，不是 AutoCount 的登入；AutoCount 安装时预设帐号是 sa。")
+        print("    不知道密码的话直接按 Enter 跳过，把这个画面截图给 Claude。）")
+        user = input("  帐号 [sa]: ").strip() or "sa"
+        password = getpass("  密码（输入时不会显示）: ")
+        if password:
+            for s_ in servers:
+                try:
+                    conn, server = try_connect(driver, s_, user, password), s_
+                    print(f"  {s_} … 成功（帐号 {user}）")
+                    break
+                except Exception as exc:                 # noqa: BLE001
+                    print(f"  {s_} … 失败：{short_err(exc)}")
+        else:
+            user = password = None
 
     if not conn:
         sys.exit("\n所有位址都连不上。请确认：\n"
                  "  - AutoCount 登入画面上显示的 Server 名称（照抄进来）\n"
                  "  - SQL Server 服务与 SQL Browser 服务是否启动\n"
-                 "  - 这台机器是否在 AutoCount 服务器所在的网络内\n"
+                 "  - SQL Server 的 sa 密码（问当初装 AutoCount 的人或经销商）\n"
                  "然后重跑本脚本，在第一个提示直接输入正确的 Server 名称。")
 
     dbs = list_databases(conn)
