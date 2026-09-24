@@ -1,13 +1,14 @@
 {
   "_说明": "复制为 autocount.json 并填入你们的实际设定。autocount.json 已被 .gitignore 排除，不会上传（内含数据库密码）。",
   "connection": {
-    "_说明": "AutoCount 的数据是存在 Microsoft SQL Server 里的。server 通常是「电脑名\\A2006」或「电脑名\\SQLEXPRESS」；database 是账套名（AutoCount 里 Tools > Manage Account Book 可看到，常见如 AED_XXXX）。",
+    "_说明": "AutoCount 的数据是存在 Microsoft SQL Server 里的。server 通常是「电脑名\\A2006」或「电脑名\\SQLEXPRESS」；database 是账套名（AutoCount 里 Tools > Manage Account Book 可看到，常见如 AED_XXXX）。 preferred_database：setup 时优先排第一、按 Enter 即选。",
     "driver": "ODBC Driver 17 for SQL Server",
     "server": "SERVERPC\\A2006",
     "database": "AED_YOURCOMPANY",
     "username": "sa",
     "password": "",
-    "trusted_connection": false
+    "trusted_connection": false,
+    "preferred_database": "AED_HOMEWORKS"
   },
   "schema": {
     "_说明": "已依 discovery（AutoCount 2.2）定稿。AutoCount 2.x 的单据表用两字母命名：IV 发票、CS 现销、CN 贷项、DO 送货单、SO 销售订单、GR 收货单；明细表加 DTL。 品牌不在 ItemBrand（空的），在 ItemType（HEMOS / HOMEGUARD / TENON…）。",

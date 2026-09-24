@@ -90,14 +90,23 @@ def list_databases(conn):
     return [r[0] for r in cur.fetchall() if r[0] not in SYSTEM_DBS]
 
 
-def choose(prompt, options):
+def choose(prompt, options, preferred=None):
+    """让使用者选一个；preferred 若在清单内就排第一，直接按 Enter 即选。也接受直接打名称。"""
+    if preferred and preferred in options:
+        options = [preferred] + [o for o in options if o != preferred]
     for i, o in enumerate(options, 1):
-        print(f"  {i}. {o}")
+        tag = "   ← 报表用这个，直接按 Enter" if preferred and o == preferred else ""
+        print(f"  {i}. {o}{tag}")
     while True:
-        raw = input(f"{prompt} [1-{len(options)}]: ").strip()
+        raw = input(f"{prompt} [1-{len(options)}，Enter = 1]: ").strip()
+        if not raw:
+            return options[0]
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return options[int(raw) - 1]
-        print("  请输入清单上的编号。")
+        hit = [o for o in options if o.upper() == raw.upper()]
+        if hit:
+            return hit[0]
+        print("  请输入清单上的编号，或直接按 Enter。")
 
 
 def main():
@@ -182,7 +191,9 @@ def main():
     likely = [d for d in dbs if d.upper().startswith("AED")] or dbs
     if likely is not dbs:
         print("（AutoCount 账套通常以 AED 开头）")
-    database = choose("请选择你们的账套", likely)
+    example = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    database = choose("请选择你们的账套", likely,
+                      preferred=example["connection"].get("preferred_database"))
 
     cfg = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     cfg["connection"].update({
