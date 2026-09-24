@@ -12,6 +12,8 @@ AutoCount 2.2 Basic（64-bit）。数据库在 `SERVER\A2006`，三个账套：
 `AED_HOMEGUARD`（HOMEGUARD SDN. BHD.，卖货给 HomeWorks 的公司）。
 从客户端连需要 sa 密码；在 SERVER 本机跑 Windows 验证可通。
 渠道靠客户账号（Debtor Code）分辨；订单逐笔含 SKU。
+**已确认**：报表的「Southern」渠道 = 卖给 HOMEWORKS (SOUTHERN) SDN BHD（JB 分公司；
+HOMEGUARD 账套内是 300-H002，HOMEWORKS 账套内的代号待 discovery）。
 
 已从 discovery 确认的结构（AED_HOMEGUARD，三个账套结构相同）：单据表两字母命名
 `IV`/`CS`/`CN`/`DO`/`SO`/`GR` + `DTL` 明细；`Item.ItemGroup`（nvarchar 8）、
@@ -19,7 +21,8 @@ AutoCount 2.2 Basic（64-bit）。数据库在 `SERVER\A2006`，三个账套：
 `StockDTL`（ItemCode/UOM/Location/Qty），仓库 HQ / JB / PRE (JB)；`ItemUOM.ReOLevel`
 安全库存；`Debtor.AccNo`/`CompanyName`/`DebtorType`；`DODTL`/`SODTL`/`IVDTL` 都有
 `TransferedQty`（已转出数量）。**尚待取得**：AED_HOMEWORKS 的渠道 Debtor Code、
-ItemGroup 与 ItemType 实际值（前两次 discovery 都选到 HOMEGUARD）。
+ItemGroup 与 ItemType 实际值（前三次 discovery 都选到 HOMEGUARD——清单按字母排序，1 是 HOMEGUARD；已改成
+HOMEWORKS 排第一、Enter 即选）。
 
 ## 第一次打开时要做的事（照顺序）
 
