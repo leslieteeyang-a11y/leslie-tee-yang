@@ -21,7 +21,7 @@ from getpass import getpass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autocount_db import build_conn_str   # noqa: E402
+from autocount_db import build_conn_str, is_report_book   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = ROOT / "autocount.example.json"
@@ -193,11 +193,12 @@ def main():
         print("（AutoCount 账套通常以 AED 开头）")
     example = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     preferred = example["connection"].get("preferred_database")
-    if preferred and preferred in likely and "--choose" not in sys.argv:
-        database = preferred
-        print(f"  → 自动选用报表账套 {preferred}（要换账套：python scripts\\autocount_setup.py --choose）")
+    matches = [d for d in likely if is_report_book(d, preferred)] if preferred else []
+    if len(matches) == 1 and "--choose" not in sys.argv:
+        database = matches[0]
+        print(f"  → 自动选用报表账套 {database}（要换账套：python scripts\\autocount_setup.py --choose）")
     else:
-        database = choose("请选择你们的账套", likely, preferred=preferred)
+        database = choose("请选择你们的账套", likely, preferred=matches[0] if matches else None)
 
     cfg = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     cfg["connection"].update({

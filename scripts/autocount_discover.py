@@ -113,8 +113,8 @@ def main():
     db = cfg["connection"]["database"]
     out = Path(__file__).resolve().parent.parent / f"discovery_{db}.txt"
     lines = [f"AutoCount 结构探查 — 账套 {db}", "=" * 70, ""]
-    if db.upper() != "AED_HOMEWORKS":
-        lines += [f"注意：这是 {db}，不是报表用的 AED_HOMEWORKS。若要渠道对照与类别值，请重跑 setup 并选 AED_HOMEWORKS。", ""]
+    if not db.upper().startswith("AED_HOMEWORKS"):
+        lines += [f"注意：这是 {db}，不是报表用的 AED_HOMEWORKSSB。若要渠道对照与类别值，请重跑 setup。", ""]
 
     cols, rows = fetch(conn, """
         SELECT TABLE_NAME, (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS c

@@ -74,6 +74,14 @@ def fetch(conn, sql, params=()):
     return cols, cur.fetchall()
 
 
+def is_report_book(name: str, preferred: str | None) -> bool:
+    """账套名相等、或以 preferred 开头（登入画面会截断，实际名称可能更长）。"""
+    if not preferred:
+        return True
+    n, p = (name or "").upper(), preferred.upper()
+    return n == p or n.startswith(p)
+
+
 def require_report_book(cfg):
     """账套不是报表用的那个就停下来，避免抓错账套还不自知。"""
     from pathlib import Path as _P
@@ -81,6 +89,6 @@ def require_report_book(cfg):
     example = _P(__file__).resolve().parent.parent / "autocount.example.json"
     want = _j.loads(example.read_text(encoding="utf-8"))["connection"].get("preferred_database")
     have = cfg["connection"]["database"]
-    if want and have.upper() != want.upper():
+    if want and not is_report_book(have, want):
         raise SystemExit(f"目前连的是 {have}，不是报表用的 {want}。\n"
                          f"请双击 setup_autocount.bat 重新设定（它会自动选 {want}）。")
