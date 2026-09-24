@@ -37,8 +37,9 @@ run_web.bat
 网页层只认 `webapp/sources/__init__.py` 定义的介面，不直接碰资料库，所以两边行为一致；
 示范资料是固定种子产生的，每次内容相同，测试都建立在它上面。
 
-**AutoCount 那套的 SQL（`webapp/sources/autocount.py`）用的是常见表名，尚未在你们账套上验证**，
-跑过 `autocount_discover.py` 后依结果修正；也可以在 `autocount.json` 加 `"webapp": {"sql": {...}}` 覆写任何一条，不必改程式。
+AutoCount 那套的 SQL（`webapp/sources/autocount.py`）已依 discovery 定稿为 AutoCount 2.x 的实际表名
+（`IV`/`CS`/`CN`/`DO`/`SO` + `DTL`、`StockDTL`、`Item.ItemBrand`）；仍可在 `autocount.json` 加
+`"webapp": {"sql": {...}}` 覆写任何一条，不必改程式。
 这个模组只做 SELECT，不会对 AutoCount 写入任何东西。
 
 ## 测试

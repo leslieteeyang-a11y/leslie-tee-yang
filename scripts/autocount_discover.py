@@ -25,9 +25,13 @@ from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
 
 INTEREST = ("invoice", "cashsale", "creditnote", "deliveryorder", "salesorder",
             "item", "debtor", "stock", "brand", "project", "salesagent",
-            "department", "uom")
+            "department", "uom", "location")
+# AutoCount 2.x 的单据表是两字母：这些用「完全相同」比对
+EXACT = {"IV", "IVDTL", "CS", "CSDTL", "CN", "CNDTL", "DO", "DODTL", "SO", "SODTL",
+         "QT", "QTDTL", "GR", "GRDTL", "PI", "PIDTL", "DN", "DNDTL", "Location"}
+SKIP_PREFIX = ("EInvoice", "MYEInvoice", "SGEInvoice")   # 电子发票表跟报表无关，跳过
 SAMPLE_ROWS = 3
-MAX_SAMPLE_TABLES = 12
+MAX_SAMPLE_TABLES = 24
 LOOKBACK_MONTHS = 6
 
 
@@ -121,7 +125,11 @@ def main():
     lines.append(f"资料表总数：{len(all_tables)}")
     lines.append("")
 
-    hits = [t for t in all_tables if any(k in t.lower() for k in INTEREST)]
+    hits = [t for t in all_tables
+            if (t in EXACT or any(k in t.lower() for k in INTEREST))
+            and not t.startswith(SKIP_PREFIX)]
+    # 单据表排最前面，样本资料才不会被其他表挤掉
+    hits.sort(key=lambda t: (t not in EXACT, t))
     lines.append(f"与销售/商品相关的资料表（{len(hits)} 张）：")
     lines.append(", ".join(hits))
     lines += ["", "=" * 70, "栏位明细", "=" * 70, ""]
@@ -164,6 +172,13 @@ def main():
     section_distinct(conn, s["item_table"], cfg["brand_filter"]["field"],
                      f"{s['item_table']}.{cfg['brand_filter']['field']} 的相异值"
                      "（应该看得到 Hemos / Hemos X）", lines)
+
+    lines += ["", "=" * 70, "其他商品分类栏（备用）", "=" * 70, ""]
+    for col in ("ItemType", "ItemCategory", "ItemClass"):
+        section_distinct(conn, s["item_table"], col, f"{s['item_table']}.{col} 的相异值", lines)
+        lines.append("")
+    lines += ["=" * 70, "仓库", "=" * 70, ""]
+    section_distinct(conn, "StockDTL", "Location", "StockDTL.Location 的相异值（有异动的仓库）", lines)
 
     out.write_text("\n".join(lines), encoding="utf-8")
     print(f"已产生：{out}")

@@ -7,8 +7,17 @@
 ## 这台电脑是什么
 
 若你在 Windows 上跑，这台很可能就是办公室里连得到 AutoCount 的机器。
-AutoCount 的资料在内网的 SQL Server（具名执行个体常为 `A2006`），账套是
-`AED_` 开头的数据库。渠道靠客户账号（Debtor Code）分辨；订单逐笔含 SKU。
+AutoCount 2.2 Basic（64-bit）。数据库在 `SERVER\A2006`，三个账套：
+`AED_HOMEWORKS`（HOMEWORKS SDN. BHD.，**报表用这个**）、`AED_HOMESOLUTIONS`、
+`AED_HOMEGUARD`（HOMEGUARD SDN. BHD.，卖货给 HomeWorks 的公司）。
+从客户端连需要 sa 密码；在 SERVER 本机跑 Windows 验证可通。
+渠道靠客户账号（Debtor Code）分辨；订单逐笔含 SKU。
+
+已从 discovery 确认的结构（AED_HOMEGUARD，三个账套结构相同）：单据表两字母命名
+`IV`/`CS`/`CN`/`DO`/`SO`/`GR` + `DTL` 明细；`Item.ItemGroup`（nvarchar 8）、
+`Item.ItemBrand`；库存流水 `StockDTL`（ItemCode/UOM/Location/Qty）；`ItemUOM.ReOLevel`
+安全库存；`Debtor.AccNo`/`CompanyName`/`DebtorType`。**尚待确认**：`DODTL`/`SODTL`
+的已转出数量栏名（目前假设 `TransferedQty`）。
 
 ## 第一次打开时要做的事（照顺序）
 
@@ -21,6 +30,8 @@ AutoCount 的资料在内网的 SQL Server（具名执行个体常为 `A2006`）
    写出 `autocount.json`。连不上时脚本会说该检查什么；**Server 名称照抄
    AutoCount 登入画面**。
 4. `python scripts\autocount_discover.py` → 产生 `discovery_<账套>.txt`。
+   （2026-09-24 已跑过一次但选到 AED_HOMEGUARD；需要用 AED_HOMEWORKS 再跑一次
+   取得渠道对照、类别与品牌的实际值。）
 5. 读那个档案，依实际表名栏名修正 `autocount.json` 的 `schema`、
    `channel_rules.map`（哪个 Debtor Code 是 Shopee / Lazada / …）、`brand_filter`，
    以及 `webapp/sources/autocount.py` 的预设 SQL（可用 `autocount.json` 的

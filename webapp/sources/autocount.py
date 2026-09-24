@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """AutoCount 资料来源（只读）。
 
-所有 SQL 都可以在 autocount.json 的 "webapp" 段覆写；这里的预设值是 AutoCount
-常见的表名栏名，**尚未在你们的账套上验证**——跑过 autocount_discover.py 之后
-依 discovery 档案修正。
+所有 SQL 都可以在 autocount.json 的 "webapp" 段覆写。表名与主要栏名已依
+discovery（AutoCount 2.2）定稿：IV/CS/CN/DO/SO/GR + DTL 明细表、Item.ItemBrand、
+StockDTL 库存流水。DODTL/SODTL 的「已转出数量」栏（TransferedQty）尚待下一次
+discovery 确认。
 
 这个模组只做 SELECT，不会对 AutoCount 写入任何东西。
 """
@@ -24,57 +25,62 @@ from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
 
 # ---- 预设 SQL（可在 autocount.json > webapp > sql 覆写）-------------------
 DEFAULT_SQL = {
-    # 库存清单：每个 SKU 一列。BalQty 为现有量，SO 未出货量另外算。
+    # ---- 依 discovery（AutoCount 2.2，账套 AED_*）定稿 --------------------
+    # 库存清单：每个 SKU 一列；现有量 = StockDTL（库存流水）加总；安全库存 = ItemUOM.ReOLevel
     "stock_list": """
-        SELECT i.ItemCode, i.Description, ISNULL(i.ItemGroup, ''), ISNULL(i.Brand, ''),
-               ISNULL(i.BaseUOM, ''), ISNULL(i.BalQty, 0), ISNULL(i.ReorderLevel, 0)
+        SELECT i.ItemCode, i.Description, ISNULL(i.ItemGroup, ''), ISNULL(i.ItemBrand, ''),
+               ISNULL(i.BaseUOM, ''), ISNULL(b.Bal, 0), ISNULL(u.ReOLevel, 0)
         FROM [Item] i
-        WHERE i.IsActive = 'T'
+        LEFT JOIN (SELECT ItemCode, SUM(Qty) AS Bal FROM [StockDTL] GROUP BY ItemCode) b
+               ON b.ItemCode = i.ItemCode
+        LEFT JOIN [ItemUOM] u ON u.ItemCode = i.ItemCode AND u.UOM = i.BaseUOM
+        WHERE i.IsActive = 'T' AND i.StockControl = 'T'
         ORDER BY i.ItemCode
     """,
-    # 销售订单未出货量（reserved）
+    # 销售订单未出货量（reserved）。SODTL 的「已转出数量」栏名待 discovery 确认；
+    # 若栏名不同，在 autocount.json > webapp > sql 覆写这条。
     "reserved": """
         SELECT d.ItemCode, SUM(d.Qty - ISNULL(d.TransferedQty, 0))
-        FROM [SO] h JOIN [SODtl] d ON d.DocKey = h.DocKey
+        FROM [SO] h JOIN [SODTL] d ON d.DocKey = h.DocKey
         WHERE h.Cancelled = 'F'
         GROUP BY d.ItemCode
         HAVING SUM(d.Qty - ISNULL(d.TransferedQty, 0)) > 0
     """,
-    # 各仓库存
+    # 各仓库存：StockDTL 依仓库加总
     "stock_locations": """
-        SELECT Location, SUM(BalQty)
-        FROM [ItemLocation]
+        SELECT Location, SUM(Qty)
+        FROM [StockDTL]
         WHERE ItemCode = ?
         GROUP BY Location
-        HAVING SUM(BalQty) <> 0
+        HAVING SUM(Qty) <> 0
     """,
-    # 库存异动：出货单（-）与收货单（+）
+    # 库存异动：送货单（-）与收货单（+）
     "movements": """
         SELECT h.DocDate, N'出货', h.DocNo, ISNULL(h.DebtorName, h.DebtorCode), -d.Qty
-        FROM [DO] h JOIN [DODtl] d ON d.DocKey = h.DocKey
+        FROM [DO] h JOIN [DODTL] d ON d.DocKey = h.DocKey
         WHERE d.ItemCode = ? AND h.DocDate >= ? AND h.Cancelled = 'F'
         UNION ALL
         SELECT h.DocDate, N'进货', h.DocNo, ISNULL(h.CreditorName, h.CreditorCode), d.Qty
-        FROM [GR] h JOIN [GRDtl] d ON d.DocKey = h.DocKey
+        FROM [GR] h JOIN [GRDTL] d ON d.DocKey = h.DocKey
         WHERE d.ItemCode = ? AND h.DocDate >= ? AND h.Cancelled = 'F'
         ORDER BY 1 DESC
     """,
-    # 销售明细（仪表板用）：Invoice + CashSale − CreditNote，与月报口径一致。
+    # 销售明细（仪表板用）：IV + CS − CN，与月报口径一致。
     # 回传：DocDate, DocKey, DebtorCode, ItemCode, Qty, Amount
     "sales_lines": """
         SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, d.Qty, d.SubTotal
-        FROM [Invoice] h JOIN [InvoiceDtl] d ON d.DocKey = h.DocKey
+        FROM [IV] h JOIN [IVDTL] d ON d.DocKey = h.DocKey
         WHERE h.DocDate >= ? AND h.Cancelled = 'F'
         UNION ALL
         SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, d.Qty, d.SubTotal
-        FROM [CashSale] h JOIN [CashSaleDtl] d ON d.DocKey = h.DocKey
+        FROM [CS] h JOIN [CSDTL] d ON d.DocKey = h.DocKey
         WHERE h.DocDate >= ? AND h.Cancelled = 'F'
         UNION ALL
         SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, -d.Qty, -d.SubTotal
-        FROM [CreditNote] h JOIN [CreditNoteDtl] d ON d.DocKey = h.DocKey
+        FROM [CN] h JOIN [CNDTL] d ON d.DocKey = h.DocKey
         WHERE h.DocDate >= ? AND h.Cancelled = 'F'
     """,
-    # 出货单表头
+    # 送货单表头
     "deliveries": """
         SELECT h.DocKey, h.DocNo, h.DocDate, h.DebtorCode, ISNULL(h.DebtorName, ''),
                h.Cancelled, ISNULL(h.Note, '')
@@ -82,10 +88,10 @@ DEFAULT_SQL = {
         WHERE h.DocDate >= ?
         ORDER BY h.DocDate DESC, h.DocNo DESC
     """,
-    # 出货单明细（TransferedQty = 已转成发票的数量，视为已出货）
+    # 送货单明细（TransferedQty = 已转成发票的数量，视为已出货；栏名待 discovery 确认）
     "delivery_lines": """
         SELECT d.DocKey, d.ItemCode, ISNULL(d.Description, ''), d.Qty, ISNULL(d.TransferedQty, 0)
-        FROM [DODtl] d
+        FROM [DODTL] d
         WHERE d.DocKey IN ({keys})
         ORDER BY d.DocKey, d.Seq
     """,

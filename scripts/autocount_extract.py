@@ -70,7 +70,8 @@ def line_source(cfg):
                ({doc['sign']}) * d.{s['detail_qty']}    AS Qty,
                ({doc['sign']}) * d.{s['detail_amount']} AS Amount
         FROM [{doc['header']}] h
-        JOIN [{doc['detail']}] d ON d.{s['header_key']} = h.{s['header_key']}""")
+        JOIN [{doc['detail']}] d ON d.{s['header_key']} = h.{s['header_key']}
+        WHERE h.{s.get('header_cancelled', 'Cancelled')} = 'F'""")
     return "\n        UNION ALL\n".join(parts)
 
 
