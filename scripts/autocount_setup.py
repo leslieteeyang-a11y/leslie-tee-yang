@@ -127,11 +127,16 @@ def main():
     servers = local_instances()
     if servers:
         print(f"这台机器上装的 SQL Server 执行个体：{', '.join(servers)}")
-    servers += [x for x in INSTANCES if x not in servers]
-    extra = input("\n若已知 SQL Server 位址请直接输入（照抄 AutoCount 登入画面上的 Server），"
-                  "留空则自动尝试：\n> ").strip()
+        extra = input("\n若 AutoCount 的数据库在别台电脑，请照抄 AutoCount 登入画面的 Server"
+                      "（例如 SERVER\\A2006）；在这台的话直接按 Enter：\n> ").strip()
+    else:
+        print("这台电脑没装 SQL Server，AutoCount 的数据库在别台电脑上。")
+        extra = ""
+        while not extra:
+            extra = input("请照抄 AutoCount 登入画面「Server」那一栏（例如 SERVER\\A2006）：\n> ").strip()
     if extra:
         servers.insert(0, extra)
+    servers += [x for x in INSTANCES if x not in servers]
 
     conn = server = user = password = None
     print("\n第一轮：用 Windows 验证试每个位址…")
@@ -144,11 +149,12 @@ def main():
             print(f"  {s_} … 失败：{short_err(exc)}")
 
     if not conn:
-        print("\n第二轮：改用 SQL Server 帐号。")
-        print("  （这是 SQL Server 的登入，不是 AutoCount 的登入；AutoCount 安装时预设帐号是 sa。")
-        print("    不知道密码的话直接按 Enter 跳过，把这个画面截图给 Claude。）")
-        user = input("  帐号 [sa]: ").strip() or "sa"
-        password = getpass("  密码（输入时不会显示）: ")
+        print("\n第二轮：改用 SQL Server 的 sa 帐号。")
+        print("  （这是 SQL Server 的密码，不是 AutoCount 的登入密码。")
+        print("    AutoCount 安装程式预设的 sa 密码常见是 oconnor2008，可以先试。")
+        print("    输入时画面不会显示任何字，打完按 Enter。不知道的话直接 Enter 跳过。）")
+        user = "sa"
+        password = getpass("  sa 密码: ")
         if password:
             for s_ in servers:
                 try:
