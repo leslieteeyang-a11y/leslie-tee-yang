@@ -69,11 +69,11 @@
       "shopify": [
         "3000-S011"
       ],
-      "referral": [],
+      "referral": ["3000-C010"],
       "shuigong": []
     },
     "type_map": {
-      "_说明": "Debtor.DebtorType → 渠道。Referral 渠道在 AutoCount 里靠哪个 DebtorType 分辨尚未确认；确认后填进来，例如 {\"DESIGNER\": \"referral\"}。"
+      "_说明": "Debtor.DebtorType → 渠道（可选，map 里没列到的客户才会用到）。Referral 已改用客户代号 3000-C010，这里通常留空。"
     },
     "custom_sql_case": "CASE WHEN h.DebtorCode LIKE '300-S%' THEN 'shopee' ELSE 'shuigong' END"
   },

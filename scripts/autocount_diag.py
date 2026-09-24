@@ -131,6 +131,12 @@ def main():
             L.append(f"     {str(code):<12} {str(name or '')[:34]:<34} type {str(dtype or ''):<12} {n:>5} 行  RM {amt:>12,.2f}")
     L.append("")
 
+    # ---- 4b. 水工渠道的全部客户（找 Referral：纸本 8 月 Referral 合计 3,160.75）----
+    L += ["[4b] 水工渠道（default）的全部客户与当月金额"]
+    for amt, code, name, dtype, n in sorted(by.get("shuigong", []), reverse=True):
+        L.append(f"     {str(code):<12} {str(name or '')[:34]:<34} type {str(dtype or ''):<12} {n:>5} 行  RM {amt:>12,.2f}")
+    L.append("")
+
     # ---- 5. 客户类型清单 ------------------------------------------------
     L += ["[5] Debtor.DebtorType 的相异值（找 Referral 用）"]
     _, rows = fetch(conn, "SELECT ISNULL(DebtorType,''), COUNT(*) FROM [Debtor] GROUP BY DebtorType ORDER BY COUNT(*) DESC")
@@ -139,15 +145,17 @@ def main():
     L.append("")
 
     # ---- 6. Top 10 会抓到的非商品项目 -----------------------------------
-    L += ["[6] 当月销量前 15 的 ItemCode（含 StockControl，判断哪些该排除）"]
+    L += ["[6] 当月销量前 15 的 ItemCode（看型号写在哪一栏：Description / Desc2 / GlobalCode）"]
     _, rows = fetch(conn, f"""
         WITH lines AS ({lines})
-        SELECT TOP 15 l.ItemCode, MAX(i.Description), MAX(i.ItemGroup), MAX(i.StockControl), SUM(l.Qty)
+        SELECT TOP 15 l.ItemCode, MAX(i.Description), MAX(i.ItemGroup), MAX(i.StockControl), SUM(l.Qty),
+               MAX(i.Desc2), MAX(i.GlobalCode)
         FROM lines l LEFT JOIN [Item] i ON i.ItemCode = l.ItemCode
         WHERE l.DocDate >= ? AND l.DocDate <= ?
         GROUP BY l.ItemCode ORDER BY SUM(l.Qty) DESC""", (start, end))
     for r in rows:
-        L.append(f"  {str(r[0]):<18} {str(r[1] or '')[:36]:<36} {str(r[2] or ''):<9} stock {r[3]}  qty {float(r[4]):>7,.0f}")
+        L.append(f"  {str(r[0]):<14} {str(r[1] or '')[:40]:<40} {str(r[2] or ''):<9} qty {float(r[4]):>6,.0f}"
+                 f"  desc2 [{str(r[5] or '')[:20]}]  global [{str(r[6] or '')[:16]}]")
 
     out = ROOT / f"diag_{month}.txt"
     out.write_text("\n".join(L), encoding="utf-8")

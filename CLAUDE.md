@@ -24,18 +24,25 @@ HOMEGUARD 账套内是 300-H002，HOMEWORKS 账套内的代号待 discovery）�
 渠道 Debtor Code（Shopee 300-S001/300-0004/3000-S009、Lazada = ECART 300-E001、
 Tiktok 3000-T003、Cash 300-C001、Online 3000-C009、Southern 3000-H008、Shopify 3000-S011、
 其余 = 水工）；ItemGroup 19 个值 → `config.json` 的 `category_map`；品牌 `ItemType` 为
-HEMOS / HEMOSX。**尚未确认**：Referral 渠道靠什么分辨（目前会被并进水工，金额很小）。
+HEMOS / HEMOSX；Referral = 客户 3000-C010「CASH (REFERRAL)」（已填入 referral）。
+AED_HOMEWORKSSB 独有：仓库 HQ / SRGADING / JB / TP STORE / PRE (JB) / DEFECTS / DISPLAY /
+EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，可作渠道第二来源）、
+`Item.UDF_SKU`（平台 SKU）；`TD_SG_*` 是 SiteGiant 同步表。
 
 ## 2026-09-24 第一次真实抓数的对账结果（8 月）
 
-与纸本对得上：Electric、Garden、Valve、Southern 整栏、Tiktok 整栏合计、SKU 月度表。
-差异待查（用 `diag.bat` → `scripts/autocount_diag.py`）：
-- ItemGroup 为空的商品（30 件、Cash 11,453.50、水工 1,971）纸本算在 Sanitary
-- ONLINE（平台手续费）纸本 Shopee −108,729 / Lazada −5,867，抓出来 −445,645 / −12,028，差数倍
-- Online 渠道（3000-C009）纸本 609.28，抓出来约 1,108
-- Top 10 抓到 VOUCHER / ONLINE000001 等非商品 → 已改为只算 StockControl='T'
-- Referral 栏抓出来的值与纸本一致（760 / 600 / 1,800.75），但设定里没有 referral 规则——
-  待 diag 的 [4] 看是哪些客户、SERVER 上跑的是不是最新版（看 `VERSION`）
+与纸本对得上（AED_HOMEWORKSSB）：Southern 938,483.56、Tiktok 25,370.66、Shopify 5,641.20
+分毫不差；Electric、Garden、Valve、SKU 月度表也对。已处理 / 已解释：
+- ItemCode 为空的自由输入行（29 件、RM 13,411.51）纸本算在 Sanitary → `category_map` 的
+  `(未分类)` → Sanitary（SQL 与 `build_forecast` 都把空 ItemGroup 视为 `(未分类)`）
+- ONLINE（平台手续费）纸本 Shopee −108,729、抓出 −179,761：Shopee 手续费是每周一笔
+  ONLINE000002 汇总行（08-02…08-30，每笔 −28k～−35k），纸本印出时最后两周与部分 CN
+  还没过账。**结论：AutoCount 是现况，纸本是快照**；请使用者用 AutoCount 自己的报表复核
+- Top 10 抓到 VOUCHER / ONLINE000001 → 只算 StockControl='T'，再排除
+  `config.json` 的 `top10_exclude_groups`，并用 `model_code_pattern` 从 Description 抽型号合并
+- Referral（760 / 600 / 1,800.75）= 3000-C010 CASH (REFERRAL)，已写进 channel_rules
+仍待查：Online 渠道（3000-C009）纸本 609.28 vs 抓出约 1,108（同样可能是快照差异）。
+对账工具：`diag.bat` → `scripts/autocount_diag.py`；`VERSION` 常数确认 SERVER 跑的是最新版。
 
 ## 第一次打开时要做的事（照顺序）
 

@@ -86,7 +86,9 @@
     "SHIP FEE": "Shipping Fee",
     "INSTALL": "Install",
     "ONLINE": "Online Fee",
-    "TRANSPOR": "Transport"
+    "TRANSPOR": "Transport",
+    "(未分类)": "Sanitary",
+    "_备注": "「(未分类)」= 开单时没选商品代号的自由输入行；2026-08 纸本把它们算在 Sanitary，故照办。要单独列出就删掉这一项。"
   },
   "category_order": [
     "Building",
@@ -104,5 +106,17 @@
     "Transport",
     "Install",
     "Valve"
-  ]
+  ],
+  "top10_exclude_groups": [
+    "ONLINE",
+    "SHIP FEE",
+    "TRAN FEE",
+    "PAY FEE",
+    "SERV FEE",
+    "INSTALL",
+    "TRANSPOR",
+    "SAMPLE"
+  ],
+  "model_code_pattern": "\\bHM[A-Z]{0,4}-[A-Z0-9]+(?:-[A-Z0-9]+)*",
+  "_top10_说明": "Top 10 与 SKU 趋势按「型号」统计：依序从 Item.GlobalCode、Desc2、Description 用 model_code_pattern 抽出 HM-xxx；抽不到就用 ItemCode。"
 }

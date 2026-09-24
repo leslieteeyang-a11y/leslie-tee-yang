@@ -28,7 +28,7 @@ from autocount_db import connect, fetch, load_autocount_config, require_report_b
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-VERSION = "2026-09-24c"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
+VERSION = "2026-09-24e"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
 
 
 # --------------------------------------------------------------- SQL 组装
@@ -105,19 +105,36 @@ ORDER BY 1, 2
 """
 
 
-def sql_item_qty(cfg):
+def sql_item_qty(cfg, exclude_groups=()):
     s = cfg["schema"]
+    excl = ""
+    if exclude_groups:
+        lst = ", ".join("'" + g.replace("'", "''") + "'" for g in exclude_groups)
+        excl = f"AND ISNULL(i.[{s['item_category']}], '') NOT IN ({lst})"
     return f"""
 WITH lines AS ({line_source(cfg)}
 )
-SELECT l.ItemCode, l.Channel, SUM(l.Qty) AS Qty
+SELECT l.ItemCode, l.Channel, SUM(l.Qty) AS Qty,
+       MAX(i.Description), MAX(i.Desc2), MAX(i.GlobalCode)
 FROM lines l
 JOIN [{s['item_table']}] i ON i.[{s['item_code']}] = l.ItemCode
-WHERE l.DocDate >= ? AND l.DocDate <= ? AND i.StockControl = 'T'
+WHERE l.DocDate >= ? AND l.DocDate <= ? AND i.StockControl = 'T' {excl}
 GROUP BY l.ItemCode, l.Channel
 HAVING SUM(l.Qty) <> 0
 ORDER BY 1
 """
+
+
+def model_code(item_code, description, desc2, global_code, pattern):
+    """型号：依序在 GlobalCode、Desc2、Description 找 HM-xxx；找不到就用 ItemCode。"""
+    import re
+    rx = re.compile(pattern, re.I) if pattern else None
+    for text in (global_code, desc2, description):
+        if text and rx:
+            m = rx.search(str(text).upper())
+            if m:
+                return m.group(0)
+    return (item_code or "").strip()
 
 
 # ----------------------------------------------------------------- 组装 JSON
@@ -132,7 +149,8 @@ def build_forecast(rows, channels, category_map=None, order=None):
     category_map = {k: v for k, v in (category_map or {}).items() if not k.startswith("_")}
     by_cat = defaultdict(lambda: {"qty": 0, **{c: 0.0 for c in channels}})
     for cat, chan, qty, amt in rows:
-        cat = category_map.get((cat or "").strip().upper(), (cat or "").strip())
+        raw = (cat or "").strip().upper() or "(未分类)"      # ItemGroup 为空 → 与 SQL 一致，归入 (未分类)
+        cat = category_map.get(raw, (cat or "").strip() or "(未分类)")
         rec = by_cat[cat]
         rec["qty"] += int(qty or 0)
         if chan in channels:
@@ -153,12 +171,15 @@ def build_month_doc(cfg, base_cfg, month, summary_all, summary_hemos, item_rows,
     channels = [c["key"] for c in base_cfg["forecast_channels"]]
     platform_channels = cfg["sku_trend"]["platform_channels"]
 
+    pattern = base_cfg.get("model_code_pattern")
     qty_by_item_chan = defaultdict(int)
     qty_by_item = defaultdict(int)
-    for code, chan, qty in item_rows:
-        code = (code or "").strip()
-        qty_by_item_chan[(code, chan)] += int(qty or 0)
-        qty_by_item[code] += int(qty or 0)
+    for row in item_rows:
+        code, chan, qty = row[0], row[1], row[2]
+        desc, desc2, gcode = (row[3], row[4], row[5]) if len(row) >= 6 else (None, None, None)
+        key = model_code(code, desc, desc2, gcode, pattern)      # 以型号汇总
+        qty_by_item_chan[(key, chan)] += int(qty or 0)
+        qty_by_item[key] += int(qty or 0)
 
     sku_qty = {}
     for platform, chan in platform_channels.items():
@@ -215,14 +236,14 @@ def main():
     if args.dry_run:
         print("-- 销售汇总（全品牌） --", sql_summary(cfg, False), sep="\n")
         print("-- 销售汇总（Hemos） --", sql_summary(cfg, True), sep="\n")
-        print("-- SKU 销量 --", sql_item_qty(cfg), sep="\n")
+        print("-- SKU 销量 --", sql_item_qty(cfg, base_cfg.get("top10_exclude_groups", ())), sep="\n")
         print(f"-- 期间参数：{start} ~ {end}")
         return
 
     conn = connect(cfg)
     _, rows_all = fetch(conn, sql_summary(cfg, False), (start, end))
     _, rows_hemos = fetch(conn, sql_summary(cfg, True), (start, end))
-    _, rows_item = fetch(conn, sql_item_qty(cfg), (start, end))
+    _, rows_item = fetch(conn, sql_item_qty(cfg, base_cfg.get("top10_exclude_groups", ())), (start, end))
 
     path = DATA_DIR / f"{args.month}.json"
     existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
