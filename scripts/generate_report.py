@@ -78,7 +78,7 @@ def set_widths(ws, widths, start_col=1):
 
 
 # ------------------------------------------------------------ sheet: cover
-def sheet_cover(wb, cfg, month, months_with_data):
+def sheet_cover(wb, cfg, month, months_with_data, produced_by=""):
     ws = wb.create_sheet("说明 Read me")
     ws.sheet_view.showGridLines = False
     set_widths(ws, [26, 86])
@@ -87,6 +87,7 @@ def sheet_cover(wb, cfg, month, months_with_data):
         ("报表月份 Report month", f"{y} 年 {MONTH_CN[int(m)]}  ({month})"),
         ("生成日期 Generated on", date.today().isoformat()),
         ("数据来源 Data source", f"data/{month}.json（本月明细） + data/{y}-*.json（SKU 全年趋势）"),
+        ("产生方式 Produced by", produced_by or "手动录入（data/*.json 由人填写）"),
         ("金额单位 Currency", "RM（马币）"),
         ("已有数据的月份 Months on file", ", ".join(months_with_data)),
         ("", ""),
@@ -374,7 +375,7 @@ def main():
 
     wb = Workbook()
     wb.remove(wb.active)
-    sheet_cover(wb, cfg, month, sorted(monthly_docs))
+    sheet_cover(wb, cfg, month, sorted(monthly_docs), doc.get("_产生方式", ""))
     for platform in cfg["sku_trend_platforms"]:
         sheet_sku_trend(wb, cfg, platform, monthly_docs)
     sheet_ads(wb, cfg, month, doc)

@@ -33,18 +33,27 @@ EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，�
 
 ## 2026-09-24 第一次真实抓数的对账结果（8 月）
 
-与纸本对得上（AED_HOMEWORKSSB）：Southern 938,483.56、Tiktok 25,370.66、Shopify 5,641.20
-分毫不差；Electric、Garden、Valve、SKU 月度表也对。已处理 / 已解释：
-- ItemCode 为空的自由输入行（29 件、RM 13,411.51）纸本算在 Sanitary → `category_map` 的
-  `(未分类)` → Sanitary（SQL 与 `build_forecast` 都把空 ItemGroup 视为 `(未分类)`）
-- ONLINE（平台手续费）纸本 Shopee −108,729、抓出 −179,761：Shopee 手续费是每周一笔
-  ONLINE000002 汇总行（08-02…08-30，每笔 −28k～−35k），纸本印出时最后两周与部分 CN
-  还没过账。**结论：AutoCount 是现况，纸本是快照**；请使用者用 AutoCount 自己的报表复核
-- Top 10 抓到 VOUCHER / ONLINE000001 → 只算 StockControl='T'，再排除
-  `config.json` 的 `top10_exclude_groups`，并用 `model_code_pattern` 从 Description 抽型号合并
-- Referral（760 / 600 / 1,800.75）= 3000-C010 CASH (REFERRAL)，已写进 channel_rules
-仍待查：Online 渠道（3000-C009）纸本 609.28 vs 抓出约 1,108（同样可能是快照差异）。
-对账工具：`diag.bat` → `scripts/autocount_diag.py`；`VERSION` 常数确认 SERVER 跑的是最新版。
+纸本对照值在 git 里的 `data/2026-08.json`（SERVER 上的同名档会被 extract 覆盖成抓取值）。
+与纸本分毫不差（AED_HOMEWORKSSB）：Southern 整栏、Tiktok 合计、Shopify、Electric、Garden、
+Kitchen、Install、Sample、Service Fee、Transport、Referral（760 / 600 / 1,800.75）、SKU 月度表
+（只差 HM-YKR06-MB 3→2）。已查清并处理：
+- **未分类**（ItemCode 空白或商品没设 ItemGroup：30 件、Cash 11,453.50、水工 1,971）：纸本
+  **没有**算进 Sanitary（Sanitary Cash 纸本 81,870.19 = 抓出的 SANITARY 本身；曾误判为并入，
+  并进去后就多了 11,453.50）。现在单独列成「(未分类)」一列让人看见，不并入任何类别。
+- **STOCK A** 群组：123 件、金额全 0，纸本没这列 → `category_map` 设 null，不列。
+- **借项单 DN**：纸本 Shipping Fee 水工 477 = DN-000002（追回运费）；Online 渠道 Sanitary
+  差 112.50 = DN-000003（冲销 CN-000767）→ 销售口径已加 DN。
+- Online 渠道另有 42.00 在纸本算 Sanitary、AutoCount 现在归 TRAN FEE（商品群组被改过），属分类差异。
+- **ONLINE（平台手续费）** 纸本 Shopee −108,729、抓出 −179,761：Shopee 手续费是每周一笔
+  ONLINE000002 汇总行（08-02…08-30，每笔 −28k～−35k），纸本印出时最后两周与部分 CN 还没过账。
+  Shopee 各类别抓出值比纸本略低（Sanitary −3.8k、Lock −0.8k）同样是之后才过账的退货 CN。
+  **结论：AutoCount 是现况，纸本是快照**；请使用者用 AutoCount 自己的报表复核。
+- **Top 10**：只算 StockControl='T'、排除 `top10_exclude_groups`、用 `model_code_pattern` 从
+  Description 抽型号合并、**只看 Shopee + Lazada 的销量排名**（之前把只在水工卖的商品也排进去，
+  两栏都是 0）。纸本 Top 10 Up 的数量比抓出的大很多（HM-101-MS 纸本 493、抓出 208），
+  **待问使用者纸本 Top 10 的来源**（疑似 Shopee 后台，不是 AutoCount）。
+对账工具：`diag.bat` → `scripts/autocount_diag.py`（[3b] 未分类逐行、[3c] 汇总原始行、[6] 平台
+销量前 30 含型号）；Excel 说明页与 JSON 的 `_产生方式` 都印 `VERSION`，用来确认 SERVER 跑的是最新版。
 
 ## 第一次打开时要做的事（照顺序）
 
@@ -85,7 +94,7 @@ EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，�
 | `scripts/generate_report.py` | `data/YYYY-MM.json` → `output/月度报表_YYYY-MM.xlsx` |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，17 个行为测试（用示范资料，不需 AutoCount） |
+| `tests/` | `python -m pytest tests -q`，23 个测试：网页行为（示范资料）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

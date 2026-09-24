@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config, require_report_book   # noqa: E402
-from autocount_extract import VERSION, channel_case, line_source  # noqa: E402
+from autocount_extract import VERSION, channel_case, line_source, model_code, sql_summary  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -114,6 +114,38 @@ def main():
                  f"  qty {float(r[4]):>6,.0f}  RM {float(r[5]):>10,.2f}")
     L.append("")
 
+    # ---- 3b. 未分类的明细行（逐张单） ------------------------------------
+    L += ["[3b] 未分类的明细行（ItemCode 空白、或商品没设 ItemGroup）：单号 / 渠道 / 代号 / 描述 / 数量 / 金额"]
+    parts = []
+    for doc in cfg["schema"]["sales_documents"]:
+        parts.append(f"""SELECT '{doc['header']}' AS DT, h.DocNo, h.DocDate, ({channel_case(cfg)}) AS Ch,
+                                d.ItemCode, d.Description, ({doc['sign']}) * d.Qty AS Qty,
+                                ({doc['sign']}) * d.SubTotal AS Amt, i.ItemType
+                         FROM [{doc['header']}] h JOIN [{doc['detail']}] d ON d.DocKey = h.DocKey
+                         LEFT JOIN [Debtor] dbt ON dbt.AccNo = h.DebtorCode
+                         LEFT JOIN [Item] i ON i.ItemCode = d.ItemCode
+                         WHERE h.Cancelled = 'F' AND h.DocDate >= ? AND h.DocDate <= ?
+                           AND (i.ItemGroup IS NULL OR LTRIM(RTRIM(i.ItemGroup)) = '')
+                           AND d.SubTotal <> 0""")
+    _, rows = fetch(conn, " UNION ALL ".join(parts) + " ORDER BY 3, 2", (start, end) * len(parts))
+    tot = 0.0
+    for r in rows[:60]:
+        tot += float(r[7] or 0)
+        L.append(f"  {r[0]:<2} {str(r[1]):<11} {str(r[2])[:10]} {str(r[3]):<9} {str(r[4] or '(空)'):<14}"
+                 f" {str(r[5] or '')[:34]:<34} qty {float(r[6] or 0):>5,.0f}  RM {float(r[7] or 0):>10,.2f}"
+                 f"  brand {str(r[8] or '')}")
+    L.append(f"  共 {len(rows)} 行（只列前 60），金额合计 RM {sum(float(r[7] or 0) for r in rows):,.2f}")
+    L.append("")
+
+    # ---- 3c. 销售汇总的原始结果（对 Excel 用） ----------------------------
+    for label, hemos in (("全品牌", False), ("Hemos", True)):
+        L += [f"[3c] 销售汇总原始行（{label}）：Category / Channel / Qty / Amount — 只列 SANITARY、(未分类)、STOCK A"]
+        _, rows = fetch(conn, sql_summary(cfg, hemos), (start, end))
+        for r in rows:
+            if str(r[0]).upper() in ("SANITARY", "(未分类)", "STOCK A"):
+                L.append(f"  {str(r[0]):<10} {str(r[1]):<9} qty {float(r[2] or 0):>8,.0f}  RM {float(r[3] or 0):>12,.2f}")
+        L.append("")
+
     # ---- 4. 各渠道的客户明细 --------------------------------------------
     L += ["[4] 各渠道由哪些客户构成（当月，每渠道前 12 名）"]
     _, rows = fetch(conn, f"""
@@ -145,17 +177,22 @@ def main():
     L.append("")
 
     # ---- 6. Top 10 会抓到的非商品项目 -----------------------------------
-    L += ["[6] 当月销量前 15 的 ItemCode（看型号写在哪一栏：Description / Desc2 / GlobalCode）"]
+    L += ["[6] Shopee + Lazada 销量前 30 的 ItemCode（对纸本 Top 10 用；型号 = 依 config.json 的 model_code_pattern 抽出）"]
+    laz = cfg["sku_trend"]["platform_channels"].get("LAZADA", "lazada")
+    sho = cfg["sku_trend"]["platform_channels"].get("SHOPEE", "shopee")
     _, rows = fetch(conn, f"""
         WITH lines AS ({lines})
-        SELECT TOP 15 l.ItemCode, MAX(i.Description), MAX(i.ItemGroup), MAX(i.StockControl), SUM(l.Qty),
+        SELECT TOP 30 l.ItemCode, MAX(i.Description), MAX(i.ItemGroup), MAX(i.StockControl),
+               SUM(CASE WHEN l.Channel = '{sho}' THEN l.Qty ELSE 0 END),
+               SUM(CASE WHEN l.Channel = '{laz}' THEN l.Qty ELSE 0 END),
                MAX(i.Desc2), MAX(i.GlobalCode)
         FROM lines l LEFT JOIN [Item] i ON i.ItemCode = l.ItemCode
-        WHERE l.DocDate >= ? AND l.DocDate <= ?
+        WHERE l.DocDate >= ? AND l.DocDate <= ? AND l.Channel IN ('{sho}', '{laz}')
         GROUP BY l.ItemCode ORDER BY SUM(l.Qty) DESC""", (start, end))
     for r in rows:
-        L.append(f"  {str(r[0]):<14} {str(r[1] or '')[:40]:<40} {str(r[2] or ''):<9} qty {float(r[4]):>6,.0f}"
-                 f"  desc2 [{str(r[5] or '')[:20]}]  global [{str(r[6] or '')[:16]}]")
+        mc = model_code(r[0], r[1], r[6], r[7], base.get("model_code_pattern"))
+        L.append(f"  {str(r[0]):<14} {str(r[1] or '')[:40]:<40} {str(r[2] or ''):<9} shopee {float(r[4]):>5,.0f}"
+                 f" lazada {float(r[5]):>4,.0f}  型号 {mc}  desc2 [{str(r[6] or '')[:20]}]")
 
     out = ROOT / f"diag_{month}.txt"
     out.write_text("\n".join(L), encoding="utf-8")

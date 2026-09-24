@@ -28,7 +28,7 @@ from autocount_db import connect, fetch, load_autocount_config, require_report_b
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-VERSION = "2026-09-24f"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
+VERSION = "2026-09-24g"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
 
 
 # --------------------------------------------------------------- SQL 组装
@@ -151,6 +151,8 @@ def build_forecast(rows, channels, category_map=None, order=None):
     for cat, chan, qty, amt in rows:
         raw = (cat or "").strip().upper() or "(未分类)"      # ItemGroup 为空 → 与 SQL 一致，归入 (未分类)
         cat = category_map.get(raw, (cat or "").strip() or "(未分类)")
+        if cat is None:                                      # category_map 设为 null 的群组：不列进报表
+            continue
         rec = by_cat[cat]
         rec["qty"] += int(qty or 0)
         if chan in channels:
@@ -188,7 +190,13 @@ def build_month_doc(cfg, base_cfg, month, summary_all, summary_hemos, item_rows,
 
     laz = cfg["sku_trend"]["platform_channels"].get("LAZADA", "lazada")
     sho = cfg["sku_trend"]["platform_channels"].get("SHOPEE", "shopee")
-    sold = [(c, q) for c, q in qty_by_item.items() if q > 0]
+    # Top 10 只看 Shopee + Lazada 的销量（纸本的 Top 10 Up/Down 就是这两个平台的合计），
+    # 否则只在门市 / 水工卖的商品会挤进榜单，而它们在 Lazada / Shopee 两栏都是 0
+    platform_qty = defaultdict(int)
+    for (code, chan), q in qty_by_item_chan.items():
+        if chan in (laz, sho):
+            platform_qty[code] += q
+    sold = [(c, q) for c, q in platform_qty.items() if q > 0]
     ranked = sorted(sold, key=lambda x: (-x[1], x[0]))
     n = int(cfg["top10"].get("count", 10))
 

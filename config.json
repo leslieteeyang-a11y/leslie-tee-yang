@@ -87,8 +87,8 @@
     "INSTALL": "Install",
     "ONLINE": "Online Fee",
     "TRANSPOR": "Transport",
-    "(未分类)": "Sanitary",
-    "_备注": "「(未分类)」= 开单时没选商品代号的自由输入行；2026-08 纸本把它们算在 Sanitary，故照办。要单独列出就删掉这一项。"
+    "STOCK A": null,
+    "_备注": "值为 null 的群组不列进报表（STOCK A：2026-08 有 123 件但金额全为 0，纸本没有这一列）。「(未分类)」= 开单时没选商品代号、或商品没设 ItemGroup 的行；2026-08 对账证实纸本没把它们算进 Sanitary，故单独列出让人看见。"
   },
   "category_order": [
     "Building",
