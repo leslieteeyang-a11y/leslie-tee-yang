@@ -28,6 +28,7 @@ from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
+VERSION = "2026-09-24c"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
 
 
 # --------------------------------------------------------------- SQL 组装
@@ -71,6 +72,7 @@ def line_source(cfg):
         parts.append(f"""
         SELECT h.{s['header_date']} AS DocDate,
                ({chan}) AS Channel,
+               h.{s['header_debtor']} AS DebtorCode,
                d.{s['detail_item']} AS ItemCode,
                ({doc['sign']}) * d.{s['detail_qty']}    AS Qty,
                ({doc['sign']}) * d.{s['detail_amount']} AS Amount
@@ -91,25 +93,27 @@ def sql_summary(cfg, brand_only):
     return f"""
 WITH lines AS ({line_source(cfg)}
 )
-SELECT ISNULL(i.[{s['item_category']}], '(未分类)') AS Category,
+SELECT ISNULL(i.[{s['item_category']}], N'(未分类)') AS Category,
        l.Channel,
        SUM(l.Qty)    AS Qty,
        SUM(l.Amount) AS Amount
 FROM lines l
 LEFT JOIN [{s['item_table']}] i ON i.[{s['item_code']}] = l.ItemCode
 WHERE l.DocDate >= ? AND l.DocDate <= ? {brand}
-GROUP BY ISNULL(i.[{s['item_category']}], '(未分类)'), l.Channel
+GROUP BY ISNULL(i.[{s['item_category']}], N'(未分类)'), l.Channel
 ORDER BY 1, 2
 """
 
 
 def sql_item_qty(cfg):
+    s = cfg["schema"]
     return f"""
 WITH lines AS ({line_source(cfg)}
 )
 SELECT l.ItemCode, l.Channel, SUM(l.Qty) AS Qty
 FROM lines l
-WHERE l.DocDate >= ? AND l.DocDate <= ?
+JOIN [{s['item_table']}] i ON i.[{s['item_code']}] = l.ItemCode
+WHERE l.DocDate >= ? AND l.DocDate <= ? AND i.StockControl = 'T'
 GROUP BY l.ItemCode, l.Channel
 HAVING SUM(l.Qty) <> 0
 ORDER BY 1
@@ -180,7 +184,7 @@ def build_month_doc(cfg, base_cfg, month, summary_all, summary_hemos, item_rows,
 
     doc = {
         "month": month,
-        "_产生方式": f"由 scripts/autocount_extract.py 于 {date.today().isoformat()} "
+        "_产生方式": f"由 scripts/autocount_extract.py（{VERSION}）于 {date.today().isoformat()} "
                      f"自 AutoCount 账套 {cfg['connection']['database']} 抓取。"
                      f"ads 与 live_sales 两段不在 AutoCount 内，需自 Shopee/Lazada 后台填入。",
         "sku_qty": sku_qty,

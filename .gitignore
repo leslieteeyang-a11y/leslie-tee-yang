@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 autocount.json
 discovery_*.txt
+diag_*.txt

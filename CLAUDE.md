@@ -26,6 +26,17 @@ Tiktok 3000-T003、Cash 300-C001、Online 3000-C009、Southern 3000-H008、Shopi
 其余 = 水工）；ItemGroup 19 个值 → `config.json` 的 `category_map`；品牌 `ItemType` 为
 HEMOS / HEMOSX。**尚未确认**：Referral 渠道靠什么分辨（目前会被并进水工，金额很小）。
 
+## 2026-09-24 第一次真实抓数的对账结果（8 月）
+
+与纸本对得上：Electric、Garden、Valve、Southern 整栏、Tiktok 整栏合计、SKU 月度表。
+差异待查（用 `diag.bat` → `scripts/autocount_diag.py`）：
+- ItemGroup 为空的商品（30 件、Cash 11,453.50、水工 1,971）纸本算在 Sanitary
+- ONLINE（平台手续费）纸本 Shopee −108,729 / Lazada −5,867，抓出来 −445,645 / −12,028，差数倍
+- Online 渠道（3000-C009）纸本 609.28，抓出来约 1,108
+- Top 10 抓到 VOUCHER / ONLINE000001 等非商品 → 已改为只算 StockControl='T'
+- Referral 栏抓出来的值与纸本一致（760 / 600 / 1,800.75），但设定里没有 referral 规则——
+  待 diag 的 [4] 看是哪些客户、SERVER 上跑的是不是最新版（看 `VERSION`）
+
 ## 第一次打开时要做的事（照顺序）
 
 （使用者也可能已经双击过 `setup_autocount.bat`（= 第 1、3、4 步）和 `make_report.bat`
