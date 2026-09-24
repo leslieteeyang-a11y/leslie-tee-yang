@@ -26,9 +26,10 @@ from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
 # ---- 预设 SQL（可在 autocount.json > webapp > sql 覆写）-------------------
 DEFAULT_SQL = {
     # ---- 依 discovery（AutoCount 2.2，账套 AED_*）定稿 --------------------
-    # 库存清单：每个 SKU 一列；现有量 = StockDTL（库存流水）加总；安全库存 = ItemUOM.ReOLevel
+    # 库存清单：每个 SKU 一列；品牌在 ItemType（ItemBrand 是空的）；
+    # 现有量 = StockDTL（库存流水）加总；安全库存 = ItemUOM.ReOLevel
     "stock_list": """
-        SELECT i.ItemCode, i.Description, ISNULL(i.ItemGroup, ''), ISNULL(i.ItemBrand, ''),
+        SELECT i.ItemCode, i.Description, ISNULL(i.ItemGroup, ''), ISNULL(i.ItemType, ''),
                ISNULL(i.BaseUOM, ''), ISNULL(b.Bal, 0), ISNULL(u.ReOLevel, 0)
         FROM [Item] i
         LEFT JOIN (SELECT ItemCode, SUM(Qty) AS Bal FROM [StockDTL] GROUP BY ItemCode) b

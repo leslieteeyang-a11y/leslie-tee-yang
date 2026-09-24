@@ -15,9 +15,11 @@ AutoCount 2.2 Basic（64-bit）。数据库在 `SERVER\A2006`，三个账套：
 
 已从 discovery 确认的结构（AED_HOMEGUARD，三个账套结构相同）：单据表两字母命名
 `IV`/`CS`/`CN`/`DO`/`SO`/`GR` + `DTL` 明细；`Item.ItemGroup`（nvarchar 8）、
-`Item.ItemBrand`；库存流水 `StockDTL`（ItemCode/UOM/Location/Qty）；`ItemUOM.ReOLevel`
-安全库存；`Debtor.AccNo`/`CompanyName`/`DebtorType`。**尚待确认**：`DODTL`/`SODTL`
-的已转出数量栏名（目前假设 `TransferedQty`）。
+品牌在 `Item.ItemType`（HEMOS / HOMEGUARD / TENON；`ItemBrand` 是空的）；库存流水
+`StockDTL`（ItemCode/UOM/Location/Qty），仓库 HQ / JB / PRE (JB)；`ItemUOM.ReOLevel`
+安全库存；`Debtor.AccNo`/`CompanyName`/`DebtorType`；`DODTL`/`SODTL`/`IVDTL` 都有
+`TransferedQty`（已转出数量）。**尚待取得**：AED_HOMEWORKS 的渠道 Debtor Code、
+ItemGroup 与 ItemType 实际值（前两次 discovery 都选到 HOMEGUARD）。
 
 ## 第一次打开时要做的事（照顺序）
 

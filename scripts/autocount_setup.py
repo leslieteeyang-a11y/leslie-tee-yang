@@ -191,8 +191,7 @@ def main():
         "trusted_connection": user is None,
     })
     if TARGET.exists():
-        if input(f"\n{TARGET.name} 已存在，要覆盖吗？(y/N) ").strip().lower() != "y":
-            sys.exit("已取消，未修改既有档案。")
+        print(f"\n（{TARGET.name} 已存在，以这次选的账套 {database} 覆盖。）")
     TARGET.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"\n已写入 {TARGET}")

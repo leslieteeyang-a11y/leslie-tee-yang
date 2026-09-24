@@ -10,7 +10,7 @@
     "trusted_connection": false
   },
   "schema": {
-    "_说明": "已依 discovery（AutoCount 2.2）定稿。AutoCount 2.x 的单据表用两字母命名：IV 发票、CS 现销、CN 贷项、DO 送货单、SO 销售订单、GR 收货单；明细表加 DTL。",
+    "_说明": "已依 discovery（AutoCount 2.2）定稿。AutoCount 2.x 的单据表用两字母命名：IV 发票、CS 现销、CN 贷项、DO 送货单、SO 销售订单、GR 收货单；明细表加 DTL。 品牌不在 ItemBrand（空的），在 ItemType（HEMOS / HOMEGUARD / TENON…）。",
     "sales_documents": [
       {
         "header": "IV",
@@ -38,7 +38,7 @@
     "item_table": "Item",
     "item_code": "ItemCode",
     "item_category": "ItemGroup",
-    "item_brand": "ItemBrand"
+    "item_brand": "ItemType"
   },
   "channel_rules": {
     "_说明": "报表的渠道栏怎么从 AutoCount 分辨出来。mode 可选 debtor / project / salesagent / custom_sql。debtor 模式下，把每个渠道对应的客户账号（Debtor Code）列出来即可。",
@@ -64,8 +64,8 @@
     "custom_sql_case": "CASE WHEN h.DebtorCode LIKE '300-S%' THEN 'shopee' ELSE 'cash' END"
   },
   "brand_filter": {
-    "_说明": "第二张汇总表 (Hemos & Hemos X only) 的品牌筛选。栏位是 Item.ItemBrand；实际值以 discovery 的「品牌对照」为准。",
-    "field": "ItemBrand",
+    "_说明": "第二张汇总表 (Hemos & Hemos X only) 的品牌筛选。discovery 证实品牌存在 Item.ItemType（ItemBrand 是空的）。实际值以 AED_HOMEWORKS 的 discovery 为准。",
+    "field": "ItemType",
     "values": [
       "HEMOS",
       "HEMOS X"
