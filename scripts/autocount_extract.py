@@ -24,7 +24,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
+from autocount_db import connect, fetch, load_autocount_config, require_report_book   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -208,6 +208,7 @@ def main():
     args = ap.parse_args()
 
     cfg = load_autocount_config()
+    require_report_book(cfg)
     base_cfg = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     start, end = month_range(args.month)
 

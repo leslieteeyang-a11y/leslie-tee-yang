@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from autocount_db import connect, fetch, load_autocount_config   # noqa: E402
+from autocount_db import connect, fetch, load_autocount_config, require_report_book   # noqa: E402
 from autocount_extract import VERSION, channel_case, line_source  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +26,7 @@ def main():
     y, m = (int(x) for x in month.split("-"))
     start, end = date(y, m, 1), date(y, m, calendar.monthrange(y, m)[1])
     cfg = load_autocount_config()
+    require_report_book(cfg)
     base = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     conn = connect(cfg)
     L = [f"HomeWorks 诊断 — {month}  账套 {cfg['connection']['database']}", "=" * 70, ""]

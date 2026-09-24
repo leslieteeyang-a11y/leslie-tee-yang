@@ -72,3 +72,15 @@ def fetch(conn, sql, params=()):
     cur.execute(sql, params)
     cols = [d[0] for d in cur.description]
     return cols, cur.fetchall()
+
+
+def require_report_book(cfg):
+    """账套不是报表用的那个就停下来，避免抓错账套还不自知。"""
+    from pathlib import Path as _P
+    import json as _j
+    example = _P(__file__).resolve().parent.parent / "autocount.example.json"
+    want = _j.loads(example.read_text(encoding="utf-8"))["connection"].get("preferred_database")
+    have = cfg["connection"]["database"]
+    if want and have.upper() != want.upper():
+        raise SystemExit(f"目前连的是 {have}，不是报表用的 {want}。\n"
+                         f"请双击 setup_autocount.bat 重新设定（它会自动选 {want}）。")

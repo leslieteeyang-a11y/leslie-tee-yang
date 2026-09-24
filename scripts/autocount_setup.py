@@ -192,8 +192,12 @@ def main():
     if likely is not dbs:
         print("（AutoCount 账套通常以 AED 开头）")
     example = json.loads(EXAMPLE.read_text(encoding="utf-8"))
-    database = choose("请选择你们的账套", likely,
-                      preferred=example["connection"].get("preferred_database"))
+    preferred = example["connection"].get("preferred_database")
+    if preferred and preferred in likely and "--choose" not in sys.argv:
+        database = preferred
+        print(f"  → 自动选用报表账套 {preferred}（要换账套：python scripts\\autocount_setup.py --choose）")
+    else:
+        database = choose("请选择你们的账套", likely, preferred=preferred)
 
     cfg = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     cfg["connection"].update({
