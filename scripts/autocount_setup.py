@@ -153,8 +153,8 @@ def main():
         print("  （这是 SQL Server 的密码，不是 AutoCount 的登入密码。")
         print("    AutoCount 安装程式预设的 sa 密码常见是 oconnor2008，可以先试。")
         print("    输入时画面不会显示任何字，打完按 Enter。不知道的话直接 Enter 跳过。）")
-        user = "sa"
-        password = getpass("  sa 密码: ")
+        user = input("  帐号 [sa]（若经销商建了只读帐号，打那个帐号）: ").strip() or "sa"
+        password = getpass(f"  {user} 的密码: ")
         if password:
             for s_ in servers:
                 try:
@@ -170,7 +170,9 @@ def main():
         sys.exit("\n所有位址都连不上。请确认：\n"
                  "  - AutoCount 登入画面上显示的 Server 名称（照抄进来）\n"
                  "  - SQL Server 服务与 SQL Browser 服务是否启动\n"
-                 "  - SQL Server 的 sa 密码（问当初装 AutoCount 的人或经销商）\n"
+                 "  - 密码：若只有 SERVER\\A2006 显示「Login failed」，代表连线已通、只是密码不对。\n"
+                 "    请经销商给 sa 密码，或用 scripts\\sql\\create_readonly_login.sql 建只读帐号；\n"
+                 "    或者到 SERVER 那台电脑上跑本脚本（Windows 验证常可直接通过）\n"
                  "然后重跑本脚本，在第一个提示直接输入正确的 Server 名称。")
 
     dbs = list_databases(conn)
