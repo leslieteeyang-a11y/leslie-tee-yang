@@ -11,7 +11,7 @@
     "preferred_database": "AED_HOMEWORKSSB"
   },
   "schema": {
-    "_说明": "已依 discovery（AutoCount 2.2）定稿。AutoCount 2.x 的单据表用两字母命名：IV 发票、CS 现销、CN 贷项、DO 送货单、SO 销售订单、GR 收货单；明细表加 DTL。 品牌不在 ItemBrand（空的），在 ItemType（HEMOS / HOMEGUARD / TENON…）。",
+    "_说明": "已依 discovery（AutoCount 2.2）定稿。AutoCount 2.x 的单据表用两字母命名：IV 发票、CS 现销、CN 贷项（扣减）、DN 借项（加回，例如冲销错开的 CN）、DO 送货单、SO 销售订单、GR 收货单；明细表加 DTL。 品牌不在 ItemBrand（空的），在 ItemType（HEMOS / HOMEGUARD / TENON…）。",
     "sales_documents": [
       {
         "header": "IV",
@@ -27,6 +27,11 @@
         "header": "CN",
         "detail": "CNDTL",
         "sign": -1
+      },
+      {
+        "header": "DN",
+        "detail": "DNDTL",
+        "sign": 1
       }
     ],
     "header_key": "DocKey",

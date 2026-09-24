@@ -27,7 +27,9 @@ Tiktok 3000-T003、Cash 300-C001、Online 3000-C009、Southern 3000-H008、Shopi
 HEMOS / HEMOSX；Referral = 客户 3000-C010「CASH (REFERRAL)」（已填入 referral）。
 AED_HOMEWORKSSB 独有：仓库 HQ / SRGADING / JB / TP STORE / PRE (JB) / DEFECTS / DISPLAY /
 EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，可作渠道第二来源）、
-`Item.UDF_SKU`（平台 SKU）；`TD_SG_*` 是 SiteGiant 同步表。
+`Item.UDF_SKU`（平台 SKU）；`TD_SG_*` 是 SiteGiant 同步表。有 `DN`/`DNDTL`（销售借项单，
+很少用，多为冲销错开的 CN）→ 销售 = IV + CS − CN + DN，与 AutoCount 自家报表口径一致。
+明细行 `AccNo` 可分辨收入科目（5000/5001/5100 = 销售）与手续费科目（6150 = 手续费）。
 
 ## 2026-09-24 第一次真实抓数的对账结果（8 月）
 
@@ -89,7 +91,7 @@ EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，�
 ## 后续路线（使用者已同意的顺序）
 
 1. 真实数据接通（上面第 3–7 步）
-2. ~~管理仪表板~~（已完成 v0.2：`/dashboard`，销售来自 Invoice+CashSale−CreditNote）
+2. ~~管理仪表板~~（已完成 v0.2：`/dashboard`，销售来自 Invoice+CashSale−CreditNote+DebitNote）
 3. 登入与权限（开到办公室以外之前必须有）
 4. 写入 AutoCount 的 POC：一条流程、测试账套、证明失败时不留半张单、重跑不重复过账
 

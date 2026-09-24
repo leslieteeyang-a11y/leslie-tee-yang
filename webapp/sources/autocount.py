@@ -80,6 +80,10 @@ DEFAULT_SQL = {
         SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, -d.Qty, -d.SubTotal
         FROM [CN] h JOIN [CNDTL] d ON d.DocKey = h.DocKey
         WHERE h.DocDate >= ? AND h.Cancelled = 'F'
+        UNION ALL
+        SELECT h.DocDate, h.DocKey, h.DebtorCode, d.ItemCode, d.Qty, d.SubTotal
+        FROM [DN] h JOIN [DNDTL] d ON d.DocKey = h.DocKey
+        WHERE h.DocDate >= ? AND h.Cancelled = 'F'
     """,
     # 送货单表头
     "deliveries": """
@@ -220,7 +224,7 @@ class AutoCountSource:
     def _sales(self, days: int):
         since = date.today() - timedelta(days=days - 1)
         return [(_d(dt), key, (dc or "").strip(), (item or "").strip(), float(q or 0), float(a or 0))
-                for dt, key, dc, item, q, a in self._q("sales_lines", (since, since, since))]
+                for dt, key, dc, item, q, a in self._q("sales_lines", (since, since, since, since))]
 
     def sales_daily(self, days: int = 30) -> list[SalesPoint]:
         from collections import defaultdict
