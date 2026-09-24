@@ -1,6 +1,19 @@
 {
   "year": 2026,
-  "months": ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"],
+  "months": [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC"
+  ],
   "sku_trend_list": [
     "HM-YKR05-MB",
     "HM-YKR06-MB",
@@ -10,17 +23,86 @@
     "HM-YKS5070-MB",
     "HM-YKS7090-MB"
   ],
-  "sku_trend_platforms": ["SHOPEE", "LAZADA"],
-  "forecast_channels": [
-    {"key": "shopee",   "header": "Shopee RM"},
-    {"key": "lazada",   "header": "Lazada RM"},
-    {"key": "cash",     "header": "Cash RM"},
-    {"key": "online",   "header": "Online RM"},
-    {"key": "referral", "header": "Referral RM"},
-    {"key": "shuigong", "header": "水工 RM"},
-    {"key": "southern", "header": "Southern RM"},
-    {"key": "tiktok",   "header": "Tiktok RM"},
-    {"key": "shopify",  "header": "Shopify RM"}
+  "sku_trend_platforms": [
+    "SHOPEE",
+    "LAZADA"
   ],
-  "live_sales_channels": ["SHOPEE", "TIKTOK"]
+  "forecast_channels": [
+    {
+      "key": "shopee",
+      "header": "Shopee RM"
+    },
+    {
+      "key": "lazada",
+      "header": "Lazada RM"
+    },
+    {
+      "key": "cash",
+      "header": "Cash RM"
+    },
+    {
+      "key": "online",
+      "header": "Online RM"
+    },
+    {
+      "key": "referral",
+      "header": "Referral RM"
+    },
+    {
+      "key": "shuigong",
+      "header": "水工 RM"
+    },
+    {
+      "key": "southern",
+      "header": "Southern RM"
+    },
+    {
+      "key": "tiktok",
+      "header": "Tiktok RM"
+    },
+    {
+      "key": "shopify",
+      "header": "Shopify RM"
+    }
+  ],
+  "live_sales_channels": [
+    "SHOPEE",
+    "TIKTOK"
+  ],
+  "category_map": {
+    "_说明": "AutoCount Item.ItemGroup → 报表上的类别名称。没列到的照原值显示。",
+    "SANITARY": "Sanitary",
+    "FITTING": "Fitting",
+    "LOCK": "Lock",
+    "KITCHEN": "Kitchen",
+    "BUILDING": "Building",
+    "ELECTRIC": "Electric",
+    "SAMPLE": "Sample",
+    "VALVE": "Valve",
+    "GARDEN": "Garden",
+    "TRAN FEE": "Transaction Fee",
+    "PAY FEE": "Transaction Fee",
+    "SERV FEE": "Service Fee",
+    "SHIP FEE": "Shipping Fee",
+    "INSTALL": "Install",
+    "ONLINE": "Online Fee",
+    "TRANSPOR": "Transport"
+  },
+  "category_order": [
+    "Building",
+    "Electric",
+    "Fitting",
+    "Garden",
+    "Online Fee",
+    "Kitchen",
+    "Lock",
+    "Sanitary",
+    "Service Fee",
+    "Shipping Fee",
+    "Sample",
+    "Transaction Fee",
+    "Transport",
+    "Install",
+    "Valve"
+  ]
 }

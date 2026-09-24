@@ -117,6 +117,9 @@ class AutoCountSource:
                     self._chan[str(c)] = chan
         self._chan_label = {c["key"]: c["header"].replace(" RM", "")
                             for c in _base_config().get("forecast_channels", [])}
+        self._type_map = {k: v for k, v in self.cfg.get("channel_rules", {}).get("type_map", {}).items()
+                          if not k.startswith("_")}
+        self._debtor_type: dict = {}          # AccNo → DebtorType，第一次用到时才查
 
     def conn(self):
         if self._conn is None:
@@ -127,8 +130,15 @@ class AutoCountSource:
         return fetch(self.conn(), self.sql[key], params)[1]
 
     def _channel(self, debtor_code: str) -> str:
-        key = self._chan.get(str(debtor_code).strip(),
-                             self.cfg.get("channel_rules", {}).get("default_channel", "cash"))
+        code = str(debtor_code or "").strip()
+        key = self._chan.get(code)
+        if key is None and self._type_map:
+            if not self._debtor_type:
+                self._debtor_type = {r[0].strip(): (r[1] or "").strip()
+                                     for r in fetch(self.conn(), "SELECT AccNo, DebtorType FROM [Debtor]")[1]}
+            key = self._type_map.get(self._debtor_type.get(code, ""))
+        if key is None:
+            key = self.cfg.get("channel_rules", {}).get("default_channel", "shuigong")
         return self._chan_label.get(key, key)
 
     # ---------------------------------------------------------------- 库存

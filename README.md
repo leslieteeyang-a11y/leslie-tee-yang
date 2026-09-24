@@ -139,6 +139,10 @@ python scripts\autocount_discover.py
 
 ### 每月执行
 
+最简单：**双击 `make_report.bat`**，输入月份（或直接 Enter = 上个月），它会抓数、产生 Excel、自动打开。
+
+命令列版本：
+
 ```bat
 run_monthly.bat
 ```

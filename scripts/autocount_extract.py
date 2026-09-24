@@ -52,6 +52,11 @@ def channel_case(cfg):
             continue
         lst = ", ".join("'" + str(c).replace("'", "''") + "'" for c in codes)
         whens.append(f"WHEN {field} IN ({lst}) THEN '{chan}'")
+    # 客户账号没列到的，再看客户类型（Debtor.DebtorType）
+    for dtype, chan in rules.get("type_map", {}).items():
+        if dtype.startswith("_"):
+            continue
+        whens.append(f"WHEN dbt.DebtorType = '{dtype.replace(chr(39), chr(39)*2)}' THEN '{chan}'")
     if not whens:
         sys.exit("channel_rules.map 里一个渠道都没设定，无法分辨渠道栏。")
     return "CASE " + " ".join(whens) + f" ELSE '{default}' END"
@@ -71,6 +76,7 @@ def line_source(cfg):
                ({doc['sign']}) * d.{s['detail_amount']} AS Amount
         FROM [{doc['header']}] h
         JOIN [{doc['detail']}] d ON d.{s['header_key']} = h.{s['header_key']}
+        LEFT JOIN [Debtor] dbt ON dbt.AccNo = h.{s['header_debtor']}
         WHERE h.{s.get('header_cancelled', 'Cancelled')} = 'F'""")
     return "\n        UNION ALL\n".join(parts)
 
@@ -116,16 +122,20 @@ def month_range(month):
     return date(y, m, 1).isoformat(), date(y, m, calendar.monthrange(y, m)[1]).isoformat()
 
 
-def build_forecast(rows, channels):
-    """[(category, channel, qty, amount)] → 报表用的类别列表。"""
+def build_forecast(rows, channels, category_map=None, order=None):
+    """[(category, channel, qty, amount)] → 报表用的类别列表。
+    category_map 把 AutoCount 的 ItemGroup 换成报表名称；order 决定列的先后。"""
+    category_map = {k: v for k, v in (category_map or {}).items() if not k.startswith("_")}
     by_cat = defaultdict(lambda: {"qty": 0, **{c: 0.0 for c in channels}})
     for cat, chan, qty, amt in rows:
+        cat = category_map.get((cat or "").strip().upper(), (cat or "").strip())
         rec = by_cat[cat]
         rec["qty"] += int(qty or 0)
         if chan in channels:
             rec[chan] += float(amt or 0)
+    rank = {name: i for i, name in enumerate(order or [])}
     out = []
-    for cat in sorted(by_cat):
+    for cat in sorted(by_cat, key=lambda c: (rank.get(c, len(rank)), c)):
         rec = by_cat[cat]
         item = {"category": cat, "qty": rec["qty"]}
         for c in channels:
@@ -178,8 +188,10 @@ def build_month_doc(cfg, base_cfg, month, summary_all, summary_hemos, item_rows,
         "live_sales": existing.get("live_sales", {}),
         "top10_up": top_rows(up),
         "top10_down": top_rows(down),
-        "forecast_all": build_forecast(summary_all, channels),
-        "forecast_hemos": build_forecast(summary_hemos, channels),
+        "forecast_all": build_forecast(summary_all, channels,
+                                       base_cfg.get("category_map"), base_cfg.get("category_order")),
+        "forecast_hemos": build_forecast(summary_hemos, channels,
+                                         base_cfg.get("category_map"), base_cfg.get("category_order")),
     }
     return doc
 

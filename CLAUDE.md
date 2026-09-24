@@ -20,13 +20,16 @@ HOMEGUARD 账套内是 300-H002，HOMEWORKS 账套内的代号待 discovery）�
 品牌在 `Item.ItemType`（HEMOS / HOMEGUARD / TENON；`ItemBrand` 是空的）；库存流水
 `StockDTL`（ItemCode/UOM/Location/Qty），仓库 HQ / JB / PRE (JB)；`ItemUOM.ReOLevel`
 安全库存；`Debtor.AccNo`/`CompanyName`/`DebtorType`；`DODTL`/`SODTL`/`IVDTL` 都有
-`TransferedQty`（已转出数量）。**尚待取得**：AED_HOMEWORKS 的渠道 Debtor Code、
-ItemGroup 与 ItemType 实际值（前三次 discovery 都选到 HOMEGUARD——清单按字母排序，1 是 HOMEGUARD；已改成
-HOMEWORKS 排第一、Enter 即选）。
+`TransferedQty`（已转出数量）。AED_HOMEWORKS 的 discovery（2026-09-24）已取得并填入 `autocount.example.json` / `config.json`：
+渠道 Debtor Code（Shopee 300-S001/300-0004/3000-S009、Lazada = ECART 300-E001、
+Tiktok 3000-T003、Cash 300-C001、Online 3000-C009、Southern 3000-H008、Shopify 3000-S011、
+其余 = 水工）；ItemGroup 19 个值 → `config.json` 的 `category_map`；品牌 `ItemType` 为
+HEMOS / HEMOSX。**尚未确认**：Referral 渠道靠什么分辨（目前会被并进水工，金额很小）。
 
 ## 第一次打开时要做的事（照顺序）
 
-（使用者也可能已经双击过 `setup_autocount.bat`，它等于第 1、3、4 步；先看有没有 `autocount.json` 与 `discovery_*.txt`。）
+（使用者也可能已经双击过 `setup_autocount.bat`（= 第 1、3、4 步）和 `make_report.bat`
+（= 第 6 步）；先看有没有 `autocount.json`、`discovery_*.txt`、`output/月度报表_*.xlsx`。）
 
 1. `python -m pip install -r requirements.txt`
 2. `run_web.bat` → 浏览器开 http://localhost:8000 看到库存页（示范资料）即通过。
@@ -35,8 +38,6 @@ HOMEWORKS 排第一、Enter 即选）。
    写出 `autocount.json`。连不上时脚本会说该检查什么；**Server 名称照抄
    AutoCount 登入画面**。
 4. `python scripts\autocount_discover.py` → 产生 `discovery_<账套>.txt`。
-   （2026-09-24 已跑过一次但选到 AED_HOMEGUARD；需要用 AED_HOMEWORKS 再跑一次
-   取得渠道对照、类别与品牌的实际值。）
 5. 读那个档案，依实际表名栏名修正 `autocount.json` 的 `schema`、
    `channel_rules.map`（哪个 Debtor Code 是 Shopee / Lazada / …）、`brand_filter`，
    以及 `webapp/sources/autocount.py` 的预设 SQL（可用 `autocount.json` 的

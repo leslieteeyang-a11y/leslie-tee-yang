@@ -42,34 +42,47 @@
     "item_brand": "ItemType"
   },
   "channel_rules": {
-    "_说明": "报表的渠道栏怎么从 AutoCount 分辨出来。mode 可选 debtor / project / salesagent / custom_sql。debtor 模式下，把每个渠道对应的客户账号（Debtor Code）列出来即可。",
+    "_说明": "依 AED_HOMEWORKS 的 discovery（2026-09-24）定稿。先比对 map 里的客户账号；没列到的再看 type_map（Debtor.DebtorType）；都没有就归 default_channel（水工）。",
     "mode": "debtor",
-    "default_channel": "cash",
+    "default_channel": "shuigong",
     "map": {
       "shopee": [
-        "300-S001"
+        "300-S001",
+        "300-0004",
+        "3000-S009"
       ],
       "lazada": [
-        "300-L001"
+        "300-E001"
+      ],
+      "tiktok": [
+        "3000-T003"
       ],
       "cash": [
         "300-C001"
       ],
-      "online": [],
+      "online": [
+        "3000-C009"
+      ],
+      "southern": [
+        "3000-H008"
+      ],
+      "shopify": [
+        "3000-S011"
+      ],
       "referral": [],
-      "shuigong": [],
-      "southern": [],
-      "tiktok": [],
-      "shopify": []
+      "shuigong": []
     },
-    "custom_sql_case": "CASE WHEN h.DebtorCode LIKE '300-S%' THEN 'shopee' ELSE 'cash' END"
+    "type_map": {
+      "_说明": "Debtor.DebtorType → 渠道。Referral 渠道在 AutoCount 里靠哪个 DebtorType 分辨尚未确认；确认后填进来，例如 {\"DESIGNER\": \"referral\"}。"
+    },
+    "custom_sql_case": "CASE WHEN h.DebtorCode LIKE '300-S%' THEN 'shopee' ELSE 'shuigong' END"
   },
   "brand_filter": {
-    "_说明": "第二张汇总表 (Hemos & Hemos X only) 的品牌筛选。discovery 证实品牌存在 Item.ItemType（ItemBrand 是空的）。实际值以 AED_HOMEWORKS 的 discovery 为准。",
+    "_说明": "第二张汇总表 (Hemos & Hemos X only)。discovery 证实品牌在 Item.ItemType，值为 HEMOS 与 HEMOSX。",
     "field": "ItemType",
     "values": [
       "HEMOS",
-      "HEMOS X"
+      "HEMOSX"
     ]
   },
   "sku_trend": {
