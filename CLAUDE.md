@@ -97,7 +97,8 @@ extract 覆盖成抓取值。以下是 2026-09-24/25 对账时查清的事实，
 
 ## 后续路线（使用者已同意的顺序）
 
-1. ~~真实数据接通~~（已完成；月报已可由 `schedule_monthly.bat` 每月自动产生，2026-09-25）
+1. ~~真实数据接通~~（已完成。2026-09-25 排程已在 SERVER 登记并用 `--run-now` 验证成功；
+   实际安装路径是 `C:\Homeworks\HomeWorks`（多一层），排程、output、logs 都在那里）
 2. ~~管理仪表板~~（已完成 v0.2：`/dashboard`，销售来自 Invoice+CashSale−CreditNote+DebitNote）
 3. 登入与权限（开到办公室以外之前必须有）
 4. 写入 AutoCount 的 POC：一条流程、测试账套、证明失败时不留半张单、重跑不重复过账
