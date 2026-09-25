@@ -28,7 +28,7 @@ from autocount_db import connect, fetch, load_autocount_config, require_report_b
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-VERSION = "2026-09-24g"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
+VERSION = "2026-09-25a"          # 印在 JSON 与诊断档里，用来确认 SERVER 上跑的是不是最新版
 
 
 # --------------------------------------------------------------- SQL 组装

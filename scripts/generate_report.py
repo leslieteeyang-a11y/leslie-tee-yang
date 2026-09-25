@@ -282,7 +282,7 @@ def sheet_top10(wb, cfg, month, doc):
 
 
 # -------------------------------------------------------- sheet: 销售汇总
-def sheet_forecast(wb, cfg, month, rows_data, sheet_name, title):
+def sheet_forecast(wb, cfg, month, rows_data, sheet_name, title, produced_by=""):
     channels = cfg["forecast_channels"]
     ws = wb.create_sheet(sheet_name)
     ncol = 3 + len(channels) + 3          # Categories, QTY, channels..., Total, Contribution, Avg
@@ -345,7 +345,7 @@ def sheet_forecast(wb, cfg, month, rows_data, sheet_name, title):
         style_cell(ws.cell(row=r, column=avg_col), bold=bold, fmt=MONEY_FMT_Z, fill=fill)
 
     ws.cell(row=tr + 2, column=1,
-            value=f"数据来源 / Source: data/{month}.json（由用户提供的当月实际数字）；"
+            value=f"数据来源 / Source: {produced_by or f'data/{month}.json（手动录入）'}；"
                   f"Total RM = 各渠道加总，Contribution = Total RM ÷ 合计，Avg. Price = Total RM ÷ QTY。")
     ws.cell(row=tr + 2, column=1).font = Font(name=FONT, size=9, italic=True)
     return ws
@@ -380,10 +380,11 @@ def main():
         sheet_sku_trend(wb, cfg, platform, monthly_docs)
     sheet_ads(wb, cfg, month, doc)
     sheet_top10(wb, cfg, month, doc)
+    produced_by = doc.get("_产生方式", "")
     sheet_forecast(wb, cfg, month, doc.get("forecast_all", []),
-                   "销售汇总-全品牌", "Sales Forecast Summary (All brand)")
+                   "销售汇总-全品牌", "Sales Forecast Summary (All brand)", produced_by)
     sheet_forecast(wb, cfg, month, doc.get("forecast_hemos", []),
-                   "销售汇总-Hemos", "Sales Forecast Summary (Hemos & Hemos X only)")
+                   "销售汇总-Hemos", "Sales Forecast Summary (Hemos & Hemos X only)", produced_by)
 
     OUT_DIR.mkdir(exist_ok=True)
     out = OUT_DIR / f"月度报表_{month}.xlsx"

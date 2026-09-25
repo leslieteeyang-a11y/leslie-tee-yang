@@ -87,8 +87,8 @@
     "INSTALL": "Install",
     "ONLINE": "Online Fee",
     "TRANSPOR": "Transport",
-    "STOCK A": null,
-    "_备注": "值为 null 的群组不列进报表（STOCK A：2026-08 有 123 件但金额全为 0，纸本没有这一列）。「(未分类)」= 开单时没选商品代号、或商品没设 ItemGroup 的行；2026-08 对账证实纸本没把它们算进 Sanitary，故单独列出让人看见。"
+    "STOCK A": "Stock A",
+    "_备注": "报表以 AutoCount 为准：每个 ItemGroup 都照实列出（STOCK A 金额常为 0 也列）。「(未分类)」= 开单时没选商品代号、或商品没设 ItemGroup 的行，单独一列让人看见。若真的要把某个群组从报表拿掉，把它的值设成 null。"
   },
   "category_order": [
     "Building",

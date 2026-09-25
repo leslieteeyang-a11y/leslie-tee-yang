@@ -23,10 +23,12 @@ def test_uncoded_lines_stay_visible_as_their_own_row():
     assert out[-1]["category"] == "(未分类)"          # 没在 category_order 里的排最后
 
 
-def test_null_mapped_group_is_dropped():
+def test_every_group_is_reported_and_null_drops():
     rows = [("STOCK A", "cash", 123, 0.0), ("LOCK", "shopee", 2, 100.0)]
     out = build_forecast(rows, CHANNELS, BASE["category_map"], BASE["category_order"])
-    assert [r["category"] for r in out] == ["Lock"]
+    assert [r["category"] for r in out] == ["Lock", "Stock A"]      # 以 AutoCount 为准，金额 0 也列
+    dropped = build_forecast(rows, CHANNELS, {**BASE["category_map"], "STOCK A": None}, BASE["category_order"])
+    assert [r["category"] for r in dropped] == ["Lock"]
 
 
 def test_fee_groups_merge_into_report_rows():

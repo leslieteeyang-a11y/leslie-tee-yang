@@ -180,6 +180,7 @@ def main():
     L += ["[6] Shopee + Lazada 销量前 30 的 ItemCode（对纸本 Top 10 用；型号 = 依 config.json 的 model_code_pattern 抽出）"]
     laz = cfg["sku_trend"]["platform_channels"].get("LAZADA", "lazada")
     sho = cfg["sku_trend"]["platform_channels"].get("SHOPEE", "shopee")
+    excl = ", ".join("'" + g.replace("'", "''") + "'" for g in base.get("top10_exclude_groups", ())) or "''"
     _, rows = fetch(conn, f"""
         WITH lines AS ({lines})
         SELECT TOP 30 l.ItemCode, MAX(i.Description), MAX(i.ItemGroup), MAX(i.StockControl),
@@ -188,6 +189,8 @@ def main():
                MAX(i.Desc2), MAX(i.GlobalCode)
         FROM lines l LEFT JOIN [Item] i ON i.ItemCode = l.ItemCode
         WHERE l.DocDate >= ? AND l.DocDate <= ? AND l.Channel IN ('{sho}', '{laz}')
+          AND ISNULL(i.StockControl, 'F') = 'T'
+          AND ISNULL(i.ItemGroup, '') NOT IN ({excl})
         GROUP BY l.ItemCode ORDER BY SUM(l.Qty) DESC""", (start, end))
     for r in rows:
         mc = model_code(r[0], r[1], r[6], r[7], base.get("model_code_pattern"))

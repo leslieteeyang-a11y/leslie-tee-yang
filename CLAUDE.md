@@ -31,29 +31,25 @@ EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，�
 很少用，多为冲销错开的 CN）→ 销售 = IV + CS − CN + DN，与 AutoCount 自家报表口径一致。
 明细行 `AccNo` 可分辨收入科目（5000/5001/5100 = 销售）与手续费科目（6150 = 手续费）。
 
-## 2026-09-24 第一次真实抓数的对账结果（8 月）
+## 报表口径：以 AutoCount 为准（使用者 2026-09-25 决定）
 
-纸本对照值在 git 里的 `data/2026-08.json`（SERVER 上的同名档会被 extract 覆盖成抓取值）。
-与纸本分毫不差（AED_HOMEWORKSSB）：Southern 整栏、Tiktok 合计、Shopify、Electric、Garden、
-Kitchen、Install、Sample、Service Fee、Transport、Referral（760 / 600 / 1,800.75）、SKU 月度表
-（只差 HM-YKR06-MB 3→2）。已查清并处理：
-- **未分类**（ItemCode 空白或商品没设 ItemGroup：30 件、Cash 11,453.50、水工 1,971）：纸本
-  **没有**算进 Sanitary（Sanitary Cash 纸本 81,870.19 = 抓出的 SANITARY 本身；曾误判为并入，
-  并进去后就多了 11,453.50）。现在单独列成「(未分类)」一列让人看见，不并入任何类别。
-- **STOCK A** 群组：123 件、金额全 0，纸本没这列 → `category_map` 设 null，不列。
-- **借项单 DN**：纸本 Shipping Fee 水工 477 = DN-000002（追回运费）；Online 渠道 Sanitary
-  差 112.50 = DN-000003（冲销 CN-000767）→ 销售口径已加 DN。
-- Online 渠道另有 42.00 在纸本算 Sanitary、AutoCount 现在归 TRAN FEE（商品群组被改过），属分类差异。
-- **ONLINE（平台手续费）** 纸本 Shopee −108,729、抓出 −179,761：Shopee 手续费是每周一笔
-  ONLINE000002 汇总行（08-02…08-30，每笔 −28k～−35k），纸本印出时最后两周与部分 CN 还没过账。
-  Shopee 各类别抓出值比纸本略低（Sanitary −3.8k、Lock −0.8k）同样是之后才过账的退货 CN。
-  **结论：AutoCount 是现况，纸本是快照**；请使用者用 AutoCount 自己的报表复核。
-- **Top 10**：只算 StockControl='T'、排除 `top10_exclude_groups`、用 `model_code_pattern` 从
-  Description 抽型号合并、**只看 Shopee + Lazada 的销量排名**（之前把只在水工卖的商品也排进去，
-  两栏都是 0）。纸本 Top 10 Up 的数量比抓出的大很多（HM-101-MS 纸本 493、抓出 208），
-  **待问使用者纸本 Top 10 的来源**（疑似 Shopee 后台，不是 AutoCount）。
-对账工具：`diag.bat` → `scripts/autocount_diag.py`（[3b] 未分类逐行、[3c] 汇总原始行、[6] 平台
-销量前 30 含型号）；Excel 说明页与 JSON 的 `_产生方式` 都印 `VERSION`，用来确认 SERVER 跑的是最新版。
+**不再对纸本调数。** 纸本报表是员工手抄的快照，AutoCount 才是现况；抓出来多少就报多少。
+`data/2026-08.json` 在 git 里的版本是当初手抄纸本的对照值，只留作历史，SERVER 上会被
+extract 覆盖成抓取值。以下是 2026-09-24/25 对账时查清的事实，留给以后判断差异用：
+- **未分类**（`(未分类)` 列）= 开单时没选商品代号的自由输入行（例：HEMOS BASIN CABINET
+  C/W MIRROR BOX、HM-UB001 石盆、PROMOTION FILTER），8 月 25 行、RM 13,411.51，多为 Cash /
+  水工。照实单独列出；要归类得请员工在 AutoCount 建商品代号（不是程式的事）。
+- **STOCK A** 群组：8 月 123 件、金额 0，照实列（category_map 可设 null 拿掉）。
+- **借项单 DN** 已并入销售口径（IV + CS − CN + DN），与 AutoCount 自家报表一致。
+- **ONLINE（平台手续费）**：Shopee 每周一笔 ONLINE000002 汇总（每笔 −28k～−35k），8 月共
+  −179,761；纸本印时只到 −108,729，因为最后两周还没过账。差异来自快照时间，不是程式。
+- **Top 10**：只算 StockControl='T'、排除 `top10_exclude_groups`、用 `model_code_pattern`
+  从 Description 抽型号合并、只看 Shopee + Lazada 销量排名。纸本 Top 10 的数字不是从
+  AutoCount 来的，不必对。
+- Shopee 还有一个客户 3000-S016「SHOPEE SINGAPORE (DIRECT)」（2026-09 出现），已加进 shopee。
+对账工具：`diag.bat` → `scripts/autocount_diag.py`（[1] 渠道×单据、[3b] 未分类逐行、
+[3c] 汇总原始行、[4b] 水工客户全清单、[6] 平台销量前 30 含型号）；Excel 说明页与 JSON 的
+`_产生方式` 都印 `VERSION`，用来确认 SERVER 跑的是最新版。
 
 ## 第一次打开时要做的事（照顺序）
 
