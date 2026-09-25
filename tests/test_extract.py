@@ -65,3 +65,27 @@ def test_sku_trend_uses_model_code():
     doc = build_month_doc(AC, BASE, "2026-08", [], [], items, {"ads": {"x": 1}})
     assert doc["sku_qty"]["SHOPEE"]["HM-YKR05-MB"] == 3
     assert doc["ads"] == {"x": 1}                       # 手填的段落要保留
+
+
+def test_schedule_xml_runs_bat_on_chosen_day_and_catches_up():
+    from pathlib import Path
+    from schedule_monthly import task_xml
+    xml = task_xml(Path(r"C:\HomeWorks\run_monthly.bat"), 1, "08:00", Path(r"C:\HomeWorks"))
+    assert "<Day>1</Day>" in xml and "T08:00:00" in xml
+    assert r"<Command>C:\HomeWorks\run_monthly.bat</Command>" in xml
+    assert "<Arguments>--scheduled</Arguments>" in xml
+    assert "<StartWhenAvailable>true</StartWhenAvailable>" in xml   # 1 号没开机 → 下次开机补跑
+
+
+def test_run_monthly_previous_month_and_delivery(tmp_path, monkeypatch):
+    import run_monthly
+    from datetime import date
+    class D(date):
+        @classmethod
+        def today(cls): return cls(2026, 1, 5)
+    monkeypatch.setattr(run_monthly, "date", D)
+    assert run_monthly.previous_month() == "2025-12"
+    src = tmp_path / "月度报表_2025-12.xlsx"; src.write_bytes(b"x")
+    run_monthly.deliver(src, str(tmp_path / "share" / "sub"))
+    assert (tmp_path / "share" / "sub" / src.name).read_bytes() == b"x"
+    run_monthly.deliver(src, "")                                     # 没设定就什么都不做

@@ -117,6 +117,10 @@
     "TRANSPOR",
     "SAMPLE"
   ],
+  "report_delivery": {
+    "_说明": "copy_to 填一个资料夹路径，每月自动产生的 Excel 会再复制一份过去（例如 OneDrive、Google Drive 同步资料夹或共享磁碟）。留空就只放在 output/。路径里的反斜线要写两个，例如 C:\\Users\\Leslie\\OneDrive\\HomeWorks报表",
+    "copy_to": ""
+  },
   "model_code_pattern": "\\bHM[A-Z]{0,4}-[A-Z0-9]+(?:-[A-Z0-9]+)*",
   "_top10_说明": "Top 10 与 SKU 趋势按「型号」统计：依序从 Item.GlobalCode、Desc2、Description 用 model_code_pattern 抽出 HM-xxx；抽不到就用 ItemCode。"
 }

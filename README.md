@@ -149,8 +149,15 @@ run_monthly.bat
 
 预设抓「上个月」，抓完直接产生报表。指定月份：`run_monthly.bat 2026-09`。
 
-**全自动**：把 `run_monthly.bat` 加进 Windows 工作排程器，设每月 1 号早上执行，
-月报就会自动出现在 `output/`。
+**全自动**：在 SERVER 上双击 **`schedule_monthly.bat`** 一次，就会登记 Windows 工作排程器：
+每月 1 号 08:00 自动抓上个月、产生 Excel 到 `output/`，每次执行纪录在 `logs/`。
+那天电脑没开也没关系，下次开机会补跑。要换日子或时间：
+`python scripts\schedule_monthly.py --day 2 --time 09:30`；立刻测一次：`--run-now`；
+看状态：`--status`；取消：`--remove`。
+想让报表自动出现在自己的电脑：在 `config.json` 的 `report_delivery.copy_to` 填一个
+OneDrive / Google Drive 同步资料夹或共享磁碟路径，每次产生完会复制一份过去。
+Shopee Ads / Lazada Affiliate / Live Sales 三块不在 AutoCount 里，仍要手动填进
+`data/YYYY-MM.json` 再跑一次 `generate_report.py`。
 
 先看 SQL 不连数据库：
 
@@ -198,7 +205,8 @@ run_web.bat                    # 启动网页
 docs/screenshots/              # 画面截图
 autocount.example.json         # AutoCount 连线与栏位对应设定（复制为 autocount.json）
 config.json                    # SKU 清单、渠道栏位、月份名称等设定
-run_monthly.bat                # 每月一键（Windows 工作排程器用这个）
+run_monthly.bat                # 每月一键（Windows 工作排程器跑这个）
+schedule_monthly.bat           # 双击一次 → 登记每月 1 号自动执行
 scripts/autocount_setup.py     # 自动侦测 SQL Server 与账套，产生 autocount.json
 scripts/autocount_discover.py  # 探查 AutoCount 账套结构
 scripts/autocount_extract.py   # 从 AutoCount 抓当月数据 → data/YYYY-MM.json

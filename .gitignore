@@ -5,3 +5,4 @@ __pycache__/
 autocount.json
 discovery_*.txt
 diag_*.txt
+logs/
