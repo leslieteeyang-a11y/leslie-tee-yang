@@ -20,6 +20,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 LOG_DIR = ROOT / "logs"
 
 
@@ -65,6 +66,18 @@ def deliver(out: Path, copy_to: str) -> None:
         print(f"[!] 复制到 {copy_to} 失败：{e}。报表仍在 {out}。请检查该资料夹是否存在、有没有写入权限。")
 
 
+def push_bi(month: str) -> None:
+    """推进 HomeWorks BI（Supabase）。没设定就跳过；失败只警告，Excel 已经产生了。"""
+    try:
+        from supabase_push import push
+        from autocount_db import load_autocount_config
+        push(load_autocount_config(), month)
+    except SystemExit as e:
+        print(f"[!] 推送 BI 失败：{e}")
+    except Exception as e:                       # noqa: BLE001
+        print(f"[!] 推送 BI 失败：{type(e).__name__}: {e}")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     scheduled = "--scheduled" in sys.argv
@@ -85,11 +98,12 @@ def main():
     print(f"\n完成。报表在 {out}")
     cfg = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     deliver(out, (cfg.get("report_delivery") or {}).get("copy_to", ""))
+    push_bi(month)
 
     doc = json.loads((ROOT / "data" / f"{month}.json").read_text(encoding="utf-8"))
     if not doc.get("ads"):
         print(f"提醒：Shopee Ads / Lazada Affiliate / Live Sales 不在 AutoCount，"
-              f"填进 data/{month}.json 后再跑一次 generate_report.py 即可。")
+              f"填进 data/{month}.json 后再跑一次 generate_report.py 与 supabase_push.py 即可。")
 
 
 if __name__ == "__main__":

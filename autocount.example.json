@@ -102,6 +102,11 @@
     "_说明": "TOP 10 UP = 当月销量最高的十个 SKU；TOP 10 DOWN = 当月有销售但销量最低的十个 SKU（与你 8 月纸本的呈现方式一致）。",
     "count": 10
   },
+  "supabase": {
+    "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。",
+    "url": "https://vwljnypzgfqhatkgulqs.supabase.co",
+    "service_key": ""
+  },
   "manual_sections": {
     "_说明": "以下数据不在 AutoCount 里（属于 Shopee/Lazada 后台的广告与直播数据），脚本会保留 data/YYYY-MM.json 内既有的数值，不会覆盖。",
     "keys": [

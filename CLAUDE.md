@@ -51,6 +51,25 @@ extract 覆盖成抓取值。以下是 2026-09-24/25 对账时查清的事实，
 [3c] 汇总原始行、[4b] 水工客户全清单、[6] 平台销量前 30 含型号）；Excel 说明页与 JSON 的
 `_产生方式` 都印 `VERSION`，用来确认 SERVER 跑的是最新版。
 
+## HomeWorks BI（Supabase）— 使用者另有一套 AutoCount → Supabase 的 BI 管线
+
+Supabase 专案 `vwljnypzgfqhatkgulqs`（ap-southeast-1，https://vwljnypzgfqhatkgulqs.supabase.co）。
+它的管线**不在 GitHub**（可能在 SERVER 本机），每天 04:05 UTC 以 Postgres 角色 `bi_sync` 同步：
+`bi.fact_sales`（IV/CS/CN 明细，company = HOMEWORKSSB / HOMEWORKSSOUTHERN）、`dim_item`
+（item_group / item_type）、`dim_customer`、`fact_stock`、AR/AP/GL/采购等；前端读 `public.bi_*`
+视图（security_invoker + RLS：`bi_is_allowed()` 看 `bi.allowed_users`，`bi_company()` 限公司）。
+渠道函数 `bi.sale_channel(debtor, type)` 与本专案的 channel_rules 口径不同（它把 Shopee SG /
+NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
+2026-09-25 核对 8 月：BI 的 CS、CN 与本专案分毫不差；IV 少 13,424.50 = 没商品代号的自由
+输入行被它丢掉；BI 没抓 DN。
+**接法（2026-09-25 建）**：本专案每月产生报表后，用 service_role 呼叫
+`public.bi_report_upsert(company, month, doc)`（PostgREST `/rest/v1/rpc/`），落到
+`bi.report_month` / `_category` / `_channel` / `_sku` / `_top10`（RLS 与其他 bi 表相同，
+`bi_sync` 也可写），前端读 `public.bi_report_month_*`。金钥放 `autocount.json` 的 `supabase`
+段（setup 会保留），用 `setup_bi.bat` 贴入。Migration 名 `monthly_report_tables`。
+**MCP 里有 Supabase 工具**（`mcp__Supabase__*`），可直接查表、建 migration；DDL 用
+apply_migration，不要用 execute_sql。
+
 ## 第一次打开时要做的事（照顺序）
 
 （使用者也可能已经双击过 `setup_autocount.bat`（= 第 1、3、4 步）和 `make_report.bat`
@@ -90,9 +109,10 @@ extract 覆盖成抓取值。以下是 2026-09-24/25 对账时查清的事实，
 | `scripts/generate_report.py` | `data/YYYY-MM.json` → `output/月度报表_YYYY-MM.xlsx` |
 | `scripts/run_monthly.py` + `run_monthly.bat` | 抓数 + 产报表一步到位；`--scheduled` 给排程用，输出写 `logs/`，可依 `config.json` 的 `report_delivery.copy_to` 再复制一份 |
 | `scripts/schedule_monthly.py` + `schedule_monthly.bat` | 用 XML 登记 Windows 工作排程器（每月 1 号 08:00，错过会补跑）；`--run-now` / `--status` / `--remove` |
+| `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，25 个测试：网页行为（示范资料）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
+| `tests/` | `python -m pytest tests -q`，26 个测试：网页行为（示范资料）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

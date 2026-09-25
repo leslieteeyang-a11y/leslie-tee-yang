@@ -89,3 +89,27 @@ def test_run_monthly_previous_month_and_delivery(tmp_path, monkeypatch):
     run_monthly.deliver(src, str(tmp_path / "share" / "sub"))
     assert (tmp_path / "share" / "sub" / src.name).read_bytes() == b"x"
     run_monthly.deliver(src, "")                                     # 没设定就什么都不做
+
+
+def test_supabase_payload_is_long_format_and_keeps_manual_sections():
+    from supabase_push import build_payload, company_of
+    doc = {
+        "_产生方式": "v1",
+        "ads": {"shopee_ads": [1]}, "live_sales": {},
+        "sku_qty": {"SHOPEE": {"HM-YKR05-MB": 2}, "LAZADA": {"HM-YKR05-MB": 0}},
+        "top10_up": [{"sku": "HM-101-MS", "lazada": 5, "shopee": 40}],
+        "top10_down": [],
+        "forecast_all": [{"category": "Sanitary", "qty": 10, "shopee": 100.5, "cash": 20.0},
+                         {"category": "(未分类)", "qty": 3, "cash": 11453.5}],
+        "forecast_hemos": [{"category": "Sanitary", "qty": 9, "shopee": 100.5}],
+    }
+    p = build_payload(doc)
+    assert p["produced_by"] == "v1" and p["ads"] == {"shopee_ads": [1]}
+    assert {"scope": "all", "category": "Sanitary", "qty": 10, "amount": 120.5} in p["category"]
+    assert {"scope": "all", "category": "(未分类)", "qty": 3, "amount": 11453.5} in p["category"]
+    assert {"scope": "hemos", "category": "Sanitary", "channel": "shopee", "amount": 100.5} in p["channel"]
+    assert len(p["channel"]) == 4                       # 只送有金额的渠道
+    assert p["sku"] == [{"platform": "SHOPEE", "sku": "HM-YKR05-MB", "qty": 2},
+                        {"platform": "LAZADA", "sku": "HM-YKR05-MB", "qty": 0}]
+    assert p["top10"] == [{"direction": "up", "rank": 1, "sku": "HM-101-MS", "lazada_qty": 5, "shopee_qty": 40}]
+    assert company_of({"connection": {"database": "AED_HOMEWORKSSB"}}) == "HOMEWORKSSB"

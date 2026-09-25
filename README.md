@@ -159,6 +159,13 @@ OneDrive / Google Drive 同步资料夹或共享磁碟路径，每次产生完�
 Shopee Ads / Lazada Affiliate / Live Sales 三块不在 AutoCount 里，仍要手动填进
 `data/YYYY-MM.json` 再跑一次 `generate_report.py`。
 
+**推进 HomeWorks BI（Supabase）**：双击 **`setup_bi.bat`** 一次，贴上 Supabase 的
+service_role 金钥（后台 Project Settings → API），它会测试连线并把上个月推上去。
+之后每月排程产生完 Excel 会自动推送；补填广告数字后再跑
+`python scripts\supabase_push.py 2026-09` 即可覆盖。BI 端的表：`bi.report_month`
+（广告 / 直播、产生版本）、`report_month_category`（类别合计）、`report_month_channel`
+（类别 × 渠道）、`report_month_sku`（SKU 趋势）、`report_month_top10`；前端读 `public.bi_report_month_*`。
+
 先看 SQL 不连数据库：
 
 ```bat
@@ -207,6 +214,7 @@ autocount.example.json         # AutoCount 连线与栏位对应设定（复制�
 config.json                    # SKU 清单、渠道栏位、月份名称等设定
 run_monthly.bat                # 每月一键（Windows 工作排程器跑这个）
 schedule_monthly.bat           # 双击一次 → 登记每月 1 号自动执行
+setup_bi.bat                   # 双击一次 → 贴 Supabase 金钥，之后月报自动推进 BI
 scripts/autocount_setup.py     # 自动侦测 SQL Server 与账套，产生 autocount.json
 scripts/autocount_discover.py  # 探查 AutoCount 账套结构
 scripts/autocount_extract.py   # 从 AutoCount 抓当月数据 → data/YYYY-MM.json

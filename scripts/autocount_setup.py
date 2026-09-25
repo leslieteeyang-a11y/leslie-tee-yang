@@ -208,6 +208,13 @@ def main():
     })
     if TARGET.exists():
         print(f"\n（{TARGET.name} 已存在，以这次选的账套 {database} 覆盖。）")
+        try:                                     # 保留人手填过的 Supabase 金钥，不然每次 setup 都要重贴
+            old = json.loads(TARGET.read_text(encoding="utf-8"))
+            if (old.get("supabase") or {}).get("service_key"):
+                cfg["supabase"] = {**cfg.get("supabase", {}), **old["supabase"]}
+                print("（保留原有的 supabase 设定。）")
+        except (OSError, ValueError):
+            pass
     TARGET.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"\n已写入 {TARGET}")
