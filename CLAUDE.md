@@ -71,6 +71,10 @@ NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
 （service_role 要能读 bi.report_month_* 才能过 `--check`）。新式 `sb_secret_` 金钥只放 apikey 标头。
 **MCP 里有 Supabase 工具**（`mcp__Supabase__*`），可直接查表、建 migration；DDL 用
 apply_migration，不要用 execute_sql。
+**BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
+2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
+（MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
+latestDeployment）。
 
 ## 第一次打开时要做的事（照顺序）
 
