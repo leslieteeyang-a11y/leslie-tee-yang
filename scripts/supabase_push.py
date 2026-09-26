@@ -131,8 +131,24 @@ def set_key(cfg: dict) -> dict:
     return cfg
 
 
+def setup_flow(cfg: dict) -> None:
+    """setup_bi.bat 用：贴金钥 → 测连线 → 今年 1 月到上个月逐月重抓并推进 BI。"""
+    import subprocess
+    from datetime import date
+    cfg = set_key(cfg)
+    check(cfg)
+    start = f"{date.today().year}-01"
+    print(f"\n开始从 AutoCount 重抓 {start} 到上个月，每个月约 1 分钟，请勿关闭视窗…")
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "backfill.py"), start], cwd=ROOT)
+    if r.returncode != 0:
+        sys.exit("有月份失败，细节在 logs\\ 里最新的档案。")
+
+
 def main():
     cfg = load_autocount_config()
+    if "--setup" in sys.argv:
+        setup_flow(cfg)
+        return
     if "--set-key" in sys.argv:
         cfg = set_key(cfg)
         check(cfg)
