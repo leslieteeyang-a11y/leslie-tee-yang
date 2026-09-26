@@ -94,8 +94,10 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - 部署：非 git，Vercel MCP `create_deployment` 内嵌原始码（见 `portal/README.md`）。
 - 已上线（第 1 阶段 · 地基）：首页、任务、审批、员工与权限。其余模块显示「规划中」。
 - 路线图：2 订货与 ETA（接 `bi.fact_po_line` / `public.bi_po_open`，加 ETA、货柜、状态的员工输入）+ 销售；
-  3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。另有一个 7 月建的 Vercel 专案 `hr-attendance-app`
-  （Next.js，之后没更新），做 HR 前先问使用者要不要沿用。
+  3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
+  HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
+  GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，
+  没有资料要搬）。那个专案与 repo 是否删除 / 暂停由使用者决定，未经同意不要动。
 
 ## 第一次打开时要做的事（照顺序）
 
