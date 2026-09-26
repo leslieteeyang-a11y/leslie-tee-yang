@@ -56,9 +56,11 @@ def build_payload(doc: dict, channels=CHANNEL_KEYS) -> dict:
 def _request(sb: dict, method: str, path: str, body=None):
     url = sb["url"].rstrip("/") + path
     data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers={
-        "apikey": sb["service_key"], "Authorization": f"Bearer {sb['service_key']}",
-        "Content-Type": "application/json", "Accept": "application/json"})
+    key = sb["service_key"]
+    headers = {"apikey": key, "Content-Type": "application/json", "Accept": "application/json"}
+    if key.startswith("eyJ"):                    # 旧式 service_role JWT 要再放 Authorization；新式 sb_secret_ 只认 apikey
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return json.loads(r.read().decode("utf-8") or "null")
@@ -107,7 +109,8 @@ def set_key(cfg: dict) -> dict:
     from autocount_db import CONFIG_PATH
     example = json.loads((ROOT / "autocount.example.json").read_text(encoding="utf-8"))
     sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
-    print("到 Supabase 后台 → Project Settings → API → service_role，按 Reveal / Copy，")
+    print("到 Supabase 后台 → Project Settings → API Keys → Secret keys 的 default（sb_secret_…）按复制；")
+    print("或 Legacy 分页的 service_role（eyJ…）也可以。")
     key = input("把整串金钥贴在这里再按 Enter：").strip()
     if not key:
         sys.exit("没有输入金钥，什么都没改。")
