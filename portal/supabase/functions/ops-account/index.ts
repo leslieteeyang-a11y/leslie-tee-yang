@@ -1,5 +1,6 @@
 // 营运系统：管理员帮员工建立登入账号 / 重设密码。
-// 已部署为 Supabase Edge Function `ops-account`（verify_jwt = true）。
+// 已部署为 Supabase Edge Function `ops-account`（verify_jwt = false：新式 JWT 签章金钥与闸道的 verify_jwt
+// 不一定相容，所以身分在函数里验：用呼叫者的 token 问 ops_me，PostgREST 会验 token，不是 admin 一律 403）。
 //
 // POST { staff_id: number, password: string }，Authorization 带呼叫者（必须是 ops admin）的登入 token。
 // 只对 ops.staff 名单里的 email 动作：没有账号就建（email 直接视为已验证），有账号就改密码。
@@ -23,6 +24,7 @@ Deno.serve(async (req) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) return reply(401, { error: "请先登入" });
 
   let body: { staff_id?: number; password?: string };
   try {
