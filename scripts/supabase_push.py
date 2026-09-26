@@ -111,9 +111,13 @@ def set_key(cfg: dict) -> dict:
     sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
     print("到 Supabase 后台 → Project Settings → API Keys → Secret keys 的 default（sb_secret_…）按复制；")
     print("或 Legacy 分页的 service_role（eyJ…）也可以。")
-    key = input("把整串金钥贴在这里再按 Enter（贴一次就好）：").strip()
+    had = sb.get("service_key", "")
+    prompt = "把整串金钥贴在这里再按 Enter（贴一次就好）："
+    if had:
+        prompt = "已经有一把金钥；直接按 Enter 沿用，或贴新的再按 Enter："
+    key = input(prompt).strip() or had
     if not key:
-        sys.exit("没有输入金钥，什么都没改。")
+        sys.exit("没有输入金钥，什么都没改。请回 Supabase 后台复制 Secret keys 的 default，再跑一次。")
     for prefix in ("sb_secret_", "eyJ"):        # 右键按了好几下会贴成同一把金钥连在一起，只取第一段
         if key.count(prefix) > 1:
             key = key[:key.index(prefix, len(prefix))]

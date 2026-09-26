@@ -131,3 +131,12 @@ def test_set_key_dedupes_repeated_paste(tmp_path, monkeypatch):
     cfg = supabase_push.set_key({})
     assert cfg["supabase"]["service_key"] == "sb_secret_ABC-12"
     assert cfg["supabase"]["url"].startswith("https://")
+
+
+def test_set_key_reuses_saved_key_when_enter_pressed(tmp_path, monkeypatch):
+    import supabase_push, autocount_db
+    cfgfile = tmp_path / "autocount.json"; cfgfile.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(autocount_db, "CONFIG_PATH", cfgfile)
+    monkeypatch.setattr("builtins.input", lambda _: "")
+    cfg = supabase_push.set_key({"supabase": {"url": "https://x.supabase.co", "service_key": "sb_secret_K1" * 3}})
+    assert cfg["supabase"]["service_key"] == "sb_secret_K1"      # 沿用已存的，并顺手修掉重复
