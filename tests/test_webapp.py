@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 os.environ["HW_SOURCE"] = "mock"
+os.environ["HW_AUTH"] = "off"
 
 from webapp.main import app                       # noqa: E402
 from webapp.sources import reset_source           # noqa: E402

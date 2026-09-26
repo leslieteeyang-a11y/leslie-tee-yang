@@ -105,7 +105,13 @@
   "supabase": {
     "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。",
     "url": "https://vwljnypzgfqhatkgulqs.supabase.co",
+    "publishable_key": "sb_publishable__elDWkBfCa5ajEQLR0NmRQ_p5a3089Q",
     "service_key": ""
+  },
+  "web": {
+    "_说明": "营运网页的登入。用 Supabase（BI）的账号密码登入，登入后再看 BI 的角色（bi.allowed_users.role），只有 allowed_roles 里的角色能进。cookie_secret 第一次启动会自动产生。示范模式（没有 autocount.json）或环境变数 HW_AUTH=off 时不需登入。",
+    "allowed_roles": ["owner"],
+    "session_hours": 12
   },
   "manual_sections": {
     "_说明": "以下数据不在 AutoCount 里（属于 Shopee/Lazada 后台的广告与直播数据），脚本会保留 data/YYYY-MM.json 内既有的数值，不会覆盖。",

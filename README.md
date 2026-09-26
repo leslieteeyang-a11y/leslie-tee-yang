@@ -59,6 +59,13 @@ python -m pytest tests -q
 把每个月要整理的那几张表（Shopee / Lazada SKU 趋势、广告、直播、Top 10、销售汇总）
 做成一条可重复执行的流水线：**直接从 AutoCount 抓数 → 自动排版、自动算合计与图表 → 输出 Excel。**
 
+## 登入与权限
+
+营运网页（`run_web.bat`）接上 AutoCount 之后就会要求登入。账号密码就是 HomeWorks BI
+（Supabase）的那一组，不用另外记；登入后网页再向 BI 问这个人的角色，预设只有 `owner`
+能进（`autocount.json` 的 `web.allowed_roles` 可加 `manager` 等）。session 12 小时，
+左下角可登出。示范模式（没有 `autocount.json`）或 `set HW_AUTH=off` 时不需登入。
+
 ## 每月怎么做
 
 **接上 AutoCount 之后（建议）**——在办公室那台连得到 AutoCount 的电脑上：

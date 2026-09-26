@@ -213,6 +213,8 @@ def main():
             if (old.get("supabase") or {}).get("service_key"):
                 cfg["supabase"] = {**cfg.get("supabase", {}), **old["supabase"]}
                 print("（保留原有的 supabase 设定。）")
+            if old.get("web"):
+                cfg["web"] = {**cfg.get("web", {}), **old["web"]}
         except (OSError, ValueError):
             pass
     TARGET.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

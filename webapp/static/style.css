@@ -52,3 +52,14 @@ dl.kv dt{color:var(--muted)}dl.kv dd{margin:0}
 details{margin-top:8px}summary{cursor:pointer;color:var(--muted);font-size:12px}
 table.compact{border:0;border-radius:0}table.compact th,table.compact td{padding:5px 8px;font-size:12.5px}
 @media(max-width:800px){.cols2{grid-template-columns:1fr}.head{flex-direction:column;align-items:flex-start}}
+
+/* ---- 登入页 ---- */
+.login-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+.login { width: min(360px, 92vw); padding: 28px; border: 1px solid var(--line, #ddd); border-radius: 12px; background: var(--card, #fff); }
+.login .brand { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.login .hint { color: #777; margin: 0 0 16px; font-size: 14px; }
+.login .error { color: #b3261e; background: #fdecea; padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+.login label { display: block; font-size: 13px; color: #555; margin: 12px 0 4px; }
+.login input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 8px; }
+.login button { width: 100%; margin-top: 18px; padding: 11px; font-size: 15px; border: 0; border-radius: 8px; background: #1a5fb4; color: #fff; cursor: pointer; }
+.side .src a { color: inherit; }

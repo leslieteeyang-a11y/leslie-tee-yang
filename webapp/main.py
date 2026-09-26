@@ -9,23 +9,79 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse
+import time
+
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from . import auth
 from .charts import bar_chart, line_chart
 from .sources import STATUS_LABEL, get_source
 
 HERE = Path(__file__).resolve().parent
-app = FastAPI(title="HomeWorks 营运入口", version="0.1")
+app = FastAPI(title="HomeWorks 营运入口", version="0.3")
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 
+PUBLIC_PATHS = ("/login", "/logout", "/health", "/static/")
+
 
 def render(request: Request, name: str, nav: str, **ctx):
-    ctx.update(request=request, nav=nav, source_name=get_source().name)
+    ctx.update(request=request, nav=nav, source_name=get_source().name,
+               user=getattr(request.state, "user", None))
     return templates.TemplateResponse(request, name, ctx)
+
+
+# ------------------------------------------------------------ 登入与权限
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    """启用登入时，除了登入页与静态档，其他页面没有有效 session 一律挡下。"""
+    cfg = auth.config()
+    request.state.user = None
+    if cfg.enabled:
+        request.state.user = auth.read_cookie(request.cookies.get(auth.COOKIE), cfg.secret)
+        path = request.url.path
+        if request.state.user is None and not path.startswith(PUBLIC_PATHS):
+            if path.startswith("/api/"):
+                return JSONResponse({"error": "login required"}, status_code=401)
+            nxt = path if path.startswith("/") and not path.startswith("//") else "/"
+            return RedirectResponse(f"/login?next={nxt}", status_code=303)
+    return await call_next(request)
+
+
+@app.get("/login")
+def login_form(request: Request, next: str = "/dashboard"):
+    if not auth.config().enabled:
+        return RedirectResponse("/dashboard")
+    return templates.TemplateResponse(request, "login.html", {"request": request, "error": "", "next": next})
+
+
+@app.post("/login")
+def login_submit(request: Request, email: str = Form(""), password: str = Form(""), next: str = Form("/dashboard")):
+    cfg = auth.config()
+    if not cfg.enabled:
+        return RedirectResponse("/dashboard", status_code=303)
+    try:
+        user = auth.sign_in(email.strip().lower(), password)
+    except auth.LoginError as e:
+        time.sleep(1)                                    # 让乱猜密码慢一点
+        return templates.TemplateResponse(request, "login.html",
+                                          {"request": request, "error": str(e), "next": next}, status_code=401)
+    target = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
+    resp = RedirectResponse(target, status_code=303)
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    resp.set_cookie(auth.COOKIE, auth.make_cookie(user, cfg.secret, cfg.session_hours),
+                    max_age=cfg.session_hours * 3600, httponly=True, samesite="lax", secure=secure)
+    return resp
+
+
+@app.get("/logout")
+def logout():
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(auth.COOKIE)
+    return resp
 
 
 @app.get("/")

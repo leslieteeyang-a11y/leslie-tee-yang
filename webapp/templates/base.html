@@ -13,6 +13,7 @@
   <a href="/inventory" class="{{ 'on' if nav == 'inventory' else '' }}">库存</a>
   <a href="/deliveries" class="{{ 'on' if nav == 'deliveries' else '' }}">出货跟踪</a>
   <div class="src">资料来源：{{ source_name }}</div>
+  {% if user %}<div class="src">{{ user.email }}<br><a href="/logout">登出</a></div>{% endif %}
 </nav>
 <main>
 {% block body %}{% endblock %}

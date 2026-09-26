@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登入 · HomeWorks 营运入口</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+<form class="login" method="post" action="/login" autocomplete="on">
+  <div class="brand">HomeWorks<br><small>营运入口</small></div>
+  <p class="hint">用 HomeWorks BI 的账号登入</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <label>Email<input type="email" name="email" required autofocus autocomplete="username"></label>
+  <label>密码<input type="password" name="password" required autocomplete="current-password"></label>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button type="submit">登入</button>
+</form>
+</body>
+</html>
