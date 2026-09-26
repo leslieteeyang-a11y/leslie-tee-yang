@@ -67,7 +67,8 @@ NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
 `public.bi_report_upsert(company, month, doc)`（PostgREST `/rest/v1/rpc/`），落到
 `bi.report_month` / `_category` / `_channel` / `_sku` / `_top10`（RLS 与其他 bi 表相同，
 `bi_sync` 也可写），前端读 `public.bi_report_month_*`。金钥放 `autocount.json` 的 `supabase`
-段（setup 会保留），用 `setup_bi.bat` 贴入。Migration 名 `monthly_report_tables`。
+段（setup 会保留），用 `setup_bi.bat` 贴入。Migration：`monthly_report_tables`、`monthly_report_service_role_read`
+（service_role 要能读 bi.report_month_* 才能过 `--check`）。新式 `sb_secret_` 金钥只放 apikey 标头。
 **MCP 里有 Supabase 工具**（`mcp__Supabase__*`），可直接查表、建 migration；DDL 用
 apply_migration，不要用 execute_sql。
 
