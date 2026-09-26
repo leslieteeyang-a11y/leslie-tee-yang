@@ -76,6 +76,27 @@ apply_migration，不要用 execute_sql。
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
 latestDeployment）。
 
+## HomeWorks 营运系统（员工各部门用，`portal/`）— 2026-09-26 起
+
+使用者要把 UK Software 提案图上的「HomeWorks AI Program」自己做出来：一个入口给各部门员工用
+（任务、审批、订货/ETA、仓库、送货、收款、佣金、HR、薪资、报表），之后再过账回 AutoCount。
+**决定（2026-09-26）**：放在 Vercel（新专案 `homeworks-ops`，与 BI 的 `homeworks-bi` 分开）+ 同一个
+Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 FastAPI 营运入口维持办公室内即时查 AutoCount。
+- 资料在 schema `ops`（不开放给 PostgREST），前端只呼叫 `public.ops_*`（security definer，开头检查身分与模块权限）。
+- 员工名单 `ops.staff` 与 `bi.allowed_users` **分开**：BI 的 `bi_is_allowed()` 只看有没有在名单，
+  若把仓库/HR 员工加进 BI 名单，他们会看到财务数据。第一批 ops 名单从 BI 名单带入（owner → admin）。
+- 权限：部门预设 `ops.dept_module` + 个人例外 `ops.staff_module`；四级 none/view/edit/approve；
+  manager 自动把 edit 升 approve；分店 HOMEWORKSSB / HOMEWORKSSOUTHERN / ALL。
+- **权限判断函数一律 `coalesce(..., false)`**：NULL 栏位（没指派人/审批人）会让 `not (...)` 变 NULL 而放行，
+  本机测试抓到过一次。
+- 开账号 / 重设密码：Edge Function `ops-account`（service role 只在函数里）。
+- 测试：`portal/supabase/tests/run.sh`（本机 PostgreSQL，stub 掉 auth 与 bi）；前端 `npm run build`。
+- 部署：非 git，Vercel MCP `create_deployment` 内嵌原始码（见 `portal/README.md`）。
+- 已上线（第 1 阶段 · 地基）：首页、任务、审批、员工与权限。其余模块显示「规划中」。
+- 路线图：2 订货与 ETA（接 `bi.fact_po_line` / `public.bi_po_open`，加 ETA、货柜、状态的员工输入）+ 销售；
+  3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。另有一个 7 月建的 Vercel 专案 `hr-attendance-app`
+  （Next.js，之后没更新），做 HR 前先问使用者要不要沿用。
+
 ## 第一次打开时要做的事（照顺序）
 
 （使用者也可能已经双击过 `setup_autocount.bat`（= 第 1、3、4 步）和 `make_report.bat`
@@ -118,6 +139,7 @@ latestDeployment）。
 | `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
+| `portal/` | 员工用营运系统（Vercel + Supabase `ops`，见上节与 `portal/README.md`） |
 | `tests/` | `python -m pytest tests -q`，36 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
 | `README.md` | 使用者视角的完整说明 |
 
