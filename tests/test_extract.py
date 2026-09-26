@@ -121,3 +121,13 @@ def test_backfill_month_range_crosses_year():
     assert month_range("2025-11", "2026-02") == ["2025-11", "2025-12", "2026-01", "2026-02"]
     assert month_range("2026-08", "2026-08") == ["2026-08"]
     assert previous_month(date(2026, 1, 15)) == "2025-12"
+
+
+def test_set_key_dedupes_repeated_paste(tmp_path, monkeypatch):
+    import supabase_push, autocount_db
+    cfgfile = tmp_path / "autocount.json"; cfgfile.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(autocount_db, "CONFIG_PATH", cfgfile)
+    monkeypatch.setattr("builtins.input", lambda _: "sb_secret_ABC-12" * 3)
+    cfg = supabase_push.set_key({})
+    assert cfg["supabase"]["service_key"] == "sb_secret_ABC-12"
+    assert cfg["supabase"]["url"].startswith("https://")

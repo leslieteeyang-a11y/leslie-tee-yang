@@ -111,9 +111,13 @@ def set_key(cfg: dict) -> dict:
     sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
     print("到 Supabase 后台 → Project Settings → API Keys → Secret keys 的 default（sb_secret_…）按复制；")
     print("或 Legacy 分页的 service_role（eyJ…）也可以。")
-    key = input("把整串金钥贴在这里再按 Enter：").strip()
+    key = input("把整串金钥贴在这里再按 Enter（贴一次就好）：").strip()
     if not key:
         sys.exit("没有输入金钥，什么都没改。")
+    for prefix in ("sb_secret_", "eyJ"):        # 右键按了好几下会贴成同一把金钥连在一起，只取第一段
+        if key.count(prefix) > 1:
+            key = key[:key.index(prefix, len(prefix))]
+            print("（侦测到金钥被重复贴上，已只取第一段。）")
     if not (key.startswith("eyJ") or key.startswith("sb_secret_")):
         sys.exit("这看起来不是 service_role 金钥（应以 eyJ 或 sb_secret_ 开头）。请回 Supabase 后台复制 service_role 那一把。")
     sb["service_key"] = key
