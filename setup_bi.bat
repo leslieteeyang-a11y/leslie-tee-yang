@@ -6,7 +6,7 @@ echo  HomeWorks - connect the monthly report to HomeWorks BI
 echo  ------------------------------------------------------
 echo  1. paste the Supabase service_role key
 echo  2. test the connection
-echo  3. push last month's report
+echo  3. rebuild every month of this year from AutoCount and push to BI
 echo.
 where python >nul 2>nul
 if errorlevel 1 (
@@ -16,10 +16,10 @@ if errorlevel 1 (
 )
 python scripts\supabase_push.py --set-key
 if errorlevel 1 goto end
-for /f %%m in ('python -c "from datetime import date;t=date.today();y,m=(t.year,t.month-1) if t.month>1 else (t.year-1,12);print(f'{y}-{m:02d}')"') do set LASTM=%%m
+for /f %%y in ('python -c "from datetime import date;print(date.today().year)"') do set YEAR=%%y
 echo.
-echo  pushing %LASTM% ...
-python scripts\supabase_push.py %LASTM%
+echo  rebuilding %YEAR%-01 .. last month (about 1 minute per month) ...
+python scripts\backfill.py %YEAR%-01
 :end
 echo.
 pause

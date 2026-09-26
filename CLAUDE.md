@@ -34,8 +34,9 @@ EGO / JB RESER；`IV.UDF_ChannelId` / `IV.UDF_OrderId`（平台同步写入，�
 ## 报表口径：以 AutoCount 为准（使用者 2026-09-25 决定）
 
 **不再对纸本调数。** 纸本报表是员工手抄的快照，AutoCount 才是现况；抓出来多少就报多少。
-`data/2026-08.json` 在 git 里的版本是当初手抄纸本的对照值，只留作历史，SERVER 上会被
-extract 覆盖成抓取值。以下是 2026-09-24/25 对账时查清的事实，留给以后判断差异用：
+手抄纸本的对照值已移到 `docs/paper_2026/`（只留历史，不进 ZIP）；`data/20*.json` 与
+`output/` 不再进 git，SERVER 上的都是 AutoCount 抓取值，覆盖 ZIP 不会再冲掉它们。
+初次安装或要重抓：`setup_bi.bat` / `backfill.bat`（`scripts/backfill.py`，逐月呼叫 run_monthly）。以下是 2026-09-24/25 对账时查清的事实，留给以后判断差异用：
 - **未分类**（`(未分类)` 列）= 开单时没选商品代号的自由输入行（例：HEMOS BASIN CABINET
   C/W MIRROR BOX、HM-UB001 石盆、PROMOTION FILTER），8 月 25 行、RM 13,411.51，多为 Cash /
   水工。照实单独列出；要归类得请员工在 AutoCount 建商品代号（不是程式的事）。
@@ -112,7 +113,7 @@ apply_migration，不要用 execute_sql。
 | `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，26 个测试：网页行为（示范资料）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
+| `tests/` | `python -m pytest tests -q`，27 个测试：网页行为（示范资料）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

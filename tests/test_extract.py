@@ -113,3 +113,11 @@ def test_supabase_payload_is_long_format_and_keeps_manual_sections():
                         {"platform": "LAZADA", "sku": "HM-YKR05-MB", "qty": 0}]
     assert p["top10"] == [{"direction": "up", "rank": 1, "sku": "HM-101-MS", "lazada_qty": 5, "shopee_qty": 40}]
     assert company_of({"connection": {"database": "AED_HOMEWORKSSB"}}) == "HOMEWORKSSB"
+
+
+def test_backfill_month_range_crosses_year():
+    from backfill import month_range, previous_month
+    from datetime import date
+    assert month_range("2025-11", "2026-02") == ["2025-11", "2025-12", "2026-01", "2026-02"]
+    assert month_range("2026-08", "2026-08") == ["2026-08"]
+    assert previous_month(date(2026, 1, 15)) == "2025-12"
