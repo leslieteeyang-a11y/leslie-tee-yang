@@ -97,6 +97,14 @@ HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
 （authenticated，函数内检查 `bi_role()='owner'`）、`bi_report_get_ads`（service_role）、`bi_report_upsert` 改成新推来的 ads 为空 /
 live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomReport 的 `canEdit` prop，App 传 owner）。SERVER 端
 `supabase_push.pull_ads/merge_ads`，`run_monthly` 在 extract 之后、generate 之前拉回 data JSON。使用者说这个填写页「不用给分行看」。
+**仓库整理（2026-09-28 晚，使用者最烦的问题）**：HQ = 总行门店仓库，SRGADING = 全公司大仓。BI fact_stock 显示 HQ 有 537 项负数，
+其中 440 项在 SRGADING 有同量正数 → 货从大仓搬到门店没开 Stock Transfer；负数最大的 VOUCHER / SHIPPING FEE / ONLINE000001
+是服务项目却有 Stock Control；真正全仓合计为负的实体商品约 104 项（Sanitary 51、Lock 18、Fitting 18…，约 1,000 件）。
+做了 BI 分页「库存异常」（`src/pages/StockAnomaly.tsx`，视图 `public.bi_stock_anomaly`，migration `stock_anomaly_view`，
+服务群组 = ONLINE/SHIP FEE/PAY FEE/TRAN FEE/SERV FEE/INSTALL/TRANSPOR）：A 服务项目 → 取消 Stock Control；B 仓位错配 →
+建议转仓清单 CSV（每个负数仓从库存最多的正数仓补）；C 真正短少 → 盘点表 CSV。整理顺序：定仓位规则 → 关服务项目库存控制 →
+照清单转仓 → 分仓盘点 → 每周看这页。**写入 AutoCount 的第一条流程改为「盘点差异 → Stock Adjustment」**（比 SO 有用）；
+API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试账套 AED_HOMEWORKSSB_TEST + 跑 `check_sdk.bat`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

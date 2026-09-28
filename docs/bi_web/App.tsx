@@ -18,6 +18,7 @@ import PriceEffect from './pages/PriceEffect';
 import OnePager from './pages/OnePager';
 import EcomReport from './pages/EcomReport';
 import BranchActual from './pages/BranchActual';
+import StockAnomaly from './pages/StockAnomaly';
 import SyncLog from './pages/SyncLog';
 
 const TABS = [
@@ -35,6 +36,7 @@ const TABS = [
   { key: 'sales', label: '销售明细' },
   { key: 'rank', label: '商品排行' },
   { key: 'stock', label: '库存' },
+  { key: 'stockx', label: '库存异常' },
   { key: 'slow', label: '滞销品' },
   { key: 'oo', label: '未交订单' },
   { key: 'log', label: '同步状态' },
@@ -42,8 +44,8 @@ const TABS = [
 type TabKey = (typeof TABS)[number]['key'];
 type Role = 'owner' | 'buyer' | 'viewer' | 'manager' | 'sales';
 // 订货员只看采购相关页面;店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
-const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'slow', 'oo', 'log'];
-const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'slow', 'oo', 'log'];
+const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'stockx', 'slow', 'oo', 'log'];
+const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'stockx', 'slow', 'oo', 'log'];
 // 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
 const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
 // 月报/调价跟踪仅老板可见(月报含利润与现金)
@@ -180,6 +182,7 @@ export default function App() {
       {tab === 'sales' && <SalesLines showProfit={showProfit} />}
       {tab === 'rank' && <ItemRanking showProfit={showProfit} />}
       {tab === 'stock' && <StockPage showCost={showProfit} />}
+      {tab === 'stockx' && <StockAnomaly />}
       {tab === 'slow' && <SlowMovers showCost={showProfit} />}
       {tab === 'oo' && <OpenOrders />}
       {tab === 'log' && <SyncLog />}
