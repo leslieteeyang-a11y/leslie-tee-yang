@@ -84,7 +84,8 @@ SO，分行账套也不在 SERVER（在使用者用 AnyDesk 连的那台分行�
 （`autocount_db.book_company_name`，读 Profile/CompanyProfile.CompanyName）含 SOUTHERN 来判断，
 读不到才退回看库名。落到 `bi.branch_actual_month`（scope ×
 category）与 `bi.branch_actual_meta`（各 agent 明细），RPC `public.bi_branch_actual_upsert`，视图
-`public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。分行 8 月发票 agent：
+`public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。**2026-09-28 分行电脑已装好并推完 1～8 月**（8 月全品牌实际销售额 1,355,211.54 = SO 1,219,856.37 +
+非 SO 发票 152,450.50 − 贷项 17,095.33），排程「HomeWorks Branch Actual」已登记。分行 8 月发票 agent：
 HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`

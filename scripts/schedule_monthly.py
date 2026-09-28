@@ -128,9 +128,12 @@ def main():
     finally:
         Path(tmp).unlink(missing_ok=True)
     print(f"已登记排程「{TASK_NAME}」：每月 {a.day} 号 {a.time} 自动抓上个月{'的分行实际销售额并推进 BI' if a.branch else '并产生 Excel'}。")
-    print(f"  报表会出现在 {ROOT / 'output'}；每次执行的纪录在 {ROOT / 'logs'}。")
+    if a.branch:
+        print(f"  每次执行的纪录在 {ROOT / 'logs'}（branch_*.log）；结果看 BI 网页电商月报的「当月实际销售额」栏。")
+    else:
+        print(f"  报表会出现在 {ROOT / 'output'}；每次执行的纪录在 {ROOT / 'logs'}。")
     print("  电脑那天没开也没关系，下次开机会补跑。")
-    print("  要现在测一次：python scripts\\schedule_monthly.py --run-now")
+    print(f"  要现在测一次：python scripts\\schedule_monthly.py --run-now{' --branch' if a.branch else ''}")
 
 
 if __name__ == "__main__":
