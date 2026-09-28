@@ -16,3 +16,29 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 3. 档案树 API 的顶层 `src/` 是 Vercel 的「原始码」节点，不是专案的子目录；档案路径不用加前缀。
 - `AdsEditor.tsx`（2026-09-28）：老板在电商月报页填广告 / 直播数字 → RPC `bi_report_set_ads`；`EcomReport.tsx` 多了 `canEdit` prop
 - `StockAnomaly.tsx`（2026-09-28）：「库存异常」分页，读 `public.bi_stock_anomaly`（migration `stock_anomaly_view`）；A 服务项目仍扣库存 / B 仓位错配→建议 Stock Transfer（CSV）/ C 真正短少→盘点表（CSV）。owner、manager、buyer 可见
+
+## 2026-09-28 晚：整个 BI 改成中 / 英双语（使用者要求「做成整个bi换成中英文」）
+
+**做法**（不改资料库、不改任何查询）：
+- `src/lib/i18n.tsx`：`LangProvider`（`main.tsx` 包住整个 App）、`useT()` 回传 `t(中文原文, 变数?)`、
+  `tr(lang, 中文, 变数?)` 给非 React 的地方、`<LangToggle />`（右上角「中 / EN」按钮，记在 localStorage `bi_lang`）。
+- **字典键 = 程式码里的中文原文**，所以中文模式零成本、英文找不到键时也只是退回中文，不会出现空白。
+  占位符用 `{name}`，例如 `t('{n} 行未交', { n })`。
+- 字典按页面分档放在 `src/i18n/`（core / manager / finance / ecom / pages1 / pages2 / purchasing，共约 650 条），
+  `index.ts` 把它们 spread 合并（后面的盖前面的，共用词如「载入中…」各档都有、内容一致）。
+- 所有 `src/pages/*.tsx`、`src/components/*.tsx`、`App.tsx` 里显示给人看的字串都包成 `t('…')`；
+  从资料库来的渠道名（现金 / 门市现金 / B2B客户 / 其他平台 / 水工…）在显示时才经 `t()`，资料本身不动。
+- 这里的 `src/` 就是 Vercel 上现在跑的完整原始码（`package.json`、`styles.css`、`lib/format.ts`、`lib/supabase.ts`
+  没改，不在这里）。
+
+**分批部署法**（一次内嵌全部档案太大，改成七批；`mkpayload.py` + `deploy_manifest.json` 就是这个用途）：
+1. `deploy_manifest.json` = Vercel 端已存在的 `{路径: SHA1}`；`python3 mkpayload.py <批名>` 印出 `create_deployment`
+   的 `files` 阵列：该批档案内嵌（`data`），其余全用 `{file, sha}` 参照。批名与档案清单在脚本顶部 `BATCH`。
+2. 贴进 `mcp__Vercel__create_deployment`（`project: homeworks-bi, target: production`，**不要带 teamId**，带了会 403）。
+3. 等 `get_deployment` 变 READY，再用 `list_deployment_files` 核对每个内嵌档的 `uid` 是否等于本机 `sha1sum`
+   ——内嵌时抄错一个字元 SHA 就不同，下一批参照会报 `missing_files`。全对后 `python3 mkpayload.py --commit <批名>` 记进 manifest。
+4. 若某档 Vercel 端就是没有那个 SHA：用 `mcp__Vercel__upload_file`（base64 + `xVercelDigest` = SHA1）单独上传，
+   伺服器会校验内容，比重新内嵌可靠。
+- 顺序：infra（i18n 骨架 + App + 空字典）→ manager → finance → ecom → pages1 → pages2 → purchasing。中途每批都是可用状态
+  （还没翻的页面就显示中文）。
+- 使用者看到旧版时按 Ctrl+F5 强制重新载入。

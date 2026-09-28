@@ -105,6 +105,10 @@ live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomR
 建议转仓清单 CSV（每个负数仓从库存最多的正数仓补）；C 真正短少 → 盘点表 CSV。整理顺序：定仓位规则 → 关服务项目库存控制 →
 照清单转仓 → 分仓盘点 → 每周看这页。**写入 AutoCount 的第一条流程改为「盘点差异 → Stock Adjustment」**（比 SO 有用）；
 API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试账套 AED_HOMEWORKSSB_TEST + 跑 `check_sdk.bat`。
+**BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
+字典键就是中文原文，英文缺键退回中文；右上角 `LangToggle` 记 localStorage `bi_lang`），字典分七档在 `src/i18n/`。
+完整原始码副本在 `docs/bi_web/src/`；分批部署工具 `docs/bi_web/mkpayload.py` + `deploy_manifest.json`，
+步骤与坑（不带 teamId、部署后用 `list_deployment_files` 核对 SHA、缺 SHA 用 `upload_file` 带 digest 上传）见 `docs/bi_web/README.md`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

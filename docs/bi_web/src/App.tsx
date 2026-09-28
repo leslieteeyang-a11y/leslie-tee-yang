@@ -20,6 +20,7 @@ import EcomReport from './pages/EcomReport';
 import BranchActual from './pages/BranchActual';
 import StockAnomaly from './pages/StockAnomaly';
 import SyncLog from './pages/SyncLog';
+import { useT, LangToggle } from './lib/i18n';
 
 const TABS = [
   { key: 'report', label: '月报' },
@@ -52,6 +53,7 @@ const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
 const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'price'];
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
+  const t = useT();
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -59,34 +61,35 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pw1.length < 8) { setMsg('密码至少 8 位'); return; }
-    if (pw1 !== pw2) { setMsg('两次输入不一致'); return; }
+    if (pw1.length < 8) { setMsg(t('密码至少 8 位')); return; }
+    if (pw1 !== pw2) { setMsg(t('两次输入不一致')); return; }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: pw1 });
     setBusy(false);
-    if (error) { setMsg('修改失败: ' + error.message); return; }
+    if (error) { setMsg(t('修改失败: ') + error.message); return; }
     onDone();
-    window.alert('密码已修改');
+    window.alert(t('密码已修改'));
   }
 
   return (
     <form className="card card-block" onSubmit={submit}
           style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-      <strong style={{ fontSize: 13 }}>修改密码</strong>
-      <input className="pwfield" type="password" placeholder="新密码(至少 8 位)" value={pw1}
+      <strong style={{ fontSize: 13 }}>{t('修改密码')}</strong>
+      <input className="pwfield" type="password" placeholder={t('新密码(至少 8 位)')} value={pw1}
              onChange={(e) => setPw1(e.target.value)} autoComplete="new-password"
              style={{ background: 'var(--page)', color: 'var(--ink)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px' }} />
-      <input type="password" placeholder="再输入一次" value={pw2}
+      <input type="password" placeholder={t('再输入一次')} value={pw2}
              onChange={(e) => setPw2(e.target.value)} autoComplete="new-password"
              style={{ background: 'var(--page)', color: 'var(--ink)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px' }} />
-      <button className="btn primary" disabled={busy}>{busy ? '提交中…' : '确认修改'}</button>
-      <button className="btn" type="button" onClick={onDone}>取消</button>
+      <button className="btn primary" disabled={busy}>{busy ? t('提交中…') : t('确认修改')}</button>
+      <button className="btn" type="button" onClick={onDone}>{t('取消')}</button>
       {msg && <span className="err" style={{ marginTop: 0 }}>{msg}</span>}
     </form>
   );
 }
 
 export default function App() {
+  const t = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<TabKey>('dash');
@@ -115,9 +118,9 @@ export default function App() {
     });
   }, [session?.user.id]);
 
-  if (!ready) return <div className="loading">载入中…</div>;
+  if (!ready) return <div className="loading">{t('载入中…')}</div>;
   if (!session) return <Login />;
-  if (role === null) return <div className="loading">载入中…</div>;
+  if (role === null) return <div className="loading">{t('载入中…')}</div>;
 
   const isHQ = COMPANY === 'HOMEWORKSSB';
   const tabs = role === 'buyer' ? TABS.filter((t) => BUYER_TABS.includes(t.key))
@@ -139,32 +142,32 @@ export default function App() {
                   style={{ background: COMPANY === 'HOMEWORKSSB' ? 'var(--surface)' : '#3d2f14',
                            color: 'var(--ink)', border: '1px solid var(--border)', borderRadius: 8,
                            padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}>
-            {Object.entries(COMPANIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(COMPANIES).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
           </select>
         )}
         {COMPANY !== 'HOMEWORKSSB' && (
           <span className="badge" style={{ color: '#f59e0b', background: 'rgba(245,158,11,.16)', fontWeight: 600 }}>
-            {role === 'owner' ? `正在看:${COMPANIES[COMPANY]}` : COMPANIES[COMPANY]}
+            {role === 'owner' ? t('正在看:{c}', { c: t(COMPANIES[COMPANY]) }) : t(COMPANIES[COMPANY])}
           </span>
         )}
         <nav className="tabs">
-          {tabsForCompany.map((t) => (
-            <button key={t.key} className={tab === t.key ? 'active' : ''}
-                    onClick={() => setTab(t.key)}>{t.label}</button>
+          {tabsForCompany.map((tab_) => (
+            <button key={tab_.key} className={tab === tab_.key ? 'active' : ''}
+                    onClick={() => setTab(tab_.key)}>{t(tab_.label)}</button>
           ))}
         </nav>
         <div className="spacer" />
+        <LangToggle />
         <span className="who">{session.user.email}</span>
-        <button className="btn" onClick={() => setShowPw(!showPw)}>修改密码</button>
-        <button className="btn" onClick={() => supabase.auth.signOut()}>退出</button>
+        <button className="btn" onClick={() => setShowPw(!showPw)}>{t('修改密码')}</button>
+        <button className="btn" onClick={() => supabase.auth.signOut()}>{t('退出')}</button>
       </div>
 
       {showPw && <ChangePassword onDone={() => setShowPw(false)} />}
 
       {empty && (
         <div className="notice">
-          当前账号看不到任何数据:要么该邮箱未加入白名单(bi.allowed_users),要么同步尚未运行。
-          请联系管理员。
+          {t('当前账号看不到任何数据:要么该邮箱未加入白名单(bi.allowed_users),要么同步尚未运行。请联系管理员。')}
         </div>
       )}
 

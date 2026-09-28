@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useT } from '../lib/i18n';
 
 // 电商月报里不在 AutoCount 的三块:Shopee Ads / Lazada Sponsored Affiliate / Shopee AMS(每周 GMV 与花费)与 Live Sales。
 // 老板在这里填,存进 bi.report_month(bi_report_set_ads,只有 owner 能写);SERVER 产 Excel 时会拉回去,重推月报也不会盖掉。
@@ -46,6 +47,7 @@ const inputStyle = {
 
 export default function AdsEditor({ company, month, ads, live, onSaved }:
   { company: string; month: string; ads: AdsDoc; live: LiveDoc; onSaved: () => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(ads, live));
   const [busy, setBusy] = useState(false);
@@ -63,45 +65,45 @@ export default function AdsEditor({ company, month, ads, live, onSaved }:
     const { ads: a, live: l } = fromDraft(draft);
     const { error } = await supabase.rpc('bi_report_set_ads', { p_company: company, p_month: month, p_ads: a, p_live_sales: l });
     setBusy(false);
-    if (error) { setMsg('储存失败:' + error.message); return; }
-    setMsg('已储存,Excel 月报下次产生时会自动带入。');
+    if (error) { setMsg(t('储存失败:{err}', { err: error.message })); return; }
+    setMsg(t('已储存,Excel 月报下次产生时会自动带入。'));
     onSaved();
   }
 
   if (!open) {
     return (
       <div className="filters" style={{ marginTop: -6 }}>
-        <button className="btn" onClick={() => setOpen(true)}>填写 {month.slice(0, 7)} 的广告 / 直播数字</button>
-        <span className="muted" style={{ fontSize: 12 }}>Shopee Ads、Lazada Affiliate、Shopee AMS、Live Sales 不在 AutoCount,由这里填</span>
+        <button className="btn" onClick={() => setOpen(true)}>{t('填写 {m} 的广告 / 直播数字', { m: month.slice(0, 7) })}</button>
+        <span className="muted" style={{ fontSize: 12 }}>{t('Shopee Ads、Lazada Affiliate、Shopee AMS、Live Sales 不在 AutoCount,由这里填')}</span>
       </div>
     );
   }
 
   return (
     <div className="card card-block">
-      <h2>填写广告 / 直播数字 · {month.slice(0, 7)}</h2>
+      <h2>{t('填写广告 / 直播数字')} · {month.slice(0, 7)}</h2>
       <div className="two-col">
         {AD_SECTIONS.map((s) => (
           <div key={s}>
             <div style={{ fontSize: 13, fontWeight: 650, margin: '6px 0' }}>{s}</div>
             <table className="data">
-              <thead><tr><th>期间(日)</th><th className="num">GMV (RM)</th><th className="num">花费 (RM)</th><th /></tr></thead>
+              <thead><tr><th>{t('期间(日)')}</th><th className="num">GMV (RM)</th><th className="num">{t('花费 (RM)')}</th><th /></tr></thead>
               <tbody>
                 {draft.ads[s].map((r, i) => (
                   <tr key={i}>
                     <td style={{ width: 90 }}><input style={inputStyle} value={r.period} onChange={(e) => setRow(s, i, 'period', e.target.value)} placeholder="1~8" /></td>
                     <td><input style={inputStyle} inputMode="decimal" value={r.gmv} onChange={(e) => setRow(s, i, 'gmv', e.target.value)} /></td>
                     <td><input style={inputStyle} inputMode="decimal" value={r.expense} onChange={(e) => setRow(s, i, 'expense', e.target.value)} /></td>
-                    <td style={{ width: 30 }}><button className="btn" style={{ padding: '2px 7px' }} onClick={() => delRow(s, i)} title="删除这一行">×</button></td>
+                    <td style={{ width: 30 }}><button className="btn" style={{ padding: '2px 7px' }} onClick={() => delRow(s, i)} title={t('删除这一行')}>×</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <button className="btn" style={{ marginTop: 6 }} onClick={() => addRow(s)}>+ 加一行</button>
+            <button className="btn" style={{ marginTop: 6 }} onClick={() => addRow(s)}>{t('+ 加一行')}</button>
           </div>
         ))}
         <div>
-          <div style={{ fontSize: 13, fontWeight: 650, margin: '6px 0' }}>LIVE SALES(整月,RM)</div>
+          <div style={{ fontSize: 13, fontWeight: 650, margin: '6px 0' }}>{t('LIVE SALES(整月,RM)')}</div>
           <table className="data">
             <tbody>
               {LIVE_CHANNELS.map((c) => (
@@ -115,8 +117,8 @@ export default function AdsEditor({ company, month, ads, live, onSaved }:
         </div>
       </div>
       <div className="filters" style={{ marginTop: 12, marginBottom: 0 }}>
-        <button className="btn primary" disabled={busy} onClick={save}>{busy ? '储存中…' : '储存'}</button>
-        <button className="btn" onClick={() => { setDraft(toDraft(ads, live)); setOpen(false); setMsg(null); }}>关闭</button>
+        <button className="btn primary" disabled={busy} onClick={save}>{busy ? t('储存中…') : t('储存')}</button>
+        <button className="btn" onClick={() => { setDraft(toDraft(ads, live)); setOpen(false); setMsg(null); }}>{t('关闭')}</button>
         {msg && <span className="muted" style={{ fontSize: 12.5 }}>{msg}</span>}
       </div>
     </div>

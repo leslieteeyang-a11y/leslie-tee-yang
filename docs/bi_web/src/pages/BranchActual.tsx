@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase, COMPANY } from '../lib/supabase';
 import { fmtRM, fmtNum, fmtCompact } from '../lib/format';
+import { useT } from '../lib/i18n';
 import { Kpi } from '../components/ChartCard';
 
 // 分行实际销售额:分行电脑上的 HomeWorks 营运系统(scripts/branch_actual.py)从分行 AutoCount 账套抓取后
@@ -23,6 +24,7 @@ function num(v: number, strong = false) {
 }
 
 export default function BranchActual() {
+  const t = useT();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [metas, setMetas] = useState<Meta[]>([]);
   const [sel, setSel] = useState<string>('');
@@ -83,9 +85,9 @@ export default function BranchActual() {
     return { named, blank, hasDirect: named.some((a) => a.direct !== undefined) };
   }, [meta]);
 
-  if (rows === null) return <div className="loading">载入中…</div>;
+  if (rows === null) return <div className="loading">{t('载入中…')}</div>;
   if (!months.length) {
-    return <div className="notice">还没有分行实际销售额资料{err ? `:${err}` : ''}。请在分行电脑上执行 setup_branch.bat 推送。</div>;
+    return <div className="notice">{t('还没有分行实际销售额资料{err}。请在分行电脑上执行 setup_branch.bat 推送。', { err: err ? `:${err}` : '' })}</div>;
   }
 
   const scopeLabel = scope === 'all' ? 'All brand' : 'Hemos & Hemos X';
@@ -102,36 +104,36 @@ export default function BranchActual() {
           <button className={scope === 'hemos' ? 'active' : ''} onClick={() => setScope('hemos')}>Hemos &amp; Hemos X</button>
         </div>
         <span className="muted" style={{ fontSize: 12 }}>
-          分行账套 · 更新于 {meta?.updated_at ? meta.updated_at.slice(0, 16).replace('T', ' ') : '–'}
+          {t('分行账套')} · {t('更新于')} {meta?.updated_at ? meta.updated_at.slice(0, 16).replace('T', ' ') : '–'}
         </span>
       </div>
-      {err && <div className="notice">查询失败:{err}</div>}
+      {err && <div className="notice">{t('查询失败:{err}', { err })}</div>}
 
       <div className="grid-kpi">
-        <Kpi label={`当月实际销售额 (${ym(sel)} · ${scopeLabel})`} value={fmtRM(total.actual)}
-             sub="= SO 全部 + 非SO发票 − 贷项;排除 agent 空白" />
-        <Kpi label="Sales Order 全部" value={fmtRM(total.so)} sub={`其中未转发票 ${fmtRM(total.open)}`} />
-        <Kpi label="非 SO 转来的发票" value={fmtRM(total.direct)} sub={`发票全部 ${fmtRM(total.iv)}(含转自 SO 的)`} />
-        <Kpi label="贷项 (Credit Note)" value={fmtRM(total.cn)} sub={meta?.detail?.excluded_blank_agent
-          ? `排除 agent 空白:${Object.entries(meta.detail.excluded_blank_agent).map(([k, v]) => `${k} ${fmtNum(v, 2)}`).join(' / ') || '无'}`
+        <Kpi label={`${t('当月实际销售额')} (${ym(sel)} · ${scopeLabel})`} value={fmtRM(total.actual)}
+             sub={t('= SO 全部 + 非SO发票 − 贷项;排除 agent 空白')} />
+        <Kpi label={t('Sales Order 全部')} value={fmtRM(total.so)} sub={t('其中未转发票 {v}', { v: fmtRM(total.open) })} />
+        <Kpi label={t('非 SO 转来的发票')} value={fmtRM(total.direct)} sub={t('发票全部 {v}(含转自 SO 的)', { v: fmtRM(total.iv) })} />
+        <Kpi label={t('贷项 (Credit Note)')} value={fmtRM(total.cn)} sub={meta?.detail?.excluded_blank_agent
+          ? t('排除 agent 空白:{list}', { list: Object.entries(meta.detail.excluded_blank_agent).map(([k, v]) => `${k} ${fmtNum(v, 2)}`).join(' / ') || t('无') })
           : undefined} />
       </div>
 
       <div className="card card-block">
-        <h2>按类别 · {ym(sel)} · {scopeLabel}</h2>
+        <h2>{t('按类别')} · {ym(sel)} · {scopeLabel}</h2>
         <div className="table-scroll">
           <table className="data">
             <thead>
               <tr>
-                <th>类别</th>
-                <th className="num">SO 全部</th><th className="num">其中未转发票</th>
-                <th className="num">非SO发票</th><th className="num">发票全部</th>
-                <th className="num">贷项</th>
-                <th className="num" style={{ color: ORANGE }}>实际销售额 RM</th><th className="num">占比</th>
+                <th>{t('类别')}</th>
+                <th className="num">{t('SO 全部')}</th><th className="num">{t('其中未转发票')}</th>
+                <th className="num">{t('非SO发票')}</th><th className="num">{t('发票全部')}</th>
+                <th className="num">{t('贷项')}</th>
+                <th className="num" style={{ color: ORANGE }}>{t('实际销售额')} RM</th><th className="num">{t('占比')}</th>
               </tr>
             </thead>
             <tbody>
-              {cur.length === 0 && <tr><td colSpan={8} className="muted">该月无数据</td></tr>}
+              {cur.length === 0 && <tr><td colSpan={8} className="muted">{t('该月无数据')}</td></tr>}
               {cur.map((r) => (
                 <tr key={r.category}>
                   <td>{r.category}</td>
@@ -156,20 +158,20 @@ export default function BranchActual() {
 
       <div className="two-col">
         <div className="card card-block">
-          <h2>各 Sales Agent · {ym(sel)}(全品牌)</h2>
+          <h2>{t('各 Sales Agent')} · {ym(sel)}{t('(全品牌)')}</h2>
           <div className="table-scroll">
             <table className="data">
               <thead>
                 <tr>
                   <th>Agent</th>
-                  <th className="num">SO 全部</th><th className="num">SO 单数</th>
-                  <th className="num">发票全部</th><th className="num">发票单数</th>
-                  <th className="num">贷项</th>
-                  <th className="num" style={{ color: ORANGE }}>实际销售额</th>
+                  <th className="num">{t('SO 全部')}</th><th className="num">{t('SO 单数')}</th>
+                  <th className="num">{t('发票全部')}</th><th className="num">{t('发票单数')}</th>
+                  <th className="num">{t('贷项')}</th>
+                  <th className="num" style={{ color: ORANGE }}>{t('实际销售额')}</th>
                 </tr>
               </thead>
               <tbody>
-                {agents.named.length === 0 && <tr><td colSpan={7} className="muted">该月无 agent 明细</td></tr>}
+                {agents.named.length === 0 && <tr><td colSpan={7} className="muted">{t('该月无 agent 明细')}</td></tr>}
                 {agents.named.map((a) => (
                   <tr key={a.agent}>
                     <td>{a.agent}</td>
@@ -177,14 +179,14 @@ export default function BranchActual() {
                     {num(a.iv)}<td className="num muted">{fmtNum(a.ivDocs)}</td>
                     {num(a.cn)}
                     <td className="num" style={{ color: ORANGE, fontWeight: 600 }}
-                        title={a.direct === undefined ? '' : `SO ${fmtNum(a.so, 2)} + 非SO发票 ${fmtNum(a.direct, 2)} − 贷项 ${fmtNum(a.cn, 2)}`}>
+                        title={a.direct === undefined ? '' : t('SO {so} + 非SO发票 {direct} − 贷项 {cn}', { so: fmtNum(a.so, 2), direct: fmtNum(a.direct, 2), cn: fmtNum(a.cn, 2) })}>
                       {a.actual === undefined ? '–' : fmtNum(a.actual, 2)}
                     </td>
                   </tr>
                 ))}
                 {agents.blank && (
                   <tr className="muted">
-                    <td>(agent 空白,已排除)</td>
+                    <td>{t('(agent 空白,已排除)')}</td>
                     {num(agents.blank.so)}<td className="num">{fmtNum(agents.blank.soDocs)}</td>
                     {num(agents.blank.iv)}<td className="num">{fmtNum(agents.blank.ivDocs)}</td>
                     {num(agents.blank.cn)}<td className="num">–</td>
@@ -195,19 +197,19 @@ export default function BranchActual() {
           </div>
           {!agents.hasDirect && agents.named.length > 0 && (
             <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-              各 agent 的实际销售额要分行电脑更新到新版脚本后才会有(需要「非SO发票」按 agent 拆分);表里的发票全部含转自 SO 的发票。
+              {t('各 agent 的实际销售额要分行电脑更新到新版脚本后才会有(需要「非SO发票」按 agent 拆分);表里的发票全部含转自 SO 的发票。')}
             </p>
           )}
         </div>
 
         <div className="card card-block">
-          <h2>逐月实际销售额 · {scopeLabel}</h2>
+          <h2>{t('逐月实际销售额')} · {scopeLabel}</h2>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={trend}>
               <CartesianGrid stroke="var(--grid)" vertical={false} />
               <XAxis dataKey="m" tick={{ fill: 'var(--muted)', fontSize: 12 }} />
               <YAxis tick={{ fill: 'var(--muted)', fontSize: 12 }} tickFormatter={fmtCompact} width={54} />
-              <Tooltip contentStyle={tipStyle} formatter={(v: number) => [fmtRM(v), '实际销售额']} cursor={{ fill: 'rgba(219,232,250,.06)' }} />
+              <Tooltip contentStyle={tipStyle} formatter={(v: number) => [fmtRM(v), t('实际销售额')]} cursor={{ fill: 'rgba(219,232,250,.06)' }} />
               <Bar dataKey="actual" fill={ORANGE} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -215,7 +217,7 @@ export default function BranchActual() {
       </div>
 
       <p className="muted" style={{ fontSize: 12 }}>
-        口径:Sales Order 全部(含未转发票的部分)+ 不是从 SO 转来的 Invoice − Credit Note;三种单据都排除 Sales Agent 空白的单。
+        {t('口径:Sales Order 全部(含未转发票的部分)+ 不是从 SO 转来的 Invoice − Credit Note;三种单据都排除 Sales Agent 空白的单。')}
         {meta?.produced_by ? ` ${meta.produced_by.split('；')[0]}。` : ''}
       </p>
     </>

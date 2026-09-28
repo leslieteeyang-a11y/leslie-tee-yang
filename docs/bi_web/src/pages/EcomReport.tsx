@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase, COMPANY } from '../lib/supabase';
 import { fmtRM, fmtNum } from '../lib/format';
+import { useT } from '../lib/i18n';
 import AdsEditor from '../components/AdsEditor';
 
 // 电商月报:由 HomeWorks 营运系统每月从 AutoCount 抓取后推进 bi.report_month_*(见 bi_report_upsert)。
@@ -15,6 +16,7 @@ type Top = { direction: string; rank: number; sku: string; lazada_qty: number; s
 type AdRow = { period: string; gmv: number; expense: number };
 type Branch = { scope: string; category: string; so_amount: number; so_open: number; iv_amount: number; iv_direct: number; cn_amount: number; actual_amount: number };
 
+// 第一个元素是渠道键(对应资料库 channel 栏),第二个是显示名(中文原文,显示时经 t() 翻译)
 const CHANNELS: [string, string][] = [
   ['shopee', 'Shopee'], ['lazada', 'Lazada'], ['cash', 'Cash'], ['online', 'Online'], ['referral', 'Referral'],
   ['shuigong', '水工'], ['southern', 'Southern'], ['tiktok', 'Tiktok'], ['shopify', 'Shopify'],
@@ -24,6 +26,7 @@ const ym = (d: string) => d.slice(0, 7);
 const n = (v: unknown) => Number(v ?? 0);
 
 function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[]; chs: Ch[]; branch: Map<string, Branch> }) {
+  const t = useT();
   const byCat = new Map<string, Map<string, number>>();
   chs.forEach((r) => {
     if (!byCat.has(r.category)) byCat.set(r.category, new Map());
@@ -41,7 +44,9 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
     ? <td className={'num' + (v < 0 ? ' neg' : '')} style={strong ? { fontWeight: 600 } : undefined}>{fmtNum(v, 2)}</td>
     : <td className="num muted">–</td>);
   const branchTip = (b?: Branch) => b
-    ? `SO 全部 ${fmtNum(b.so_amount, 2)}（未转发票 ${fmtNum(b.so_open, 2)}）+ 非SO发票 ${fmtNum(b.iv_direct, 2)}（发票全部 ${fmtNum(b.iv_amount, 2)}）− 贷项 ${fmtNum(b.cn_amount, 2)}`
+    ? t('SO 全部 {so}（未转发票 {open}）+ 非SO发票 {direct}（发票全部 {iv}）− 贷项 {cn}', {
+      so: fmtNum(b.so_amount, 2), open: fmtNum(b.so_open, 2), direct: fmtNum(b.iv_direct, 2), iv: fmtNum(b.iv_amount, 2), cn: fmtNum(b.cn_amount, 2),
+    })
     : '';
   return (
     <div className="card card-block">
@@ -52,15 +57,15 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
             <tr>
               <th>Categories</th><th className="num">QTY</th>
               {CHANNELS.map(([k, l]) => (
-                <th key={k} className="num">{l} RM</th>
+                <th key={k} className="num">{t(l)} RM</th>
               )).flatMap((th, i) => (CHANNELS[i][0] === 'southern'
-                ? [th, <th key="branch-actual" className="num" style={{ color: '#f59e0b' }} title="分行（JB Southern 账套）当月实际销售额：SO 全部 + 非SO发票 − 贷项，排除 agent 空白；不计入 Total">当月实际销售额 RM</th>]
+                ? [th, <th key="branch-actual" className="num" style={{ color: '#f59e0b' }} title={t('分行（JB Southern 账套）当月实际销售额：SO 全部 + 非SO发票 − 贷项，排除 agent 空白；不计入 Total')}>{t('当月实际销售额')} RM</th>]
                 : [th]))}
               <th className="num">Total RM</th><th className="num">Contribution</th><th className="num">Avg. Price</th>
             </tr>
           </thead>
           <tbody>
-            {allCats.length === 0 && <tr><td colSpan={CHANNELS.length + 6} className="muted">该月无数据</td></tr>}
+            {allCats.length === 0 && <tr><td colSpan={CHANNELS.length + 6} className="muted">{t('该月无数据')}</td></tr>}
             {allCats.map((c) => (
               <tr key={c.category}>
                 <td>{c.category}</td>
@@ -99,19 +104,20 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
           )}
         </table>
       </div>
-      {!hasBranch && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>「当月实际销售额」这栏还没有资料：分行电脑上跑 setup_branch.bat 之后才会有。</p>}
+      {!hasBranch && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>{t('「当月实际销售额」这栏还没有资料：分行电脑上跑 setup_branch.bat 之后才会有。')}</p>}
     </div>
   );
 }
 
 function TopTable({ title, rows }: { title: string; rows: Top[] }) {
+  const t = useT();
   return (
     <div className="card card-block">
       <h2>{title}</h2>
       <table className="data">
         <thead><tr><th>#</th><th>SKU</th><th className="num">Lazada</th><th className="num">Shopee</th><th className="num">Total (qty)</th></tr></thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={5} className="muted">该月无数据</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={5} className="muted">{t('该月无数据')}</td></tr>}
           {rows.map((r) => (
             <tr key={r.rank}>
               <td className="muted">{r.rank}</td><td>{r.sku}</td>
@@ -126,12 +132,13 @@ function TopTable({ title, rows }: { title: string; rows: Top[] }) {
 }
 
 function AdsTable({ title, rows }: { title: string; rows: AdRow[] }) {
+  const t = useT();
   const gmv = rows.reduce((s, r) => s + n(r.gmv), 0), exp = rows.reduce((s, r) => s + n(r.expense), 0);
   return (
     <div className="card card-block">
       <h2>{title}</h2>
       <table className="data">
-        <thead><tr><th>期间</th><th className="num">ADS GMV (RM)</th><th className="num">ADS EXPENSE (RM)</th><th className="num">%</th></tr></thead>
+        <thead><tr><th>{t('期间')}</th><th className="num">ADS GMV (RM)</th><th className="num">ADS EXPENSE (RM)</th><th className="num">%</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.period}>
@@ -150,6 +157,7 @@ function AdsTable({ title, rows }: { title: string; rows: AdRow[] }) {
 }
 
 export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
+  const t = useT();
   const [months, setMonths] = useState<Month[] | null>(null);
   const [sel, setSel] = useState<string>('');
   const [scope, setScope] = useState<'all' | 'hemos'>('all');
@@ -220,9 +228,9 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
     return row;
   });
 
-  if (months === null) return <div className="loading">载入中…</div>;
+  if (months === null) return <div className="loading">{t('载入中…')}</div>;
   if (!months.length) {
-    return <div className="notice">还没有电商月报资料{err ? `:${err}` : ''}。请在 SERVER 上执行 setup_bi.bat 或 backfill.bat 推送。</div>;
+    return <div className="notice">{t('还没有电商月报资料{err}。请在 SERVER 上执行 setup_bi.bat 或 backfill.bat 推送。', { err: err ? `:${err}` : '' })}</div>;
   }
   const ads = (cur?.ads ?? {}) as Record<string, AdRow[]>;
   const live = (cur?.live_sales ?? {}) as Record<string, number>;
@@ -238,10 +246,10 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
           <button className={scope === 'hemos' ? 'active' : ''} onClick={() => setScope('hemos')}>Hemos &amp; Hemos X</button>
         </div>
         <span className="muted" style={{ fontSize: 12 }}>
-          {cur?.produced_by ? cur.produced_by.split('。')[0] : ''} · 更新于 {cur?.updated_at?.slice(0, 16).replace('T', ' ')}
+          {cur?.produced_by ? cur.produced_by.split('。')[0] : ''} · {t('更新于')} {cur?.updated_at?.slice(0, 16).replace('T', ' ')}
         </span>
       </div>
-      {err && <div className="notice">查询失败:{err}</div>}
+      {err && <div className="notice">{t('查询失败:{err}', { err })}</div>}
       {canEdit && cur && (
         <AdsEditor company={COMPANY} month={cur.month} ads={ads as never} live={live} onSaved={loadMonths} />
       )}
@@ -256,7 +264,7 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
 
       {skuTrend.platforms.map((p) => (
         <div className="card card-block" key={p}>
-          <h2>{p} · SKU 月度销量 {sel.slice(0, 4)}</h2>
+          <h2>{p} · {t('SKU 月度销量')} {sel.slice(0, 4)}</h2>
           <div className="table-scroll">
             <table className="data">
               <thead><tr><th>SKU</th>{MONTHS_CN.map((m) => <th key={m} className="num">{m}</th>)}<th className="num">TOTAL</th></tr></thead>
@@ -279,7 +287,7 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
 
       {skuTrend.platforms.length > 0 && (
         <div className="card card-block">
-          <h2>追踪 SKU 合计销量趋势 {sel.slice(0, 4)}</h2>
+          <h2>{t('追踪 SKU 合计销量趋势')} {sel.slice(0, 4)}</h2>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
               <CartesianGrid stroke="var(--grid)" />
@@ -300,7 +308,7 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
           {Object.entries(ads).map(([name, rows]) => <AdsTable key={name} title={`${name} · ${ym(sel)}`} rows={rows} />)}
         </div>
       ) : (
-        <div className="notice">Shopee Ads / Lazada Sponsored Affiliate / Live Sales 不在 AutoCount 里,这个月还没填(老板点上面「填写广告 / 直播数字」即可)。</div>
+        <div className="notice">{t('Shopee Ads / Lazada Sponsored Affiliate / Live Sales 不在 AutoCount 里,这个月还没填(老板点上面「填写广告 / 直播数字」即可)。')}</div>
       )}
       {Object.keys(live).length > 0 && (
         <div className="grid-kpi">
@@ -310,8 +318,9 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
         </div>
       )}
       <p className="muted" style={{ fontSize: 12 }}>
-        口径:销售 = 发票 + 现销 − 贷项 + 借项,按商品群组与客户账号分类,与 Excel 月报完全一致;「(未分类)」= 开单时没选商品代号的行。
-        Top 10 只看 Shopee + Lazada 销量,按型号合并。「当月实际销售额」= 分行 JB Southern 账套：Sales Order 全部 + 不是从 SO 转来的发票 − 贷项,排除 agent 空白的单,不计入 Total。
+        {t('口径:销售 = 发票 + 现销 − 贷项 + 借项,按商品群组与客户账号分类,与 Excel 月报完全一致;「(未分类)」= 开单时没选商品代号的行。')}
+        {' '}
+        {t('Top 10 只看 Shopee + Lazada 销量,按型号合并。「当月实际销售额」= 分行 JB Southern 账套：Sales Order 全部 + 不是从 SO 转来的发票 − 贷项,排除 agent 空白的单,不计入 Total。')}
       </p>
     </>
   );
