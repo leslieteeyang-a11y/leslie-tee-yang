@@ -29,6 +29,12 @@ Member（或 Owner）才能由 Claude 部署；或使用者自己部署。
   - 新增：`loyalty.html`、`src/loyalty/main.tsx`、`src/loyalty/loyalty.css`、`src/pages/Loyalty.tsx`、`src/i18n/loyalty.ts`
   - 修改：`vite.config.ts`（多一个入口 loyalty.html）、`src/i18n/index.ts`（并入 loyalty 字典，放最前面，现有翻译优先）
   - 其余档案不动；部署时用 `{file, sha}` 参照线上 dpl_2HzZjNwpUdrSg8iQTKsNQzXU9phT 的档即可。
+  - **部署前先 `get_project homeworks-bi`（不带 teamId）看 latestDeployment**：若已不是 dpl_2HzZjNwpUdrSg8iQTKsNQzXU9phT，
+    使用者在这之间改过网页，要改用新部署的档案树 SHA，并确认新版 `vite.config.ts`、`src/i18n/index.ts` 是否也改过
+    （这两个档我们会整个替换）。部署后用 list_deployment_files 比对 7 个新档的 SHA1 与本目录一致。
+- 403 的原因（2026-09-28 查明）：团队只有使用者一个成员（Owner），不是角色问题；是 claude.ai 的 Vercel 连接器授权
+  拿不到完整身分（get_auth_user 回 User not found）。解法是在 https://claude.ai/customize/connectors 中断再重连 Vercel，
+  然后**开新 session**（连接器只在 session 开始时载入）。
 - 为什么是独立页而不是分页：`get_deployment_file_contents` 每个档只回前 1,500 bytes，拿不到完整的 `App.tsx`，
   改不了分页列。以后若使用者提供完整原始码，把 `Loyalty` 元件挂进 App.tsx 的 TABS（owner / manager / sales）即可，
   元件本身不用改（props：`lang`、`role`、`company`）。
