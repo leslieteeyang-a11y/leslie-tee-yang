@@ -161,7 +161,9 @@ latestDeployment）。
 4. 写入 AutoCount 的 POC：一条流程、测试账套、证明失败时不留半张单、重跑不重复过账
 5. **2026-09-28 使用者决定**：BI 网页「够用了」，本机营运网页（webapp/、localhost:8000）不再投入，
    Cloudflare Tunnel / HTTPS 对外通道因此不做。webapp 保留但不加功能；新功能一律做在 BI（Supabase + Vercel）。
-   待办：分行电脑装 d 版（HomeWorks_0928d.zip，= b 版脚本 + 广告拉回）并重跑 setup_branch.bat 换成每天排程。
+   分行电脑与 SERVER 都已用 `update_from_zip.bat` 更新到 d 版（2026-09-28 晚）；分行排程已改每天，BI 有 2026-09 至今
+   （9/28 时 1,046,421.66）与各 agent 的 direct。以后更新程式：下载 ZIP → 双击 update_from_zip.bat（Windows 的
+   Extract All 不会真的取代旧档，别再用）。
 
 ## 写码惯例
 
