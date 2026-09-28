@@ -44,5 +44,7 @@ PGHOST=... PGPORT=... PGUSER=postgres sh supabase/tests/run.sh
 把 `package.json`、`tsconfig.json`、`vite.config.ts`、`index.html`、`src/**` 以 utf-8 内嵌上传，
 Vercel 自己 `npm install` + `vite build`。
 - **不要带 `teamId` 参数**：这个 MCP 连线带 teamId 时读专案会 404、正式部署会 403；不带就正常。
-- 没改的档用 `{file, sha, size}` 参照上一版（`sha1sum` 算），只内嵌改过的档；部署后用 `list_deployment_files`
-  核对每个档的 uid（= SHA1）与本机一致。
+- **推荐做法**：改过的档先逐一 `upload_file`（base64 内容 + `xVercelDigest` = SHA1），再 `create_deployment`
+  全部用 `{file, sha, size}` 参照（没改的档沿用上一版的 SHA）。每次呼叫都很小，不会因内容太大而中断。
+  `public/` 底下的档要保留 `public/` 前缀。部署后用 `list_deployment_files` 核对每个档的 uid（= SHA1）与本机一致。
+- 新功能尽量放新的小档（例：`src/sync.tsx`、`src/extra.css`），少动大档，部署时要上传的量就小。
