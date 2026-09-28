@@ -12,6 +12,7 @@ type Ch = { scope: string; category: string; channel: string; amount: number };
 type Sku = { month: string; platform: string; sku: string; qty: number };
 type Top = { direction: string; rank: number; sku: string; lazada_qty: number; shopee_qty: number };
 type AdRow = { period: string; gmv: number; expense: number };
+type Branch = { scope: string; category: string; so_amount: number; so_open: number; iv_amount: number; iv_direct: number; cn_amount: number; actual_amount: number };
 
 const CHANNELS: [string, string][] = [
   ['shopee', 'Shopee'], ['lazada', 'Lazada'], ['cash', 'Cash'], ['online', 'Online'], ['referral', 'Referral'],
@@ -21,15 +22,26 @@ const MONTHS_CN = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP'
 const ym = (d: string) => d.slice(0, 7);
 const n = (v: unknown) => Number(v ?? 0);
 
-function ForecastTable({ title, cats, chs }: { title: string; cats: Cat[]; chs: Ch[] }) {
+function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[]; chs: Ch[]; branch: Map<string, Branch> }) {
   const byCat = new Map<string, Map<string, number>>();
   chs.forEach((r) => {
     if (!byCat.has(r.category)) byCat.set(r.category, new Map());
     byCat.get(r.category)!.set(r.channel, n(r.amount));
   });
-  const total = cats.reduce((s, c) => s + n(c.amount), 0);
-  const colTotal = (ch: string) => cats.reduce((s, c) => s + (byCat.get(c.category)?.get(ch) ?? 0), 0);
-  const cell = (v: number) => (v ? <td className={'num' + (v < 0 ? ' neg' : '')}>{fmtNum(v, 2)}</td> : <td className="num muted">–</td>);
+  // 分行独有的类别（例如 GST）也要有一列，让实际销售那栏对得上
+  const extraCats = Array.from(branch.keys()).filter((c) => !cats.some((x) => x.category === c))
+    .map((category) => ({ scope: '', category, qty: 0, amount: 0 }));
+  const allCats = [...cats, ...extraCats];
+  const total = allCats.reduce((s, c) => s + n(c.amount), 0);
+  const colTotal = (ch: string) => allCats.reduce((s, c) => s + (byCat.get(c.category)?.get(ch) ?? 0), 0);
+  const actualTotal = allCats.reduce((s, c) => s + n(branch.get(c.category)?.actual_amount), 0);
+  const hasBranch = branch.size > 0;
+  const cell = (v: number, strong = false) => (v
+    ? <td className={'num' + (v < 0 ? ' neg' : '')} style={strong ? { fontWeight: 600 } : undefined}>{fmtNum(v, 2)}</td>
+    : <td className="num muted">–</td>);
+  const branchTip = (b?: Branch) => b
+    ? `SO 全部 ${fmtNum(b.so_amount, 2)}（未转发票 ${fmtNum(b.so_open, 2)}）+ 非SO发票 ${fmtNum(b.iv_direct, 2)}（发票全部 ${fmtNum(b.iv_amount, 2)}）− 贷项 ${fmtNum(b.cn_amount, 2)}`
+    : '';
   return (
     <div className="card card-block">
       <h2>{title}</h2>
@@ -38,35 +50,55 @@ function ForecastTable({ title, cats, chs }: { title: string; cats: Cat[]; chs: 
           <thead>
             <tr>
               <th>Categories</th><th className="num">QTY</th>
-              {CHANNELS.map(([k, l]) => <th key={k} className="num">{l} RM</th>)}
+              {CHANNELS.map(([k, l]) => (
+                <th key={k} className="num">{l} RM</th>
+              )).flatMap((th, i) => (CHANNELS[i][0] === 'southern'
+                ? [th, <th key="branch-actual" className="num" style={{ color: '#f59e0b' }} title="分行（JB Southern 账套）当月实际销售额：SO 全部 + 非SO发票 − 贷项，排除 agent 空白；不计入 Total">当月实际销售额 RM</th>]
+                : [th]))}
               <th className="num">Total RM</th><th className="num">Contribution</th><th className="num">Avg. Price</th>
             </tr>
           </thead>
           <tbody>
-            {cats.length === 0 && <tr><td colSpan={CHANNELS.length + 5} className="muted">该月无数据</td></tr>}
-            {cats.map((c) => (
+            {allCats.length === 0 && <tr><td colSpan={CHANNELS.length + 6} className="muted">该月无数据</td></tr>}
+            {allCats.map((c) => (
               <tr key={c.category}>
                 <td>{c.category}</td>
                 <td className="num">{fmtNum(c.qty)}</td>
-                {CHANNELS.map(([k]) => <span key={k} style={{ display: 'contents' }}>{cell(byCat.get(c.category)?.get(k) ?? 0)}</span>)}
+                {CHANNELS.map(([k]) => (
+                  <span key={k} style={{ display: 'contents' }}>
+                    {cell(byCat.get(c.category)?.get(k) ?? 0)}
+                    {k === 'southern' && (
+                      <td className={'num' + (n(branch.get(c.category)?.actual_amount) < 0 ? ' neg' : '')}
+                          style={{ color: '#f59e0b' }} title={branchTip(branch.get(c.category))}>
+                        {hasBranch ? (n(branch.get(c.category)?.actual_amount) ? fmtNum(branch.get(c.category)!.actual_amount, 2) : '–') : ''}
+                      </td>
+                    )}
+                  </span>
+                ))}
                 <td className={'num' + (n(c.amount) < 0 ? ' neg' : '')} style={{ fontWeight: 600 }}>{fmtNum(c.amount, 2)}</td>
                 <td className="num">{total ? ((n(c.amount) / total) * 100).toFixed(1) + '%' : '–'}</td>
                 <td className="num">{n(c.qty) ? fmtNum(n(c.amount) / n(c.qty), 2) : '–'}</td>
               </tr>
             ))}
           </tbody>
-          {cats.length > 0 && (
+          {allCats.length > 0 && (
             <tfoot>
               <tr style={{ fontWeight: 650 }}>
                 <td>TOTAL</td>
-                <td className="num">{fmtNum(cats.reduce((s, c) => s + n(c.qty), 0))}</td>
-                {CHANNELS.map(([k]) => <span key={k} style={{ display: 'contents' }}>{cell(colTotal(k))}</span>)}
+                <td className="num">{fmtNum(allCats.reduce((s, c) => s + n(c.qty), 0))}</td>
+                {CHANNELS.map(([k]) => (
+                  <span key={k} style={{ display: 'contents' }}>
+                    {cell(colTotal(k))}
+                    {k === 'southern' && <td className="num" style={{ color: '#f59e0b' }}>{hasBranch ? fmtNum(actualTotal, 2) : ''}</td>}
+                  </span>
+                ))}
                 <td className="num">{fmtNum(total, 2)}</td><td className="num">100%</td><td />
               </tr>
             </tfoot>
           )}
         </table>
       </div>
+      {!hasBranch && <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>「当月实际销售额」这栏还没有资料：分行电脑上跑 setup_branch.bat 之后才会有。</p>}
     </div>
   );
 }
@@ -124,6 +156,7 @@ export default function EcomReport() {
   const [chs, setChs] = useState<Ch[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [tops, setTops] = useState<Top[]>([]);
+  const [branch, setBranch] = useState<Branch[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -141,17 +174,20 @@ export default function EcomReport() {
     if (!sel) return;
     const year = sel.slice(0, 4);
     (async () => {
-      const [a, b, c, d] = await Promise.all([
+      const [a, b, c, d, br] = await Promise.all([
         supabase.from('bi_report_month_category').select('scope,category,qty,amount').eq('company', COMPANY).eq('month', sel),
         supabase.from('bi_report_month_channel').select('scope,category,channel,amount').eq('company', COMPANY).eq('month', sel),
         supabase.from('bi_report_month_sku').select('month,platform,sku,qty').eq('company', COMPANY)
           .gte('month', `${year}-01-01`).lte('month', `${year}-12-31`),
         supabase.from('bi_report_month_top10').select('direction,rank,sku,lazada_qty,shopee_qty').eq('company', COMPANY).eq('month', sel).order('rank'),
+        // 分行(JB Southern 账套)当月实际销售额,按类别,由分行电脑推送(bi_branch_actual_upsert)
+        supabase.from('bi_branch_actual_month').select('scope,category,so_amount,so_open,iv_amount,iv_direct,cn_amount,actual_amount').eq('month', sel),
       ]);
       const e = a.error ?? b.error ?? c.error ?? d.error;
       setErr(e ? e.message : null);
       setCats((a.data ?? []) as Cat[]); setChs((b.data ?? []) as Ch[]);
       setSkus((c.data ?? []) as Sku[]); setTops((d.data ?? []) as Top[]);
+      setBranch((br.data ?? []) as Branch[]);
     })();
   }, [sel]);
 
@@ -161,6 +197,11 @@ export default function EcomReport() {
   const rank = (c: string) => { const i = catOrder.indexOf(c); return i < 0 ? 99 : i; };
   const catsScoped = cats.filter((r) => r.scope === scope).sort((x, y) => rank(x.category) - rank(y.category) || x.category.localeCompare(y.category));
   const chsScoped = chs.filter((r) => r.scope === scope);
+  const branchByCat = useMemo(() => {
+    const m = new Map<string, Branch>();
+    branch.filter((r) => r.scope === scope).forEach((r) => m.set(r.category, r));
+    return m;
+  }, [branch, scope]);
 
   // SKU 全年趋势:每个平台一张表 + 一张折线图
   const skuTrend = useMemo(() => {
@@ -202,7 +243,7 @@ export default function EcomReport() {
       {err && <div className="notice">查询失败:{err}</div>}
 
       <ForecastTable title={`Sales Forecast Summary (${scope === 'all' ? 'All brand' : 'Hemos & Hemos X only'}) · ${ym(sel)}`}
-                     cats={catsScoped} chs={chsScoped} />
+                     cats={catsScoped} chs={chsScoped} branch={branchByCat} />
 
       <div className="two-col">
         <TopTable title={`Top 10 UP · ${ym(sel)}`} rows={tops.filter((t) => t.direction === 'up')} />
@@ -266,7 +307,7 @@ export default function EcomReport() {
       )}
       <p className="muted" style={{ fontSize: 12 }}>
         口径:销售 = 发票 + 现销 − 贷项 + 借项,按商品群组与客户账号分类,与 Excel 月报完全一致;「(未分类)」= 开单时没选商品代号的行。
-        Top 10 只看 Shopee + Lazada 销量,按型号合并。
+        Top 10 只看 Shopee + Lazada 销量,按型号合并。「当月实际销售额」= 分行 JB Southern 账套：Sales Order 全部 + 不是从 SO 转来的发票 − 贷项,排除 agent 空白的单,不计入 Total。
       </p>
     </>
   );

@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TASK_NAME = "HomeWorks Monthly Report"
+BRANCH_TASK = "HomeWorks Branch Actual"
 
 
 def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path) -> str:
@@ -90,7 +91,12 @@ def main():
     ap.add_argument("--run-now", action="store_true", help="立刻执行一次已登记的排程")
     ap.add_argument("--status", action="store_true", help="显示排程状态")
     ap.add_argument("--remove", action="store_true", help="取消排程")
+    ap.add_argument("--branch", action="store_true", help="分行电脑用：登记「分行实际销售额」推送，而不是总部月报")
     a = ap.parse_args()
+    global TASK_NAME
+    bat = "run_branch.bat" if a.branch else "run_monthly.bat"
+    if a.branch:
+        TASK_NAME = BRANCH_TASK
 
     if sys.platform != "win32":
         sys.exit("这个脚本要在办公室那台 Windows（SERVER）上执行，它登记的是 Windows 工作排程器。")
@@ -113,7 +119,7 @@ def main():
     if not (ROOT / "autocount.json").exists():
         sys.exit("还没连接 AutoCount（找不到 autocount.json）。请先双击 setup_autocount.bat。")
 
-    xml = task_xml(ROOT / "run_monthly.bat", a.day, a.time, ROOT)
+    xml = task_xml(ROOT / bat, a.day, a.time, ROOT)
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-16") as f:
         f.write(xml)
         tmp = f.name
@@ -121,7 +127,7 @@ def main():
         schtasks("/Create", "/TN", TASK_NAME, "/XML", tmp, "/F")
     finally:
         Path(tmp).unlink(missing_ok=True)
-    print(f"已登记排程「{TASK_NAME}」：每月 {a.day} 号 {a.time} 自动抓上个月并产生 Excel。")
+    print(f"已登记排程「{TASK_NAME}」：每月 {a.day} 号 {a.time} 自动抓上个月{'的分行实际销售额并推进 BI' if a.branch else '并产生 Excel'}。")
     print(f"  报表会出现在 {ROOT / 'output'}；每次执行的纪录在 {ROOT / 'logs'}。")
     print("  电脑那天没开也没关系，下次开机会补跑。")
     print("  要现在测一次：python scripts\\schedule_monthly.py --run-now")

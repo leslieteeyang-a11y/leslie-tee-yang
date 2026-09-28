@@ -71,6 +71,14 @@ NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
 （service_role 要能读 bi.report_month_* 才能过 `--check`）。新式 `sb_secret_` 金钥只放 apikey 标头。
 **MCP 里有 Supabase 工具**（`mcp__Supabase__*`），可直接查表、建 migration；DDL 用
 apply_migration，不要用 execute_sql。
+**分行实际销售额**（2026-09-28）：使用者要在电商月报 Southern 旁多一栏「当月实际销售额」= 分行
+JB Southern 账套的 SO 全部 + 非 SO 转来的 IV − CN，三者都排除 SalesAgent 空白的单。BI 的管线没有
+SO，分行账套也不在 SERVER（在使用者用 AnyDesk 连的那台分行电脑），所以 `scripts/branch_actual.py`
+要装在分行电脑上跑（`setup_branch.bat` = 贴金钥 + 今年各月 backfill + `schedule_monthly.py --branch`
+登记「HomeWorks Branch Actual」排程 → `run_branch.bat`）。落到 `bi.branch_actual_month`（scope ×
+category）与 `bi.branch_actual_meta`（各 agent 明细），RPC `public.bi_branch_actual_upsert`，视图
+`public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。分行 8 月发票 agent：
+HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
@@ -115,10 +123,11 @@ latestDeployment）。
 | `scripts/generate_report.py` | `data/YYYY-MM.json` → `output/月度报表_YYYY-MM.xlsx` |
 | `scripts/run_monthly.py` + `run_monthly.bat` | 抓数 + 产报表一步到位；`--scheduled` 给排程用，输出写 `logs/`，可依 `config.json` 的 `report_delivery.copy_to` 再复制一份 |
 | `scripts/schedule_monthly.py` + `schedule_monthly.bat` | 用 XML 登记 Windows 工作排程器（每月 1 号 08:00，错过会补跑）；`--run-now` / `--status` / `--remove` |
-| `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送 |
+| `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送、`--setup-branch` 分行流程 |
+| `scripts/branch_actual.py` + `setup_branch.bat` / `run_branch.bat` | 分行电脑用：分行当月实际销售额 → BI（见下节） |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，36 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
+| `tests/` | `python -m pytest tests -q`，37 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

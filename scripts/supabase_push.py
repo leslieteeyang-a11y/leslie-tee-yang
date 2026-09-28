@@ -144,8 +144,24 @@ def setup_flow(cfg: dict) -> None:
         sys.exit("有月份失败，细节在 logs\\ 里最新的档案。")
 
 
+def setup_branch_flow(cfg: dict) -> None:
+    """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。"""
+    import subprocess
+    from datetime import date
+    cfg = set_key(cfg)
+    check(cfg)
+    start = f"{date.today().year}-01"
+    print(f"\n开始抓分行 {start} 到上个月的实际销售额并推进 BI…")
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "branch_actual.py"), "--backfill", start], cwd=ROOT)
+    if r.returncode != 0:
+        sys.exit("有月份失败，请把这个视窗截图给 Claude。")
+
+
 def main():
     cfg = load_autocount_config()
+    if "--setup-branch" in sys.argv:
+        setup_branch_flow(cfg)
+        return
     if "--setup" in sys.argv:
         setup_flow(cfg)
         return

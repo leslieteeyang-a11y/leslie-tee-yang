@@ -103,10 +103,11 @@
     "count": 10
   },
   "supabase": {
-    "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。",
+    "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。company：推进 BI 用的公司代码，留空 = 账套名去掉 AED_（总部 HOMEWORKSSB、分行 HOMEWORKSSOUTHERN）。",
     "url": "https://vwljnypzgfqhatkgulqs.supabase.co",
     "publishable_key": "sb_publishable__elDWkBfCa5ajEQLR0NmRQ_p5a3089Q",
-    "service_key": ""
+    "service_key": "",
+    "company": ""
   },
   "web": {
     "_说明": "营运网页的登入。用 Supabase（BI）的账号密码登入，登入后再看 BI 的角色（bi.allowed_users.role），只有 allowed_roles 里的角色能进。cookie_secret 第一次启动会自动产生。示范模式（没有 autocount.json）或环境变数 HW_AUTH=off 时不需登入。",

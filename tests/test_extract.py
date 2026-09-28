@@ -140,3 +140,23 @@ def test_set_key_reuses_saved_key_when_enter_pressed(tmp_path, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "")
     cfg = supabase_push.set_key({"supabase": {"url": "https://x.supabase.co", "service_key": "sb_secret_K1" * 3}})
     assert cfg["supabase"]["service_key"] == "sb_secret_K1"      # 沿用已存的，并顺手修掉重复
+
+
+def test_branch_actual_rows_follow_user_definition():
+    from branch_actual import build_rows, sql_lines
+    cmap = BASE["category_map"]
+    # (ItemGroup, ItemType, Amount, Extra)：SO 的 Extra = 未转发票部分；IV 的 Extra = 不是从 SO 来的部分
+    so = [("SANITARY", "HEMOS", 1000.0, 400.0), ("KITCHEN", "ITTO", 500.0, 500.0)]
+    iv = [("SANITARY", "HEMOS", 800.0, 200.0), ("DELIVERY", "", 50.0, 50.0)]
+    cn = [("SANITARY", "HEMOS", 100.0, 0)]
+    rows = build_rows(so, iv, cn, cmap, ["HEMOS", "HEMOSX"])
+    by = {(r["scope"], r["category"]): r for r in rows}
+    s = by[("all", "Sanitary")]
+    assert (s["so_amount"], s["so_open"], s["iv_amount"], s["iv_direct"], s["cn_amount"]) == (1000, 400, 800, 200, 100)
+    assert s["actual_amount"] == 1000 + 200 - 100                  # SO 全部 + 非SO发票 − 贷项
+    assert by[("all", "Kitchen")]["actual_amount"] == 500
+    assert ("hemos", "Kitchen") not in by                            # ITTO 不是 Hemos
+    assert by[("hemos", "Sanitary")]["actual_amount"] == 1100
+    assert by[("all", "DELIVERY")]["actual_amount"] == 50           # 分行独有群组照实列
+    for doc in ("SO", "IV", "CN"):
+        assert "SalesAgent" in sql_lines(doc) and "Cancelled = 'F'" in sql_lines(doc)
