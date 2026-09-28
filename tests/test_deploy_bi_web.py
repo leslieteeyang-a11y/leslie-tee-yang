@@ -219,3 +219,127 @@ def test_failed_build_reports_log_and_says_site_unchanged(monkeypatch):
         run(monkeypatch, final_state="ERROR")
     msg = str(e.value)
     assert "没有被换掉" in msg and "TS2307" in msg and "Build failed" in msg
+
+
+# ── 审查后补的：金钥失效、网路断线、部署建立后才出错 ─────────────────────────
+
+def test_network_drop_mid_response_becomes_a_chinese_message(monkeypatch):
+    """真的开一个「接上就断线」的服务器：urllib 这种错不会包成 URLError，以前会印英文 traceback。"""
+    import socket
+    import threading
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def accept_and_drop():
+        conn, _ = srv.accept()
+        conn.recv(65536)
+        conn.close()
+
+    threading.Thread(target=accept_and_drop, daemon=True).start()
+    monkeypatch.setattr(d, "API", f"http://127.0.0.1:{srv.getsockname()[1]}")
+    with pytest.raises(d.DeployError) as e:
+        d.Vercel("t", "team").call("GET", "/v9/projects/x", timeout=5)
+    srv.close()
+    assert e.value.transient and "连线中断" in str(e.value)
+
+
+def test_get_retries_transient_errors_but_not_bad_key(monkeypatch):
+    monkeypatch.setattr(d.time, "sleep", lambda s: None)
+    vc = d.Vercel("t", "team")
+    calls = []
+
+    def flaky(method, path, query=None):
+        calls.append(path)
+        if len(calls) < 3:
+            raise d.DeployError("断线", transient=True)
+        return {"ok": True}
+
+    monkeypatch.setattr(vc, "call", flaky)
+    assert vc.get("/x") == {"ok": True} and len(calls) == 3
+
+    def bad_key(method, path, query=None):
+        calls.append(path)
+        raise d.DeployError("401", status=401)
+
+    calls.clear()
+    monkeypatch.setattr(vc, "call", bad_key)
+    with pytest.raises(d.DeployError):
+        vc.get("/x")
+    assert len(calls) == 1                                  # 金钥错不重试
+
+
+class KeyCheck:
+    def __init__(self, status):
+        self.status = status
+
+    def __call__(self, token, team_id):
+        outer = self
+
+        class _V:
+            def get(self, path, query=None, tries=4):
+                if outer.status:
+                    raise d.DeployError(f"Vercel 回应 {outer.status}", status=outer.status)
+                return {"id": "prj"}
+        return _V()
+
+
+def test_expired_saved_key_asks_for_a_new_one_in_the_same_double_click(monkeypatch):
+    asked = []
+    monkeypatch.setattr(d, "Vercel", KeyCheck(401))
+    monkeypatch.setattr(d, "ask_token", lambda s: asked.append(s) or {**s, "token": "new"})
+    out = d.ensure_token({**d.DEFAULTS, "token": "old"})
+    assert out["token"] == "new" and "token" not in asked[0]
+
+
+def test_good_saved_key_is_used_without_asking(monkeypatch):
+    monkeypatch.setattr(d, "Vercel", KeyCheck(None))
+    monkeypatch.setattr(d, "ask_token", lambda s: pytest.fail("不该问金钥"))
+    assert d.ensure_token({**d.DEFAULTS, "token": "ok"})["token"] == "ok"
+
+
+def test_server_error_on_key_check_is_not_mistaken_for_a_bad_key(monkeypatch):
+    monkeypatch.setattr(d, "Vercel", KeyCheck(500))
+    monkeypatch.setattr(d, "ask_token", lambda s: pytest.fail("不该问金钥"))
+    with pytest.raises(d.DeployError):
+        d.ensure_token({**d.DEFAULTS, "token": "ok"})
+
+
+def test_rejected_new_key_is_not_saved(monkeypatch, tmp_path):
+    key_file = tmp_path / "vercel_token.json"
+    monkeypatch.setattr(d, "KEY_PATH", key_file)
+    monkeypatch.setattr(d, "_read_secret", lambda prompt: "X" * 24)
+    monkeypatch.setattr(d, "Vercel", KeyCheck(403))
+    with pytest.raises(d.DeployError, match="什么都没存"):
+        d.ask_token(dict(d.DEFAULTS))
+    assert not key_file.exists()
+
+
+def test_accepted_new_key_is_saved(monkeypatch, tmp_path):
+    key_file = tmp_path / "vercel_token.json"
+    monkeypatch.setattr(d, "KEY_PATH", key_file)
+    monkeypatch.setattr(d, "_read_secret", lambda prompt: "Y" * 24)
+    monkeypatch.setattr(d, "Vercel", KeyCheck(None))
+    d.ask_token(dict(d.DEFAULTS))
+    assert json.loads(key_file.read_text(encoding="utf-8"))["token"] == "Y" * 24
+
+
+class DropsWhileWaiting(FakeVercel):
+    def wait(self, deployment_id, limit_s=900):
+        raise d.DeployError("跟 Vercel 的连线中断（ConnectionResetError）。", transient=True)
+
+
+def test_error_after_deployment_was_created_says_do_not_redeploy(monkeypatch):
+    fake = DropsWhileWaiting("t", "team")
+    monkeypatch.setattr(d, "Vercel", lambda token, team_id: fake)
+    with pytest.raises(d.DeployError) as e:
+        d.deploy(d.DEFAULT_OVERLAY, False, {**d.DEFAULTS, "token": "t"})
+    msg = str(e.value)
+    assert "dpl_new 已经建立" in msg and "先不要重新部署" in msg
+
+
+def test_build_failure_is_not_told_that_it_will_go_live(monkeypatch):
+    with pytest.raises(d.BuildFailed) as e:
+        run(monkeypatch, final_state="ERROR")
+    assert "先不要重新部署" not in str(e.value)

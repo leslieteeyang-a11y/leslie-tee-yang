@@ -163,7 +163,7 @@ latestDeployment）。
 | `scripts/deploy_bi_web.py` + `deploy_bi_web.bat` | BI 网页（Vercel homeworks-bi）改版上线：用使用者自己的 Vercel 金钥（`vercel_token.json`，不进 git），线上档原样引用、只传改版目录（预设 `docs/bi_web/loyalty/`）的档；`overlay.json` 写明换掉哪些线上档与当初的底，线上被改过就停；`--check` 只检查、`--set-key` 换金钥 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，37 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
+| `tests/` | `python -m pytest tests -q`，65 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

@@ -17,8 +17,8 @@
 """
 
 import argparse
-import base64
 import hashlib
+import http.client
 import json
 import sys
 import time
@@ -35,7 +35,7 @@ MANIFEST = "overlay.json"
 DEFAULTS = {"project": "homeworks-bi", "team_id": "team_IA7hNGv1797N7fYFAD4mJd08",
             "domain": "homeworks-bi.vercel.app"}
 TOKEN_HELP = """\
-第一次使用要一把 Vercel 金钥（token）：
+需要一把 Vercel 金钥（token）——第一次使用，或旧的那把过期了：
   1. 用浏览器打开 https://vercel.com/account/tokens （用 leslieteeyang@gmail.com 登入）
   2. 按 Create（建立），名称填 homeworks-deploy；
      有 Scope 就选 leslie tee；有 Expiration（期限）建议选 90 天。
@@ -44,7 +44,17 @@ TOKEN_HELP = """\
 
 
 class DeployError(Exception):
-    """要告诉使用者、然后停下来的状况（讯息已写成该检查什么）。"""
+    """要告诉使用者、然后停下来的状况（讯息已写成该检查什么）。
+
+    status = Vercel 回的 HTTP 状态码（没有就是 None）；transient = 网路断线、429、5xx 这类过一下再试可能就好的错。"""
+
+    def __init__(self, msg: str, status: int | None = None, transient: bool = False):
+        super().__init__(msg)
+        self.status, self.transient = status, transient
+
+
+class BuildFailed(DeployError):
+    """Vercel 建置失败：线上还是原版，可以放心修好再部署。"""
 
 
 # ── 纯函数（tests/test_deploy_bi_web.py 测这些） ─────────────────────────────
@@ -160,17 +170,32 @@ class Vercel:
                 text = r.read().decode("utf-8") or "null"
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")[:400]
-            hint = {401: "金钥不对、过期或被删了。请执行 deploy_bi_web.bat --set-key 换一把新的。",
-                    403: "这把金钥没有权限。建金钥时 Scope 要选 leslie tee（不是个人帐号），再用 --set-key 换上。",
-                    404: "找不到东西（专案名称或部署编号不对）。",
-                    429: "Vercel 暂时限制请求次数，过几分钟再试。"}.get(e.code, "")
-            raise DeployError(f"Vercel 回应 {e.code}（{method} {path}）{hint}\n  {detail}")
+            hint = {401: "金钥不对、过期或被删了。关掉这个视窗再双击 deploy_bi_web.bat，它会请你贴一把新的。",
+                    403: "这把金钥没有权限（建金钥时 Scope 要选 leslie tee，不是个人帐号）。关掉视窗再双击 deploy_bi_web.bat 贴一把新的。",
+                    404: "找不到东西（专案名称或部署编号不对）。请把这段讯息贴给 Claude。",
+                    429: "Vercel 暂时限制请求次数，过几分钟再双击一次。"}.get(e.code, "")
+            raise DeployError(f"Vercel 回应 {e.code}（{method} {path}）{hint}\n  {detail}",
+                              status=e.code, transient=e.code == 429 or e.code >= 500)
         except urllib.error.URLError as e:
-            raise DeployError(f"连不上 Vercel：{e.reason}\n  请检查这台电脑的网路，能不能用浏览器打开 https://vercel.com。")
+            raise DeployError(f"连不上 Vercel：{e.reason}\n  请检查这台电脑的网路，能不能用浏览器打开 https://vercel.com。",
+                              transient=True)
+        except (OSError, http.client.HTTPException) as e:   # 连线中途断掉、读取逾时：urllib 不会包成 URLError
+            raise DeployError(f"跟 Vercel 的连线中断（{type(e).__name__}）。\n"
+                              "  请检查这台电脑的网路，能不能用浏览器打开 https://vercel.com。", transient=True)
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             return text
+
+    def get(self, path: str, query: dict | None = None, tries: int = 4):
+        """只读的 GET：网路瞬断、429、5xx 等 5 秒重试几次。建部署（POST）不重试，免得建出两个。"""
+        for i in range(tries):
+            try:
+                return self.call("GET", path, query=query)
+            except DeployError as e:
+                if not e.transient or i == tries - 1:
+                    raise
+                time.sleep(5)
 
     def production_deployment(self, project: str, domain: str) -> str:
         """目前正式网址（domain）指着的部署。先问别名；问不到再看专案的 production target。"""
@@ -181,7 +206,7 @@ class Vercel:
                 return dep
         except DeployError:
             pass
-        proj = self.call("GET", f"/v9/projects/{project}")
+        proj = self.get(f"/v9/projects/{project}")
         dep = ((proj.get("targets") or {}).get("production") or {}).get("id")
         if not dep:
             ready = [d for d in proj.get("latestDeployments") or []
@@ -192,7 +217,7 @@ class Vercel:
         return dep
 
     def live_files(self, deployment_id: str) -> dict[str, str]:
-        tree = self.call("GET", f"/v6/deployments/{deployment_id}/files")
+        tree = self.get(f"/v6/deployments/{deployment_id}/files")
         if not isinstance(tree, list) or not tree:
             raise DeployError(f"读不到部署 {deployment_id} 的档案清单（Vercel 回 {str(tree)[:200]}）。")
         live = flatten_tree(tree)
@@ -212,7 +237,7 @@ class Vercel:
     def wait(self, deployment_id: str, limit_s: int = 900) -> dict:
         start, last = time.time(), None
         while True:
-            d = self.call("GET", f"/v13/deployments/{deployment_id}")
+            d = self.get(f"/v13/deployments/{deployment_id}")
             state = d.get("readyState") or d.get("status")
             if state != last:
                 print(f"  状态：{state}")
@@ -255,10 +280,31 @@ def ask_token(settings: dict) -> dict:
     tok = clean_token(_read_secret("\n把金钥贴在这里再按 Enter："))
     if len(tok) < 20:
         raise DeployError("没有贴到金钥（或太短），什么都没改。请照上面的步骤复制整串再试一次。")
-    Vercel(tok, settings["team_id"]).call("GET", f"/v9/projects/{settings['project']}")
+    try:
+        Vercel(tok, settings["team_id"]).get(f"/v9/projects/{settings['project']}")
+    except DeployError as e:
+        if e.status in (401, 403, 404):
+            raise DeployError(f"这把金钥不能用，什么都没存（{e}）\n"
+                              "请照上面的步骤重建一把（Scope 选 leslie tee），再双击 deploy_bi_web.bat 重贴。")
+        raise
     settings = {**settings, "token": tok}
     KEY_PATH.write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"金钥有效，已存进 {KEY_PATH.name}（这个档不会上传）。\n")
+    return settings
+
+
+def ensure_token(settings: dict) -> dict:
+    """没有金钥就请使用者贴；存着的金钥过期 / 被删 / 没权限（401、403）就当场请他贴新的，不用另外下指令。
+    在上传与建部署之前检查，所以换金钥不会造成重复部署。"""
+    if not settings.get("token"):
+        return ask_token(settings)
+    try:
+        Vercel(settings["token"], settings["team_id"]).get(f"/v9/projects/{settings['project']}")
+    except DeployError as e:
+        if e.status not in (401, 403):
+            raise
+        print(f"存着的 Vercel 金钥已经不能用了（Vercel 回 {e.status}：过期、被删或权限不对），请贴一把新的。\n")
+        return ask_token({k: v for k, v in settings.items() if k != "token"})
     return settings
 
 
@@ -295,6 +341,17 @@ def deploy(folder: Path, check_only: bool, settings: dict) -> None:
     if not dep_id:
         raise DeployError(f"Vercel 没回部署编号：{str(created)[:300]}")
     print(f"  部署编号 {dep_id}")
+    try:
+        finish(vc, dep_id, overlay, plan, project, domain)
+    except DeployError as e:
+        if isinstance(e, BuildFailed):
+            raise
+        raise DeployError(f"{e}\n\n注意：部署 {dep_id} 已经建立，Vercel 建好后通常会自动上线，先不要重新部署。\n"
+                          "几分钟后再双击 deploy_bi_web.bat：若显示「线上已经是这一版」就是成功了。")
+
+
+def finish(vc: "Vercel", dep_id: str, overlay: dict[str, bytes], plan: dict, project: str, domain: str) -> None:
+    """部署已建立之后：等建置、核对档案、等正式网址指过来。"""
     done = vc.wait(dep_id)
     state = done.get("readyState") or done.get("status")
     if state != "READY":
@@ -304,7 +361,7 @@ def deploy(folder: Path, check_only: bool, settings: dict) -> None:
             msg += f"\n  Vercel：{done['errorMessage']}"
         if tail:
             msg += "\n  建置日志最后几行：\n    " + "\n    ".join(tail)
-        raise DeployError(msg + "\n请把这段讯息贴给 Claude。")
+        raise BuildFailed(msg + "\n请把这段讯息贴给 Claude。")
 
     new_live = vc.live_files(dep_id)
     wrong = [p for p, d in overlay.items() if new_live.get(p) != sha1(d)]
@@ -336,11 +393,13 @@ def main() -> None:
         if args.set_key:
             ask_token(settings)
             return
-        if not settings.get("token"):
-            settings = ask_token(settings)
+        settings = ensure_token(settings)
         deploy(folder, args.check, settings)
     except DeployError as e:
         sys.exit(f"\n[X] {e}")
+    except KeyboardInterrupt:
+        sys.exit("\n[X] 已中断。若刚才已经显示「部署编号」，Vercel 会自己建完上线，先不要重新部署；"
+                 "几分钟后再双击 deploy_bi_web.bat 确认（会显示「线上已经是这一版」）。")
 
 
 if __name__ == "__main__":
