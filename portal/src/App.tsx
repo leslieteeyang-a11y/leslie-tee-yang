@@ -12,6 +12,7 @@ import Planned from "./pages/Planned";
 import Password from "./pages/Password";
 import Purchasing from "./pages/Purchasing";
 import { SyncNote } from "./sync";
+import LangSwitch from "./LangSwitch";
 
 const ICON: Record<string, string> = {
   dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", warehouse: "▦", delivery: "⛟", sales: "¤",
@@ -103,6 +104,7 @@ export default function App() {
       <header className="topbar">
         <button className="icon menu-btn" onClick={() => setMenuOpen(!menuOpen)} aria-label="选单">☰</button>
         <a href="#/" className="brand-small">HomeWorks 营运</a>
+        <LangSwitch />
       </header>
       <nav className={"side" + (menuOpen ? " open" : "")}>
         <a href="#/" className="brand">
@@ -122,6 +124,7 @@ export default function App() {
           <span>
             <a href="#/password">改密码</a> · <a href="#/" onClick={() => supabase.auth.signOut().then(() => go("/"))}>登出</a>
           </span>
+          <LangSwitch />
         </div>
       </nav>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}

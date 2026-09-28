@@ -2,3 +2,8 @@
 .sync { margin: 0 0 12px; }
 .card.install { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-left: 4px solid var(--blue); }
 .card.install p { margin: 4px 0 0; }
+.lang { display: inline-flex; gap: 2px; background: rgba(255, 255, 255, .12); border-radius: 8px; padding: 2px; }
+.lang button { background: transparent; color: inherit; padding: 3px 10px; font-size: .8rem; font-weight: 600; opacity: .7; }
+.lang button.on { background: var(--blue); color: #fff; opacity: 1; }
+.lang.light { background: #e6ebf2; color: var(--text); align-self: center; }
+.topbar .lang { margin-left: auto; margin-right: 4px; color: #fff; }

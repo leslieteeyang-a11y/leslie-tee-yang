@@ -1,5 +1,7 @@
 import { FormEvent, useState } from "react";
 import { supabase } from "../supabase";
+import LangSwitch from "../LangSwitch";
+import "../extra.css";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -31,6 +33,7 @@ export default function Login() {
         {error && <div className="error">{error}</div>}
         <button disabled={busy}>{busy ? "登入中…" : "登入"}</button>
         <p className="hint">没有账号或忘记密码，请找管理员。</p>
+        <LangSwitch className="light" />
       </form>
     </div>
   );
