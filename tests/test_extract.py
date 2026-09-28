@@ -167,9 +167,27 @@ def test_setup_branch_refuses_hq_book(tmp_path, monkeypatch):
     import pytest
     import supabase_push
     monkeypatch.setattr("autocount_db.CONFIG_PATH", tmp_path / "autocount.json")
+    monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: None)
     with pytest.raises(SystemExit) as e:
         supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSSB"}})
     assert "choose_book.bat" in str(e.value)
+
+
+def test_setup_branch_trusts_company_name_over_db_name(tmp_path, monkeypatch):
+    """分行账套库名可能与总公司相同（复制账套没改名）；公司名称含 SOUTHERN 就放行，反之就挡。"""
+    import json
+    import pytest
+    import supabase_push
+    target = tmp_path / "autocount.json"
+    monkeypatch.setattr("autocount_db.CONFIG_PATH", target)
+    monkeypatch.setattr(supabase_push, "set_key", lambda cfg: (_ for _ in ()).throw(SystemExit("stop")))
+    monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: "HOMEWORKS (SOUTHERN) SDN. BHD.")
+    with pytest.raises(SystemExit, match="stop"):
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSSB"}})
+    assert json.loads(target.read_text(encoding="utf-8"))["supabase"]["company"] == "HOMEWORKSSOUTHERN"
+    monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: "HOMEWORKS SDN. BHD.")
+    with pytest.raises(SystemExit, match="没有 SOUTHERN"):
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}})
 
 
 def test_setup_branch_sets_branch_company(tmp_path, monkeypatch):
@@ -179,6 +197,7 @@ def test_setup_branch_sets_branch_company(tmp_path, monkeypatch):
     target = tmp_path / "autocount.json"
     monkeypatch.setattr("autocount_db.CONFIG_PATH", target)
     monkeypatch.setattr(supabase_push, "set_key", lambda cfg: (_ for _ in ()).throw(SystemExit("stop")))
+    monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: None)
     try:
         supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}})
     except SystemExit:

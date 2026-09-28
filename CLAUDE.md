@@ -79,8 +79,10 @@ SO，分行账套也不在 SERVER（在使用者用 AnyDesk 连的那台分行�
 要装在分行电脑上跑（`setup_branch.bat` = 挡总公司账套（`preferred_database`，请用 `choose_book.bat`
 = `autocount_setup.py --choose` 改选）+ 自动填 `supabase.company` = HOMEWORKSSOUTHERN + 贴金钥 +
 今年各月 backfill + `schedule_monthly.py --branch` 登记「HomeWorks Branch Actual」排程 →
-`run_branch.bat`）。2026-09-28 分行电脑第一次跑时 setup 自动选到 AED_HOMEWORKSSB（分行电脑看得到
-这个名字的账套），被挡下；分行账套实际名称待使用者从 choose_book 清单确认。落到 `bi.branch_actual_month`（scope ×
+`run_branch.bat`）。**分行账套在分行电脑本机 `(local)\A2006`，公司名 HOMEWORKS (SOUTHERN) SDN. BHD.，库名 AED_HOMEWORKS…
+（登入画面截断，可能与总公司同名 AED_HOMEWORKSSB）**，所以分行流程改用账套里的公司名称
+（`autocount_db.book_company_name`，读 Profile/CompanyProfile.CompanyName）含 SOUTHERN 来判断，
+读不到才退回看库名。落到 `bi.branch_actual_month`（scope ×
 category）与 `bi.branch_actual_meta`（各 agent 明细），RPC `public.bi_branch_actual_upsert`，视图
 `public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。分行 8 月发票 agent：
 HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。

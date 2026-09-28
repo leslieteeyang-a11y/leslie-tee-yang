@@ -160,6 +160,16 @@ def setup_flow(cfg: dict) -> None:
         sys.exit("有月份失败，细节在 logs\\ 里最新的档案。")
 
 
+def book_company_name_of(cfg: dict):
+    """连上 autocount.json 指定的账套读公司名称；连不上就交给使用者去查（回 None 由库名判断）。"""
+    from autocount_db import book_company_name, connect
+    try:
+        return book_company_name(connect(cfg))
+    except Exception as e:                    # noqa: BLE001 — 连线错误细节印出来，判断交给后面
+        print(f"（连不上账套读公司名称：{str(e)[:120]}）")
+        return None
+
+
 def setup_branch_flow(cfg: dict) -> None:
     """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。"""
     import subprocess
@@ -170,10 +180,15 @@ def setup_branch_flow(cfg: dict) -> None:
     hq = example["connection"].get("preferred_database", "")
     if not db:
         sys.exit("autocount.json 还没有连线设定。请先双击 setup_autocount.bat。")
-    if hq and is_report_book(db, hq):
-        sys.exit(f"[X] 目前连的是总公司账套 {db}，不是分行的。\n"
-                 "    请双击 choose_book.bat，在清单里选分行（JB Southern）的账套，再跑一次 setup_branch.bat。\n"
-                 "    清单里没有分行账套的话，代表它在别台电脑：照抄分行 AutoCount 登入画面的 Server 名称输入。")
+    name = book_company_name_of(cfg)
+    fix = ("    请双击 choose_book.bat，在清单里选分行（JB Southern）的账套，再跑一次 setup_branch.bat。\n"
+           "    清单里没有分行账套的话，代表它在别台电脑：照抄分行 AutoCount 登入画面的 Server 名称输入。")
+    if name is not None:
+        print(f"账套 {db} 的公司名称：{name}")
+        if "SOUTHERN" not in name.upper():
+            sys.exit(f"[X] 这个账套是「{name}」，不是分行（公司名称没有 SOUTHERN）。\n{fix}")
+    elif hq and is_report_book(db, hq):      # 读不到公司名称才退回看库名
+        sys.exit(f"[X] 目前连的是总公司账套 {db}，不是分行的。\n{fix}")
     sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
     if not sb.get("company"):
         sb["company"] = BRANCH_COMPANY          # 分行账套名不一定含 SOUTHERN，BI 的公司代码固定是这个

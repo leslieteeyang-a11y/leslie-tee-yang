@@ -82,6 +82,21 @@ def is_report_book(name: str, preferred: str | None) -> bool:
     return n == p or n.startswith(p)
 
 
+def book_company_name(conn) -> str | None:
+    """账套里登记的公司名称（AutoCount 登入画面的 Company Name），找不到就 None。
+
+    分行账套的数据库名可能与总公司一样（复制账套时没改名），所以分辨分行要看这个而不是库名。
+    """
+    for table in ("Profile", "CompanyProfile"):
+        try:
+            _, rows = fetch(conn, f"SELECT TOP 1 CompanyName FROM [{table}]")
+        except Exception:                      # 表不存在 / 没权限：换下一个候选
+            continue
+        if rows and rows[0][0]:
+            return str(rows[0][0]).strip()
+    return None
+
+
 def require_report_book(cfg):
     """账套不是报表用的那个就停下来，避免抓错账套还不自知。"""
     from pathlib import Path as _P
