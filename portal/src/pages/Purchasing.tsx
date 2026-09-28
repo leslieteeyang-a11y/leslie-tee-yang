@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  api, BRANCH_LABEL, can, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
-  PoStatus, Shipment, SHIPMENT_STATUS_LABEL, ShipmentStatus,
+  api, BRANCH_LABEL, can, ETA_SOURCE_LABEL, fmtAgo, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
+  PoStatus, Shipment, SHIPMENT_STATUS_LABEL, ShipmentStatus, SyncStatus,
 } from "../api";
 import { go } from "../router";
 import { Empty, ErrorBox, Modal, Tabs } from "../ui";
@@ -19,6 +19,7 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
         <Tabs value={tab} onChange={(t) => go(t === "po" ? "/purchasing" : `/purchasing/${t}`)}
               options={[["po", "未到货 PO"], ["shipments", "货柜"], ["item", "查 SKU 到货"]]} />
       </div>
+      <SyncNote />
       {tab === "po" && <PoTab me={me} canEdit={canEdit} />}
       {tab === "shipments" && <ShipmentTab me={me} canEdit={canEdit} />}
       {tab === "item" && <ItemTab />}
@@ -27,6 +28,28 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
                        onClose={() => go("/purchasing")} />
       )}
     </>
+  );
+}
+
+// AutoCount 的 PO / 库存不是即时的：告诉员工资料更新到几点，免得以为系统错了
+function SyncNote() {
+  const [rows, setRows] = useState<SyncStatus[] | null>(null);
+  useEffect(() => {
+    api.syncStatus().then(setRows).catch(() => setRows(null));
+  }, []);
+  if (!rows || rows.length === 0) return null;
+  const stale = rows.some((r) => !r.purchase || Date.now() - new Date(r.purchase).getTime() > 26 * 3600 * 1000);
+  return (
+    <p className={"muted small sync" + (stale ? " late" : "")}>
+      AutoCount 资料更新：
+      {rows.map((r, n) => (
+        <span key={r.company}>
+          {n > 0 && " · "}
+          {rows.length > 1 && `${BRANCH_LABEL[r.company]} `}PO {fmtAgo(r.purchase)}、库存 {fmtAgo(r.stock)}
+        </span>
+      ))}
+      {stale ? "（超过一天没更新，请通知管理员检查同步）" : "（刚在 AutoCount 做的单，要等下一次同步才会出现）"}
+    </p>
   );
 }
 
@@ -465,7 +488,6 @@ function ItemTab() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="输入 SKU 或品名，例：ST001174、RAXON HOSE" autoFocus />
         <button disabled={busy}>{busy ? "查询中…" : "查询"}</button>
       </form>
-      <p className="muted small">库存与 PO 是 AutoCount 每天早上同步的数字，不是即时的。</p>
       <ErrorBox error={error} />
       {rows && (rows.length === 0 ? <Empty>找不到这个商品。</Empty> : (
         <div className="item-list">

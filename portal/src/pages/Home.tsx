@@ -1,6 +1,34 @@
 import { useEffect, useState } from "react";
 import { api, can, Home, Me, moduleHref, Task } from "../api";
 import { ErrorBox } from "../ui";
+import { canPromptInstall, dismissHint, hintDismissed, isIos, isStandalone, onInstallChange, promptInstall } from "../install";
+
+// 首页提示：把系统加到手机主画面（已安装、已关掉提示就不显示）
+function InstallHint() {
+  const [, force] = useState(0);
+  const [hidden, setHidden] = useState(() => isStandalone() || hintDismissed());
+  useEffect(() => onInstallChange(() => force((n) => n + 1)), []);
+  if (hidden) return null;
+  const close = () => { dismissHint(); setHidden(true); };
+  return (
+    <section className="card install">
+      <div>
+        <b>把营运系统加到手机主画面</b>
+        <p className="muted small">
+          {canPromptInstall()
+            ? "像 App 一样一点就开，不用记网址。"
+            : isIos()
+              ? "用 Safari 打开这个网页 → 点下方「分享」按钮 → 选「加入主画面」。"
+              : "用 Chrome 打开 → 点右上角 ⋮ → 选「加到主画面」或「安装应用程式」。"}
+        </p>
+      </div>
+      <div className="actions">
+        {canPromptInstall() && <button onClick={() => promptInstall().then((ok) => ok && setHidden(true))}>加到主画面</button>}
+        <button className="ghost" onClick={close}>不用了</button>
+      </div>
+    </section>
+  );
+}
 
 export default function HomePage({ me }: { me: Me }) {
   const [home, setHome] = useState<Home | null>(null);
@@ -20,6 +48,7 @@ export default function HomePage({ me }: { me: Me }) {
     <>
       <h1>{hello}，{me.staff.name}</h1>
       <ErrorBox error={error} />
+      <InstallHint />
       {home && (
         <div className="kpis">
           <a className="kpi" href="#/tasks"><b>{home.my_open_tasks}</b><span>我的待办任务</span></a>

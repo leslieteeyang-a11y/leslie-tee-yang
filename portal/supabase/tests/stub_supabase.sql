@@ -49,3 +49,17 @@ insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, cr
   ('HOMEWORKSSB', 5, 'PO-OLD', current_date - 700, '400-S001', 'SHING SOON HENG', 'ST002', 'RAXON BIDET', 'HQ', 'SETS', 1, 0, 10, null),
   -- JB 的单
   ('HOMEWORKSSOUTHERN', 6, 'PO-JB', current_date - 5, '400-S001', 'HOMEWORKS', 'ST001', 'RAXON HOSE', 'HQ', 'SETS', 2, 0, 9, null);
+
+-- ETA 修正 / 同步时间（2026-09-28b）
+create table bi.sync_log (id bigint generated always as identity, step text, started_at timestamptz,
+  finished_at timestamptz, rows int, ok boolean, error text);
+insert into bi.sync_log (step, started_at, finished_at, rows, ok) values
+  ('purchase:HOMEWORKSSB:load', now() - interval '2 hours', now() - interval '2 hours', 10, true),
+  ('purchase:HOMEWORKSSB:load', now() - interval '1 hour', now() - interval '1 hour', 0, false),
+  ('stock:HOMEWORKSSB:load', now() - interval '3 hours', now() - interval '3 hours', 10, true),
+  ('purchase:HOMEWORKSSOUTHERN:load', now() - interval '5 hours', now() - interval '5 hours', 10, true);
+-- 中国货：AutoCount 预计交货日只填开单后 5 天（不可信）/ 开单后 45 天（可信）
+insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, creditor_name, item_code, description,
+                             location, uom, qty, transferred_qty, unit_price, est_delivery) values
+  ('HOMEWORKSSB', 7, 'PO-CN5', current_date - 40, '4000-M002', 'CS065', 'ST001', 'RAXON HOSE', 'SRGADING', 'SETS', 1, 0, null, current_date - 35),
+  ('HOMEWORKSSB', 8, 'PO-CN45', current_date - 50, '4000-M002', 'CS065', 'ST001', 'RAXON HOSE', 'SRGADING', 'SETS', 1, 0, null, current_date - 5);

@@ -177,6 +177,11 @@ export interface ItemEta {
   incoming: { po_no: string; open_qty: number; eta: string; eta_source: string; status: PoStatus;
               shipment_name: string | null; supplier_name: string; location: string; overdue: boolean }[];
 }
+export interface SyncStatus {
+  company: string;
+  purchase: string | null;   // PO 最后一次从 AutoCount 同步成功的时间
+  stock: string | null;      // 库存
+}
 export const PO_STATUS_LABEL: Record<PoStatus, string> = {
   ordered: "已下单", confirmed: "供应商已确认", producing: "生产 / 备货中", shipped: "已出货", arrived: "已到港 / 到货中",
   closed: "关闭（不会来）",
@@ -229,6 +234,7 @@ export const api = {
   shipments: (includeDone = false) => rpc<Shipment[]>("ops_shipment_list", { p_include_done: includeDone }),
   saveShipment: (p: Record<string, unknown>) => rpc<Shipment>("ops_shipment_save", { p }),
   itemEta: (q: string) => rpc<ItemEta[]>("ops_item_eta", { p_q: q }),
+  syncStatus: () => rpc<SyncStatus[]>("ops_sync_status"),
   async setPassword(staffId: number, password: string): Promise<{ created: boolean }> {
     const { data, error } = await supabase.functions.invoke("ops-account", {
       body: { staff_id: staffId, password },
@@ -260,6 +266,19 @@ export function fmtRM(n: number | null | undefined): string {
 export function moduleHref(m: { key: string; ready: boolean }): string {
   if (m.key === "dashboard") return "#/";
   return m.ready ? `#/${m.key}` : `#/m/${m.key}`;
+}
+
+/** 「今天 15:05」「昨天 12:05」「9/25 12:05」：给员工看资料新不新 */
+export function fmtAgo(s: string | null | undefined): string {
+  if (!s) return "未知";
+  const d = new Date(s);
+  const now = new Date();
+  const hm = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return `今天 ${hm}`;
+  if (diff === 1) return `昨天 ${hm}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 }
 
 export function fmtDate(s: string | null | undefined): string {

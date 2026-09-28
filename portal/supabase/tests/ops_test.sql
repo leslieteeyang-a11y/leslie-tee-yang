@@ -115,10 +115,11 @@ do $$ begin assert public.ops_me() is null, 'inactive'; end $$;
 select pg_temp.as_user('buyer@example.com');
 do $$ declare l jsonb; one jsonb; begin
   l := public.ops_po_list('{}');
-  assert jsonb_array_length(l) = 2, 'HQ buyer sees PO-1 + PO-2 only (PO-3 received, PO-OLD stale, PO-JB other branch): ' || l::text;
-  assert l->0->>'po_no' = 'PO-2' and (l->0->>'overdue')::boolean, 'overdue first';
-  assert (l->0->>'open_amt')::numeric = 40, 'buyer sees amount';
-  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 3, 'stale toggle';
+  assert jsonb_array_length(l) = 4, 'HQ buyer sees PO-1, PO-2, PO-CN5, PO-CN45 only (PO-3 received, PO-OLD stale, PO-JB other branch): ' || l::text;
+  assert l->0->>'po_no' = 'PO-CN45' and (l->0->>'overdue')::boolean, 'overdue first (china est 45d after po is trusted)';
+  assert l->1->>'po_no' = 'PO-2', 'then local overdue';
+  assert (l->1->>'open_amt')::numeric = 40, 'buyer sees amount';
+  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 5, 'stale toggle';
   assert jsonb_array_length(public.ops_po_list('{"q":"bidet"}')) = 1, 'search by item';
   one := public.ops_po_get('HOMEWORKSSB', 'PO-1');
   assert jsonb_array_length(one->'items') = 2 and (one->'items'->1->>'open_qty')::numeric = 15, 'lines';
@@ -131,7 +132,7 @@ select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSOUTHERN', 
 do $$ declare s jsonb; l jsonb; begin
   perform public.ops_po_update('HOMEWORKSSB', array['PO-2'], jsonb_build_object('eta', current_date + 3, 'remark', '供应商说下周'));
   l := public.ops_po_list('{"overdue":true}');
-  assert jsonb_array_length(l) = 0, 'no overdue after eta';
+  assert jsonb_array_length(l) = 1 and l->0->>'po_no' = 'PO-CN45', 'only china-45 overdue after eta: ' || l::text;
   s := public.ops_shipment_save(jsonb_build_object('company', 'HOMEWORKSSB', 'name', 'CS065-0925', 'eta', current_date + 30));
   perform public.ops_po_update('HOMEWORKSSB', array['PO-1', 'PO-2'], jsonb_build_object('shipment_id', s->>'id'));
   l := public.ops_po_list('{"q":"CS065-0925"}');
@@ -146,8 +147,8 @@ select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSB', array[
 -- 关闭旧单 → 清单隐藏
 do $$ begin
   perform public.ops_po_update('HOMEWORKSSB', array['PO-OLD'], '{"status":"closed"}');
-  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 2, 'closed hidden';
-  assert jsonb_array_length(public.ops_po_list('{"stale":true,"status":"all"}')) = 3, 'closed shown with all';
+  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 4, 'closed hidden';
+  assert jsonb_array_length(public.ops_po_list('{"stale":true,"status":"all"}')) = 5, 'closed shown with all';
 end $$;
 
 -- 业务：只看（无价格），不能改；可查 SKU 到货
@@ -156,11 +157,11 @@ select public.ops_staff_save('{"email":"hqsales@example.com","name":"门市小�
 select pg_temp.as_user('hqsales@example.com');
 do $$ declare l jsonb; e jsonb; begin
   l := public.ops_po_list('{}');
-  assert jsonb_array_length(l) = 2 and l->0->'open_amt' = 'null'::jsonb, 'sales sees no amount';
+  assert jsonb_array_length(l) = 4 and l->0->'open_amt' = 'null'::jsonb, 'sales sees no amount';
   assert public.ops_po_get('HOMEWORKSSB', 'PO-1')->'items'->0->'unit_price' = 'null'::jsonb, 'sales no unit price';
   e := public.ops_item_eta('ST001');
   assert jsonb_array_length(e) = 1, 'sales sees only own branch item: ' || e::text;
-  assert (e->0->>'on_hand')::numeric = 8 and jsonb_array_length(e->0->'incoming') = 2, 'stock + incoming';
+  assert (e->0->>'on_hand')::numeric = 8 and jsonb_array_length(e->0->'incoming') = 4, 'stock + incoming';
   assert (public.ops_home()->'po_overdue') = 'null'::jsonb, 'sales no po kpi';
 end $$;
 select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSB', array['PO-1'], '{"status":"arrived"}')$q$, '编辑权限');
@@ -171,6 +172,25 @@ select public.ops_staff_save('{"email":"hr@example.com","name":"HR","department"
 select pg_temp.as_user('hr@example.com');
 select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '订货与 ETA');
 select pg_temp.expect_error('select * from ops.v_po_open', 'permission denied');
+
+-- 10. 中国货 ETA 修正：AutoCount 只填开单后 5 天 → 不采用，改按交期（60 天）
+select pg_temp.as_user('buyer@example.com');
+do $$ declare p jsonb; begin
+  p := public.ops_po_get('HOMEWORKSSB', 'PO-CN5');
+  assert p->>'eta_source' = 'lead' and p->>'eta' = (current_date + 20)::text and not (p->>'overdue')::boolean,
+    'china est 5d after po ignored: ' || p::text;
+  p := public.ops_po_get('HOMEWORKSSB', 'PO-CN45');
+  assert p->>'eta_source' = 'autocount' and p->>'eta' = (current_date - 5)::text, 'china est 45d trusted';
+end $$;
+
+-- 11. 资料更新时间：只取成功的，只看得到自己分店
+do $$ declare s jsonb := public.ops_sync_status(); begin
+  assert jsonb_array_length(s) = 1 and s->0->>'company' = 'HOMEWORKSSB', 'own branch only: ' || s::text;
+  assert (s->0->>'purchase')::timestamptz < now() - interval '90 minutes', 'failed run ignored';
+  assert s->0->>'stock' is not null, 'stock time';
+end $$;
+select pg_temp.as_user('boss@example.com');
+do $$ begin assert jsonb_array_length(public.ops_sync_status()) = 2, 'admin sees both'; end $$;
 
 reset role;
 select 'ALL OPS TESTS PASSED' as result;
