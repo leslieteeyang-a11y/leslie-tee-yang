@@ -159,6 +159,9 @@ latestDeployment）。
    /health /static。测试 `tests/test_auth.py` 用假 sign_in。**开到办公室以外**还要做 HTTPS 与
    对外通道（建议 Cloudflare Tunnel），尚未做。）
 4. 写入 AutoCount 的 POC：一条流程、测试账套、证明失败时不留半张单、重跑不重复过账
+5. **2026-09-28 使用者决定**：BI 网页「够用了」，本机营运网页（webapp/、localhost:8000）不再投入，
+   Cloudflare Tunnel / HTTPS 对外通道因此不做。webapp 保留但不加功能；新功能一律做在 BI（Supabase + Vercel）。
+   待办：分行电脑装 d 版（HomeWorks_0928d.zip，= b 版脚本 + 广告拉回）并重跑 setup_branch.bat 换成每天排程。
 
 ## 写码惯例
 
