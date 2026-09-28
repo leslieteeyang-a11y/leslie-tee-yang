@@ -1,12 +1,13 @@
-# 月报产生器
+# ASCII only: pip on an English Windows reads this file with cp1252 and chokes on Chinese comments.
+# Excel report
 openpyxl>=3.1
-# 连 AutoCount（只在办公室机器需要）
+# AutoCount (SQL Server) - only needed on the office / branch PC
 pyodbc>=5.0
-# 营运入口网页
+# Ops web portal
 fastapi>=0.110
 uvicorn[standard]>=0.29
 jinja2>=3.1
-python-multipart>=0.0.9   # 登入表单
-# 测试
+python-multipart>=0.0.9
+# Tests
 pytest>=8.0
 httpx>=0.27

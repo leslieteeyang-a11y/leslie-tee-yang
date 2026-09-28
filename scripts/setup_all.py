@@ -19,7 +19,9 @@ def step(n, text):
 
 
 def run(args, fail_msg):
-    r = subprocess.run([PY, *args], cwd=ROOT)
+    # 子程序一律用 UTF-8：英文版 Windows 预设 cp1252，pip / 脚本读到中文就会 UnicodeDecodeError
+    env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    r = subprocess.run([PY, *args], cwd=ROOT, env=env)
     if r.returncode != 0:
         print(f"\n[X] {fail_msg}\n    请把这个视窗整个截图给 Claude。")
         sys.exit(r.returncode)
