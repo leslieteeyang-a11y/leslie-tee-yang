@@ -1,0 +1,8 @@
+{
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是这一版，部署会停下来。其余档都是新增。",
+  "based_on_deployment": "dpl_2HzZjNwpUdrSg8iQTKsNQzXU9phT",
+  "replaces": {
+    "vite.config.ts": "0c897d6f972ea1895b2f1af316e9ea51de65cd0e",
+    "src/i18n/index.ts": "6f28962c7d01c5760239cd3f935d885f70db3ec7"
+  }
+}

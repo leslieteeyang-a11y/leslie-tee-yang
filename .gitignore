@@ -8,3 +8,4 @@ diag_*.txt
 logs/
 output/
 data/20*.json
+vercel_token.json

@@ -32,9 +32,25 @@ Member（或 Owner）才能由 Claude 部署；或使用者自己部署。
   - **部署前先 `get_project homeworks-bi`（不带 teamId）看 latestDeployment**：若已不是 dpl_2HzZjNwpUdrSg8iQTKsNQzXU9phT，
     使用者在这之间改过网页，要改用新部署的档案树 SHA，并确认新版 `vite.config.ts`、`src/i18n/index.ts` 是否也改过
     （这两个档我们会整个替换）。部署后用 list_deployment_files 比对 7 个新档的 SHA1 与本目录一致。
-- 403 的原因（2026-09-28 查明）：团队只有使用者一个成员（Owner），不是角色问题；是 claude.ai 的 Vercel 连接器授权
-  拿不到完整身分（get_auth_user 回 User not found）。解法是在 https://claude.ai/customize/connectors 中断再重连 Vercel，
-  然后**开新 session**（连接器只在 session 开始时载入）。
+- 403 的原因（2026-09-28 查明）：团队只有使用者一个成员（Owner），不是角色问题；是 claude.ai 的 Vercel 连接器授权。
+  使用者在 https://claude.ai/customize/connectors 重连后，同一个 session 就认得身分了（get_auth_user 从 User not found
+  变成 Owner），但建部署、列别名**仍然 403**——连接器授权不含部署权限，重连解决不了。改用下面的 deploy_bi_web.bat。
 - 为什么是独立页而不是分页：`get_deployment_file_contents` 每个档只回前 1,500 bytes，拿不到完整的 `App.tsx`，
   改不了分页列。以后若使用者提供完整原始码，把 `Loyalty` 元件挂进 App.tsx 的 TABS（owner / manager / sales）即可，
   元件本身不用改（props：`lang`、`role`、`company`）。
+
+## 部署改版：deploy_bi_web.bat（2026-09-28 起）
+
+使用者重新授权连接器后，`get_auth_user` 认得是 Owner，但建 preview / production 部署、列别名仍回 403：
+连接器授权本身不含部署权限，Claude 这边解不了。所以改用 `scripts/deploy_bi_web.py`（SERVER 上双击 `deploy_bi_web.bat`）：
+
+1. 第一次会请使用者到 https://vercel.com/account/tokens 建一把金钥（Scope 选 leslie tee），getpass 贴上、先读一次专案验证，
+   存进 `vercel_token.json`（gitignore；update_from_zip 也不会盖掉）。
+2. 用别名 `homeworks-bi.vercel.app` 找出目前正式部署（找不到再看专案的 production target），读它的档案树。
+3. 线上每个档用 `{file, sha}` 原样引用；改版目录的档用 `/v2/files` 上传；`overlay.json` 的 `replaces` 是要换掉的线上档
+   与当初的底（SHA1），线上已不是那一版就停下来并请使用者把讯息贴给 Claude（重新以线上最新版合并）。
+4. `/v13/deployments` 建正式部署、等到 READY，再核对新部署里改版档的 SHA1、等正式网址指过来。建置失败会印出建置日志最后几行，
+   线上维持原版。`--check` 只看会动到哪些档；线上已是这一版就不部署（重跑安全）。
+
+以后做新的 BI 网页改版：另开一个改版目录（路径就是部署路径 + `overlay.json`），
+`python scripts/deploy_bi_web.py docs/bi_web/<目录>`。需要换掉的线上档，先确认手上的底就是线上那一版（SHA1 对得上）。

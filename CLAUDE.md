@@ -113,7 +113,7 @@ JB RETAIL + 空白）两边合并、RM1 = 1 分、100 分折抵 RM1、一次最�
 规则存 `bi.loyalty_settings`（owner 可在页面改）。RPC `public.bi_loyalty_*`（SECURITY DEFINER，函数内查角色）：查询与兑换 =
 owner/manager/sales，作废 = owner + 本门市 manager，调整与改规则 = owner。**AutoCount 不写入**：兑换后店员照常开单手动给折扣。
 Migration `loyalty_points`（+ `_cn_sign`、`_no_debt`），合并版 `docs/bi_web/loyalty_points.sql`。前端是独立页 `/loyalty.html`
-（档案在 `docs/bi_web/loyalty/`）——**尚未部署**：Vercel 连接的帐号 2026-09-28 起对 homeworks-bi 部署回 403，见 `docs/bi_web/README.md`。
+（档案在 `docs/bi_web/loyalty/`）——**尚未部署**：Claude 的 Vercel 连接器（使用者重新授权后也一样）能读不能建部署（403），所以改由使用者在 SERVER 双击 `deploy_bi_web.bat`（`scripts/deploy_bi_web.py`）用自己的 Vercel 金钥部署，见 `docs/bi_web/README.md`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
@@ -160,6 +160,7 @@ latestDeployment）。
 | `scripts/schedule_monthly.py` + `schedule_monthly.bat` | 用 XML 登记 Windows 工作排程器（每月 1 号 08:00，错过会补跑）；`--run-now` / `--status` / `--remove` |
 | `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送、`--setup-branch` 分行流程 |
 | `scripts/branch_actual.py` + `setup_branch.bat` / `run_branch.bat` | 分行电脑用：分行当月实际销售额 → BI（见下节） |
+| `scripts/deploy_bi_web.py` + `deploy_bi_web.bat` | BI 网页（Vercel homeworks-bi）改版上线：用使用者自己的 Vercel 金钥（`vercel_token.json`，不进 git），线上档原样引用、只传改版目录（预设 `docs/bi_web/loyalty/`）的档；`overlay.json` 写明换掉哪些线上档与当初的底，线上被改过就停；`--check` 只检查、`--set-key` 换金钥 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
 | `tests/` | `python -m pytest tests -q`，37 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10），都不需 AutoCount |
