@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, can, Home, Me, Task } from "../api";
+import { api, can, Home, Me, moduleHref, Task } from "../api";
 import { ErrorBox } from "../ui";
 
 export default function HomePage({ me }: { me: Me }) {
@@ -26,6 +26,9 @@ export default function HomePage({ me }: { me: Me }) {
           <a className={"kpi" + (home.my_overdue ? " warn" : "")} href="#/tasks"><b>{home.my_overdue}</b><span>已逾期</span></a>
           <a className={"kpi" + (home.approvals_waiting ? " warn" : "")} href="#/approvals"><b>{home.approvals_waiting}</b><span>等我审批</span></a>
           <a className="kpi" href="#/approvals"><b>{home.my_pending_requests}</b><span>我的申请（待批）</span></a>
+          {home.po_overdue != null && (
+            <a className={"kpi" + (home.po_overdue ? " warn" : "")} href="#/purchasing"><b>{home.po_overdue}</b><span>PO 已过预计到货日</span></a>
+          )}
           <a className="kpi" href="#/tasks"><b>{home.dept_open_tasks}</b><span>{me.staff.department_name}部门未完成</span></a>
         </div>
       )}
@@ -48,7 +51,7 @@ export default function HomePage({ me }: { me: Me }) {
       <div className="tiles">
         {modules.map((m) => (
           <a key={m.key} className={"tile" + (m.ready ? "" : " planned")}
-             href={["tasks", "approvals", "admin"].includes(m.key) ? `#/${m.key}` : `#/m/${m.key}`}>
+             href={moduleHref(m)}>
             <b>{m.name}</b>
             <span>{m.description}</span>
             <small>{m.ready ? "已上线" : `第 ${m.phase} 阶段 · 规划中`}</small>

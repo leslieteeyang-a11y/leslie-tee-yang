@@ -93,7 +93,12 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - 测试：`portal/supabase/tests/run.sh`（本机 PostgreSQL，stub 掉 auth 与 bi）；前端 `npm run build`。
 - 部署：非 git，Vercel MCP `create_deployment` 内嵌原始码（见 `portal/README.md`）。
 - 已上线（第 1 阶段 · 地基）：首页、任务、审批、员工与权限。其余模块显示「规划中」。
-- 路线图：2 订货与 ETA（接 `bi.fact_po_line` / `public.bi_po_open`，加 ETA、货柜、状态的员工输入）+ 销售；
+- 已上线（第 2 阶段 · 订货与 ETA，2026-09-28）：`ops.po_track`（每张 PO 的状态 / ETA / 备注，key = company+po_no）、
+  `ops.shipment`（货柜，一柜多张 PO）；视图 `ops.v_po_open(_line)` 读 `bi.fact_po_line`。有效 ETA = 货柜 > 采购填写 >
+  AutoCount 预计交货日（晚于开单日才算）> 开单日 + 供应商交期（与 BI `bi_po_open` 同规则）。120 天以上且没人跟进的旧单
+  预设隐藏（总部有 ~120 张多年没结的本地 PO）；可标「关闭」。只有订货「可编辑」看得到单价 / 金额。中国货（CSxxx 供应商）
+  在 AutoCount 多数没有单价，金额为 0 是正常的。
+- 路线图：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，

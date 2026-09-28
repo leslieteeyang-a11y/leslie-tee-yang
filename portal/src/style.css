@@ -130,6 +130,24 @@ select.lv.view { background: #eef4ff; }
 select.lv.edit { background: var(--green-soft); }
 select.lv.approve { background: var(--amber-soft); }
 
+/* ---------- 订货 ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.toolbar input:not([type]), .toolbar input[type="text"] { flex: 1 1 260px; width: auto; }
+.toolbar select { width: auto; }
+.toolbar label.check { flex: 0 0 auto; font-size: .88rem; }
+.small { font-size: .85rem; }
+.bulkbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--blue-soft); padding: 8px 12px; border-radius: 10px; margin-bottom: 10px; }
+.po, .sh { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; background: #eef1f5; color: var(--muted); }
+.po.confirmed, .po.producing, .sh.loading, .sh.booked { background: var(--blue-soft); color: var(--blue); }
+.po.shipped, .po.arrived, .sh.shipped, .sh.arrived { background: var(--amber-soft); color: var(--amber); }
+.sh.received { background: var(--green-soft); color: var(--green); }
+.po.closed, .sh.cancelled { text-decoration: line-through; }
+td.remark { max-width: 220px; color: var(--muted); font-size: .85rem; }
+.tile.warn { border-top-color: var(--red); }
+.tile button { align-self: flex-start; }
+.item-list .card { padding: 14px 16px; }
+.stock { margin: 6px 0; }
+
 /* ---------- 弹窗与表单 ---------- */
 .modal-back { position: fixed; inset: 0; background: rgba(15, 25, 40, .45); display: grid; place-items: start center; padding: 6vh 16px; overflow-y: auto; z-index: 50; }
 .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 560px; padding: 20px 22px; box-shadow: 0 10px 40px rgba(0, 0, 0, .2); }

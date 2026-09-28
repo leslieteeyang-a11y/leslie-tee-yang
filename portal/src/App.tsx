@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { api, BRANCH_LABEL, can, Me, ROLE_LABEL } from "./api";
+import { api, BRANCH_LABEL, can, Me, moduleHref, ROLE_LABEL } from "./api";
 import { go, useRoute } from "./router";
 import Login from "./pages/Login";
 import HomePage from "./pages/Home";
@@ -10,6 +10,7 @@ import Approvals from "./pages/Approvals";
 import Admin from "./pages/Admin";
 import Planned from "./pages/Planned";
 import Password from "./pages/Password";
+import Purchasing from "./pages/Purchasing";
 
 const ICON: Record<string, string> = {
   dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", warehouse: "▦", delivery: "⛟", sales: "¤",
@@ -61,7 +62,7 @@ export default function App() {
     );
 
   const visible = me.modules.filter((m) => m.level !== "none");
-  const [, section, arg] = route.split("/");
+  const [, section, arg, arg2, arg3] = route.split("/");
   let page;
   switch (section || "") {
     case "":
@@ -76,6 +77,9 @@ export default function App() {
     case "admin":
       page = can(me, "admin", "approve") ? <Admin me={me} onChanged={loadMe} /> : <NoAccess />;
       break;
+    case "purchasing":
+      page = can(me, "purchasing", "view") ? <Purchasing me={me} sub={arg} arg1={arg2} arg2={arg3} /> : <NoAccess />;
+      break;
     case "password":
       page = <Password />;
       break;
@@ -88,8 +92,6 @@ export default function App() {
       page = <NoAccess />;
   }
 
-  const href = (key: string) =>
-    key === "dashboard" ? "#/" : ["tasks", "approvals", "admin"].includes(key) ? `#/${key}` : `#/m/${key}`;
   const active = (key: string) =>
     key === "dashboard" ? !section : section === key || (section === "m" && arg === key);
 
@@ -105,7 +107,7 @@ export default function App() {
           <span>HomeWorks<br /><small>营运系统</small></span>
         </a>
         {visible.map((m) => (
-          <a key={m.key} href={href(m.key)} className={active(m.key) ? "on" : ""}>
+          <a key={m.key} href={moduleHref(m)} className={active(m.key) ? "on" : ""}>
             <span className="ico">{ICON[m.key] ?? "•"}</span>
             {m.name}
             {!m.ready && <span className="soon">规划中</span>}

@@ -45,6 +45,7 @@ export interface Home {
   dept_open_tasks: number;
   approvals_waiting: number;
   my_pending_requests: number;
+  po_overdue: number | null;   // 只有订货模块可编辑的人才有
 }
 export type TaskStatus = "todo" | "doing" | "done" | "cancelled";
 export type Priority = "low" | "normal" | "high" | "urgent";
@@ -114,6 +115,79 @@ export interface DeptModule {
   level: Level;
 }
 
+export type PoStatus = "ordered" | "confirmed" | "producing" | "shipped" | "arrived" | "closed";
+export type ShipmentStatus = "booked" | "loading" | "shipped" | "arrived" | "received" | "cancelled";
+export interface PoRow {
+  company: string;
+  po_no: string;
+  po_date: string;
+  creditor_code: string;
+  supplier_name: string;
+  creditor_name: string;
+  is_china: boolean;
+  lines: number;
+  open_qty: number;
+  locations: string;
+  open_amt: number | null;        // 没有编辑权限的人看不到金额（null）
+  status: PoStatus;
+  po_eta: string | null;
+  remark: string | null;
+  updated_at: string | null;
+  updated_by_name: string | null;
+  shipment_id: number | null;
+  shipment_name: string | null;
+  shipment_status: ShipmentStatus | null;
+  eta: string;
+  eta_source: "shipment" | "po" | "autocount" | "lead";
+  days_open: number;
+  days_late: number;
+  overdue: boolean;
+  stale: boolean;
+}
+export interface PoDetail extends PoRow {
+  can_edit: boolean;
+  items: { item_code: string; description: string; uom: string; location: string; qty: number; received: number;
+           open_qty: number; unit_price: number | null; open_amt: number | null }[];
+  receipts: { doc_no: string; src: string; rcv_date: string; item_code: string; qty: number }[];
+  history: { at: string; staff_name: string; data: Record<string, string> }[];
+}
+export interface Shipment {
+  id: number;
+  company: string;
+  name: string;
+  forwarder: string;
+  etd: string | null;
+  eta: string | null;
+  status: ShipmentStatus;
+  remark: string;
+  po_count: number;
+  open_po_count: number;
+  po_nos: string[];
+  updated_by_name: string | null;
+  updated_at: string;
+  overdue: boolean;
+}
+export interface ItemEta {
+  company: string;
+  item_code: string;
+  description: string;
+  uom: string;
+  on_hand: number;
+  by_loc: Record<string, number>;
+  incoming: { po_no: string; open_qty: number; eta: string; eta_source: string; status: PoStatus;
+              shipment_name: string | null; supplier_name: string; location: string; overdue: boolean }[];
+}
+export const PO_STATUS_LABEL: Record<PoStatus, string> = {
+  ordered: "已下单", confirmed: "供应商已确认", producing: "生产 / 备货中", shipped: "已出货", arrived: "已到港 / 到货中",
+  closed: "关闭（不会来）",
+};
+export const SHIPMENT_STATUS_LABEL: Record<ShipmentStatus, string> = {
+  booked: "已订舱", loading: "装柜中", shipped: "已出海", arrived: "已到港", received: "已入仓", cancelled: "取消",
+};
+export const ETA_SOURCE_LABEL: Record<string, string> = {
+  shipment: "货柜", po: "采购填写", autocount: "AutoCount", lead: "按交期推算",
+};
+
 export const STATUS_LABEL: Record<TaskStatus, string> = { todo: "待办", doing: "进行中", done: "已完成", cancelled: "已取消" };
 export const PRIORITY_LABEL: Record<Priority, string> = { low: "低", normal: "一般", high: "高", urgent: "紧急" };
 export const KIND_LABEL: Record<ApprovalKind, string> = {
@@ -148,6 +222,13 @@ export const api = {
   deptModules: () => rpc<DeptModule[]>("ops_dept_module_list"),
   setDeptModule: (department: string, module: string, level: string) =>
     rpc<void>("ops_dept_module_set", { p_department: department, p_module: module, p_level: level }),
+  poList: (p: Record<string, unknown>) => rpc<PoRow[]>("ops_po_list", { p }),
+  po: (company: string, poNo: string) => rpc<PoDetail>("ops_po_get", { p_company: company, p_po_no: poNo }),
+  updatePos: (company: string, poNos: string[], p: Record<string, unknown>) =>
+    rpc<number>("ops_po_update", { p_company: company, p_po_nos: poNos, p }),
+  shipments: (includeDone = false) => rpc<Shipment[]>("ops_shipment_list", { p_include_done: includeDone }),
+  saveShipment: (p: Record<string, unknown>) => rpc<Shipment>("ops_shipment_save", { p }),
+  itemEta: (q: string) => rpc<ItemEta[]>("ops_item_eta", { p_q: q }),
   async setPassword(staffId: number, password: string): Promise<{ created: boolean }> {
     const { data, error } = await supabase.functions.invoke("ops-account", {
       body: { staff_id: staffId, password },
@@ -165,6 +246,20 @@ export const api = {
 export function can(me: Me, module: string, need: Level): boolean {
   const m = me.modules.find((x) => x.key === module);
   return !!m && LEVEL_RANK[m.level] >= LEVEL_RANK[need];
+}
+
+export function fmtQty(n: number | null | undefined): string {
+  return n == null ? "" : Number(n).toLocaleString("en-MY", { maximumFractionDigits: 2 });
+}
+
+export function fmtRM(n: number | null | undefined): string {
+  return n == null ? "" : "RM " + Number(n).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** 已上线的模块有自己的页面，其余进「规划中」说明页 */
+export function moduleHref(m: { key: string; ready: boolean }): string {
+  if (m.key === "dashboard") return "#/";
+  return m.ready ? `#/${m.key}` : `#/m/${m.key}`;
 }
 
 export function fmtDate(s: string | null | undefined): string {

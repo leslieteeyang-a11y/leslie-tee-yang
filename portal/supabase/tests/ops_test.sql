@@ -111,5 +111,66 @@ select public.ops_staff_save(jsonb_build_object('id', (select (e->>'id') from js
 select pg_temp.as_user('wh@example.com');
 do $$ begin assert public.ops_me() is null, 'inactive'; end $$;
 
+-- 9. 订货与 ETA
+select pg_temp.as_user('buyer@example.com');
+do $$ declare l jsonb; one jsonb; begin
+  l := public.ops_po_list('{}');
+  assert jsonb_array_length(l) = 2, 'HQ buyer sees PO-1 + PO-2 only (PO-3 received, PO-OLD stale, PO-JB other branch): ' || l::text;
+  assert l->0->>'po_no' = 'PO-2' and (l->0->>'overdue')::boolean, 'overdue first';
+  assert (l->0->>'open_amt')::numeric = 40, 'buyer sees amount';
+  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 3, 'stale toggle';
+  assert jsonb_array_length(public.ops_po_list('{"q":"bidet"}')) = 1, 'search by item';
+  one := public.ops_po_get('HOMEWORKSSB', 'PO-1');
+  assert jsonb_array_length(one->'items') = 2 and (one->'items'->1->>'open_qty')::numeric = 15, 'lines';
+  assert one->>'eta' = (current_date + 50)::text and one->>'eta_source' = 'lead', 'lead-time eta';
+end $$;
+select pg_temp.expect_error($q$select public.ops_po_get('HOMEWORKSSOUTHERN', 'PO-JB')$q$, '找不到这张 PO');
+select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSOUTHERN', array['PO-JB'], '{"status":"confirmed"}')$q$, '其他分店');
+
+-- 填 ETA → 逾期消失；挂货柜 → ETA 以货柜为准；货柜出货 → PO 状态跟着变
+do $$ declare s jsonb; l jsonb; begin
+  perform public.ops_po_update('HOMEWORKSSB', array['PO-2'], jsonb_build_object('eta', current_date + 3, 'remark', '供应商说下周'));
+  l := public.ops_po_list('{"overdue":true}');
+  assert jsonb_array_length(l) = 0, 'no overdue after eta';
+  s := public.ops_shipment_save(jsonb_build_object('company', 'HOMEWORKSSB', 'name', 'CS065-0925', 'eta', current_date + 30));
+  perform public.ops_po_update('HOMEWORKSSB', array['PO-1', 'PO-2'], jsonb_build_object('shipment_id', s->>'id'));
+  l := public.ops_po_list('{"q":"CS065-0925"}');
+  assert jsonb_array_length(l) = 2 and l->0->>'eta_source' = 'shipment' and l->0->>'eta' = (current_date + 30)::text, 'shipment eta';
+  perform public.ops_shipment_save(jsonb_build_object('id', s->>'id', 'status', 'shipped'));
+  assert public.ops_po_get('HOMEWORKSSB', 'PO-1')->>'status' = 'shipped', 'status follows shipment';
+  assert (public.ops_shipment_list()->0->>'open_po_count')::int = 2, 'shipment po count';
+  assert jsonb_array_length(public.ops_po_get('HOMEWORKSSB', 'PO-2')->'history') = 2, 'history';
+end $$;
+select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSB', array['PO-1'], '{"shipment_id":"999"}')$q$, '货柜不存在');
+
+-- 关闭旧单 → 清单隐藏
+do $$ begin
+  perform public.ops_po_update('HOMEWORKSSB', array['PO-OLD'], '{"status":"closed"}');
+  assert jsonb_array_length(public.ops_po_list('{"stale":true}')) = 2, 'closed hidden';
+  assert jsonb_array_length(public.ops_po_list('{"stale":true,"status":"all"}')) = 3, 'closed shown with all';
+end $$;
+
+-- 业务：只看（无价格），不能改；可查 SKU 到货
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"hqsales@example.com","name":"门市小美","department":"sales","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hqsales@example.com');
+do $$ declare l jsonb; e jsonb; begin
+  l := public.ops_po_list('{}');
+  assert jsonb_array_length(l) = 2 and l->0->'open_amt' = 'null'::jsonb, 'sales sees no amount';
+  assert public.ops_po_get('HOMEWORKSSB', 'PO-1')->'items'->0->'unit_price' = 'null'::jsonb, 'sales no unit price';
+  e := public.ops_item_eta('ST001');
+  assert jsonb_array_length(e) = 1, 'sales sees only own branch item: ' || e::text;
+  assert (e->0->>'on_hand')::numeric = 8 and jsonb_array_length(e->0->'incoming') = 2, 'stock + incoming';
+  assert (public.ops_home()->'po_overdue') = 'null'::jsonb, 'sales no po kpi';
+end $$;
+select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSB', array['PO-1'], '{"status":"arrived"}')$q$, '编辑权限');
+
+-- 人事部没有订货模块
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"hr@example.com","name":"HR","department":"hr","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hr@example.com');
+select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '订货与 ETA');
+select pg_temp.expect_error('select * from ops.v_po_open', 'permission denied');
+
 reset role;
 select 'ALL OPS TESTS PASSED' as result;

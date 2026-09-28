@@ -1,6 +1,6 @@
 # HomeWorks 营运系统（员工各部门用）
 
-给各部门员工用的网页：首页、任务、审批、员工与权限；订货与 ETA、仓库、送货、HR… 依路线图陆续加上。
+给各部门员工用的网页：首页、任务、审批、员工与权限、订货与 ETA；仓库、送货、HR… 依路线图陆续加上。
 与 HomeWorks BI 用同一个 Supabase 专案、同一套登入，但**员工名单分开**（`ops.staff`），
 所以仓库、HR 的员工进得了营运系统，却看不到 BI 的财务数据。
 
@@ -14,7 +14,7 @@
 | 路径 | 用途 |
 |---|---|
 | `src/api.ts` | 型别与所有 `ops_*` 呼叫 |
-| `src/pages/` | 各页：Home / Tasks / Approvals / Admin / Planned（规划中模块）/ Login / Password |
+| `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Admin / Planned（规划中模块）/ Login / Password |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
 | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
