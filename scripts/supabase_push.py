@@ -174,7 +174,7 @@ def setup_branch_flow(cfg: dict) -> None:
     """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。"""
     import subprocess
     from datetime import date
-    from autocount_db import CONFIG_PATH, is_report_book
+    from autocount_db import CONFIG_PATH
     db = (cfg.get("connection") or {}).get("database", "")
     example = json.loads((ROOT / "autocount.example.json").read_text(encoding="utf-8"))
     hq = example["connection"].get("preferred_database", "")
@@ -187,7 +187,7 @@ def setup_branch_flow(cfg: dict) -> None:
         print(f"账套 {db} 的公司名称：{name}")
         if "SOUTHERN" not in name.upper():
             sys.exit(f"[X] 这个账套是「{name}」，不是分行（公司名称没有 SOUTHERN）。\n{fix}")
-    elif hq and is_report_book(db, hq):      # 读不到公司名称才退回看库名
+    elif hq and db.upper() == hq.upper():   # 读不到公司名称才退回看库名；分行库名 AED_HOMEWORKSSBJB 只是前缀相同，要用相等比
         sys.exit(f"[X] 目前连的是总公司账套 {db}，不是分行的。\n{fix}")
     sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
     if not sb.get("company"):
