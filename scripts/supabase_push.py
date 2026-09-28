@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import load_autocount_config  # noqa: E402
 
+BRANCH_COMPANY = "HOMEWORKSSOUTHERN"      # BI 同步管线里分行（JB Southern）账套的公司代码
 CHANNEL_KEYS = ("shopee", "lazada", "cash", "online", "referral", "shuigong", "southern", "tiktok", "shopify")
 
 
@@ -84,8 +85,14 @@ def check(cfg: dict) -> None:
     sb = supabase_config(cfg)
     if not sb:
         sys.exit("autocount.json 还没有 supabase 设定（url 与 service_key）。")
-    rows = _request(sb, "GET", "/rest/v1/bi_report_month?select=company,month&order=month.desc&limit=3")
-    print(f"连线 OK：{sb['url']}，公司 {company_of(cfg)}，BI 里已有 {len(rows)} 个月的报表{'：' + str(rows) if rows else ''}")
+    company = sb.get("company") or company_of(cfg)
+    # 视图 public.bi_report_month 只放行登入的 BI 使用者，service_role 读永远是 0 行，
+    # 所以改问 RPC bi_report_status（只给 service_role 用）拿真正的月份清单。
+    status = _request(sb, "POST", "/rest/v1/rpc/bi_report_status", {"p_company": company}) or {}
+    report, branch = status.get("report") or [], status.get("branch") or []
+    print(f"连线 OK：{sb['url']}，公司 {company}")
+    print(f"  BI 里已有电商月报 {len(report)} 个月{'：' + ' '.join(report) if report else ''}")
+    print(f"  BI 里已有分行实际销售额 {len(branch)} 个月{'：' + ' '.join(branch) if branch else ''}")
 
 
 def push(cfg: dict, month: str) -> dict:
@@ -104,6 +111,15 @@ def push(cfg: dict, month: str) -> dict:
     return res
 
 
+def _read_secret(prompt: str) -> str:
+    """读金钥但不回显（避免截图外泄）。不是终端机（例如测试）时退回一般 input。"""
+    import getpass
+    if sys.stdin.isatty():
+        print("（贴上时画面不会显示任何字，贴一次后按 Enter 即可。）")
+        return getpass.getpass(prompt)
+    return input(prompt)
+
+
 def set_key(cfg: dict) -> dict:
     """让使用者把 service_role 金钥贴进来，写回 autocount.json（不用手改 JSON）。"""
     from autocount_db import CONFIG_PATH
@@ -115,7 +131,7 @@ def set_key(cfg: dict) -> dict:
     prompt = "把整串金钥贴在这里再按 Enter（贴一次就好）："
     if had:
         prompt = "已经有一把金钥；直接按 Enter 沿用，或贴新的再按 Enter："
-    key = input(prompt).strip() or had
+    key = _read_secret(prompt).strip() or had
     if not key:
         sys.exit("没有输入金钥，什么都没改。请回 Supabase 后台复制 Secret keys 的 default，再跑一次。")
     for prefix in ("sb_secret_", "eyJ"):        # 右键按了好几下会贴成同一把金钥连在一起，只取第一段
@@ -148,6 +164,22 @@ def setup_branch_flow(cfg: dict) -> None:
     """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。"""
     import subprocess
     from datetime import date
+    from autocount_db import CONFIG_PATH, is_report_book
+    db = (cfg.get("connection") or {}).get("database", "")
+    example = json.loads((ROOT / "autocount.example.json").read_text(encoding="utf-8"))
+    hq = example["connection"].get("preferred_database", "")
+    if not db:
+        sys.exit("autocount.json 还没有连线设定。请先双击 setup_autocount.bat。")
+    if hq and is_report_book(db, hq):
+        sys.exit(f"[X] 目前连的是总公司账套 {db}，不是分行的。\n"
+                 "    请双击 choose_book.bat，在清单里选分行（JB Southern）的账套，再跑一次 setup_branch.bat。\n"
+                 "    清单里没有分行账套的话，代表它在别台电脑：照抄分行 AutoCount 登入画面的 Server 名称输入。")
+    sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
+    if not sb.get("company"):
+        sb["company"] = BRANCH_COMPANY          # 分行账套名不一定含 SOUTHERN，BI 的公司代码固定是这个
+        cfg["supabase"] = sb
+        CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"账套 {db} → BI 公司代码 {sb['company']}")
     cfg = set_key(cfg)
     check(cfg)
     start = f"{date.today().year}-01"

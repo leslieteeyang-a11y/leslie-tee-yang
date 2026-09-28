@@ -174,8 +174,10 @@ service_role 金钥（后台 Project Settings → API），它会测试连线，
 `python scripts\supabase_push.py 2026-09` 即可覆盖。
 
 **分行实际销售额（BI 电商月报 Southern 旁边那一栏）**：在分行（JB Southern）那台连得到分行
-AutoCount 的电脑上，装好本程式（`setup_autocount.bat` 选分行账套），再双击 **`setup_branch.bat`**
-一次：贴 Supabase 金钥、把今年各月的分行实际销售额推进 BI、登记每月 1 号自动推送。
+AutoCount 的电脑上，装好本程式（`setup_autocount.bat`；若它自动选到总公司账套，再双击
+`choose_book.bat` 改选分行账套），再双击 **`setup_branch.bat`** 一次：贴 Supabase 金钥（画面不会
+显示）、把今年各月的分行实际销售额推进 BI、登记每月 1 号自动推送。连到总公司账套时它会停下来，
+BI 的公司代码固定填 HOMEWORKSSOUTHERN（写进 `autocount.json` 的 `supabase.company`）。
 口径：Sales Order 全部 + 不是从 SO 转来的 Invoice − Credit Note，全部排除 agent 空白的单。BI 端的表：`bi.report_month`
 （广告 / 直播、产生版本）、`report_month_category`（类别合计）、`report_month_channel`
 （类别 × 渠道）、`report_month_sku`（SKU 趋势）、`report_month_top10`；前端读 `public.bi_report_month_*`。
@@ -231,6 +233,7 @@ schedule_monthly.bat           # 双击一次 → 登记每月 1 号自动执行
 setup_bi.bat                   # 双击一次 → 贴 Supabase 金钥、今年各月重抓并推进 BI
 backfill.bat                   # 补抓一段期间的月报（抓数 + Excel + 推 BI）
 setup_branch.bat               # 分行电脑：贴金钥、推分行实际销售额、登记每月排程
+choose_book.bat                # 换账套（列出清单让你选；分行电脑选 JB Southern 那个）
 run_branch.bat                 # 分行电脑的排程跑这个
 scripts/autocount_setup.py     # 自动侦测 SQL Server 与账套，产生 autocount.json
 scripts/autocount_discover.py  # 探查 AutoCount 账套结构

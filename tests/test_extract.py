@@ -160,3 +160,28 @@ def test_branch_actual_rows_follow_user_definition():
     assert by[("all", "DELIVERY")]["actual_amount"] == 50           # 分行独有群组照实列
     for doc in ("SO", "IV", "CN"):
         assert "SalesAgent" in sql_lines(doc) and "Cancelled = 'F'" in sql_lines(doc)
+
+
+def test_setup_branch_refuses_hq_book(tmp_path, monkeypatch):
+    """分行流程连到总公司账套（preferred_database）时要停下来，不能把总公司数字当分行推上去。"""
+    import pytest
+    import supabase_push
+    monkeypatch.setattr("autocount_db.CONFIG_PATH", tmp_path / "autocount.json")
+    with pytest.raises(SystemExit) as e:
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSSB"}})
+    assert "choose_book.bat" in str(e.value)
+
+
+def test_setup_branch_sets_branch_company(tmp_path, monkeypatch):
+    """分行账套名不一定含 SOUTHERN；流程要自动把 BI 公司代码填成 HOMEWORKSSOUTHERN 并存档。"""
+    import json
+    import supabase_push
+    target = tmp_path / "autocount.json"
+    monkeypatch.setattr("autocount_db.CONFIG_PATH", target)
+    monkeypatch.setattr(supabase_push, "set_key", lambda cfg: (_ for _ in ()).throw(SystemExit("stop")))
+    try:
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}})
+    except SystemExit:
+        pass
+    saved = json.loads(target.read_text(encoding="utf-8"))
+    assert saved["supabase"]["company"] == "HOMEWORKSSOUTHERN"

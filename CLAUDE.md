@@ -68,14 +68,19 @@ NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
 `bi.report_month` / `_category` / `_channel` / `_sku` / `_top10`（RLS 与其他 bi 表相同，
 `bi_sync` 也可写），前端读 `public.bi_report_month_*`。金钥放 `autocount.json` 的 `supabase`
 段（setup 会保留），用 `setup_bi.bat` 贴入。Migration：`monthly_report_tables`、`monthly_report_service_role_read`
-（service_role 要能读 bi.report_month_* 才能过 `--check`）。新式 `sb_secret_` 金钥只放 apikey 标头。
+、`report_status_rpc`（`public.bi_report_status(p_company)` 只给 service_role，`--check` 用它数月份；
+视图 `public.bi_report_month` 靠 `bi_is_allowed()` 放行，service_role 读永远 0 行）。新式 `sb_secret_`
+金钥只放 apikey 标头；贴金钥用 getpass 不回显（2026-09-28 有一把因截图外泄而轮换）。
 **MCP 里有 Supabase 工具**（`mcp__Supabase__*`），可直接查表、建 migration；DDL 用
 apply_migration，不要用 execute_sql。
 **分行实际销售额**（2026-09-28）：使用者要在电商月报 Southern 旁多一栏「当月实际销售额」= 分行
 JB Southern 账套的 SO 全部 + 非 SO 转来的 IV − CN，三者都排除 SalesAgent 空白的单。BI 的管线没有
 SO，分行账套也不在 SERVER（在使用者用 AnyDesk 连的那台分行电脑），所以 `scripts/branch_actual.py`
-要装在分行电脑上跑（`setup_branch.bat` = 贴金钥 + 今年各月 backfill + `schedule_monthly.py --branch`
-登记「HomeWorks Branch Actual」排程 → `run_branch.bat`）。落到 `bi.branch_actual_month`（scope ×
+要装在分行电脑上跑（`setup_branch.bat` = 挡总公司账套（`preferred_database`，请用 `choose_book.bat`
+= `autocount_setup.py --choose` 改选）+ 自动填 `supabase.company` = HOMEWORKSSOUTHERN + 贴金钥 +
+今年各月 backfill + `schedule_monthly.py --branch` 登记「HomeWorks Branch Actual」排程 →
+`run_branch.bat`）。2026-09-28 分行电脑第一次跑时 setup 自动选到 AED_HOMEWORKSSB（分行电脑看得到
+这个名字的账套），被挡下；分行账套实际名称待使用者从 choose_book 清单确认。落到 `bi.branch_actual_month`（scope ×
 category）与 `bi.branch_actual_meta`（各 agent 明细），RPC `public.bi_branch_actual_upsert`，视图
 `public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。分行 8 月发票 agent：
 HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
