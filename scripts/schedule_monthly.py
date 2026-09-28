@@ -24,24 +24,30 @@ TASK_NAME = "HomeWorks Monthly Report"
 BRANCH_TASK = "HomeWorks Branch Actual"
 
 
-def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path) -> str:
-    """产生工作排程器的任务定义（纯函数，方便测试）。"""
+def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: bool = False) -> str:
+    """产生工作排程器的任务定义（纯函数，方便测试）。daily=True 时每天跑（分行当月进度用）。"""
     hh, mm = time_hhmm.split(":")
     start = f"{date.today().isoformat()}T{int(hh):02d}:{int(mm):02d}:00"
+    if daily:
+        desc = "HomeWorks：每天自动从分行 AutoCount 抓上个月与本月至今的实际销售额推进 BI"
+        schedule = "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>"
+    else:
+        desc = f"HomeWorks：每月 {day} 号自动从 AutoCount 抓上个月数据并产生 Excel 月报"
+        schedule = f"""<ScheduleByMonth>
+        <DaysOfMonth><Day>{day}</Day></DaysOfMonth>
+        <Months><January/><February/><March/><April/><May/><June/><July/><August/>
+                <September/><October/><November/><December/></Months>
+      </ScheduleByMonth>"""
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>HomeWorks：每月 {day} 号自动从 AutoCount 抓上个月数据并产生 Excel 月报</Description>
+    <Description>{desc}</Description>
   </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>
       <StartBoundary>{start}</StartBoundary>
       <Enabled>true</Enabled>
-      <ScheduleByMonth>
-        <DaysOfMonth><Day>{day}</Day></DaysOfMonth>
-        <Months><January/><February/><March/><April/><May/><June/><July/><August/>
-                <September/><October/><November/><December/></Months>
-      </ScheduleByMonth>
+      {schedule}
     </CalendarTrigger>
   </Triggers>
   <Principals>
@@ -119,7 +125,7 @@ def main():
     if not (ROOT / "autocount.json").exists():
         sys.exit("还没连接 AutoCount（找不到 autocount.json）。请先双击 setup_autocount.bat。")
 
-    xml = task_xml(ROOT / bat, a.day, a.time, ROOT)
+    xml = task_xml(ROOT / bat, a.day, a.time, ROOT, daily=a.branch)   # 分行每天跑，本月进度才会更新
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-16") as f:
         f.write(xml)
         tmp = f.name
@@ -127,7 +133,10 @@ def main():
         schtasks("/Create", "/TN", TASK_NAME, "/XML", tmp, "/F")
     finally:
         Path(tmp).unlink(missing_ok=True)
-    print(f"已登记排程「{TASK_NAME}」：每月 {a.day} 号 {a.time} 自动抓上个月{'的分行实际销售额并推进 BI' if a.branch else '并产生 Excel'}。")
+    if a.branch:
+        print(f"已登记排程「{TASK_NAME}」：每天 {a.time} 自动抓上个月 + 本月至今的分行实际销售额并推进 BI。")
+    else:
+        print(f"已登记排程「{TASK_NAME}」：每月 {a.day} 号 {a.time} 自动抓上个月并产生 Excel。")
     if a.branch:
         print(f"  每次执行的纪录在 {ROOT / 'logs'}（branch_*.log）；结果看 BI 网页电商月报的「当月实际销售额」栏。")
     else:

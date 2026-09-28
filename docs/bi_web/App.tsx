@@ -17,6 +17,7 @@ import Payables from './pages/Payables';
 import PriceEffect from './pages/PriceEffect';
 import OnePager from './pages/OnePager';
 import EcomReport from './pages/EcomReport';
+import BranchActual from './pages/BranchActual';
 import SyncLog from './pages/SyncLog';
 
 const TABS = [
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'dash', label: '总览' },
   { key: 'alerts', label: '今日异常' },
   { key: 'mgr', label: '门店' },
+  { key: 'branch', label: '实际销售' },
   { key: 'buy', label: '订货' },
   { key: 'pl', label: '损益' },
   { key: 'ar', label: '应收账款' },
@@ -41,7 +43,7 @@ type TabKey = (typeof TABS)[number]['key'];
 type Role = 'owner' | 'buyer' | 'viewer' | 'manager' | 'sales';
 // 订货员只看采购相关页面;店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
 const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'slow', 'oo', 'log'];
-const MANAGER_TABS: TabKey[] = ['mgr', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'slow', 'oo', 'log'];
+const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'slow', 'oo', 'log'];
 // 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
 const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
 // 月报/调价跟踪仅老板可见(月报含利润与现金)
@@ -121,6 +123,8 @@ export default function App() {
     : role === 'sales' ? TABS.filter((t) => SALES_TABS.includes(t.key))
     : role === 'owner' ? TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom')) // 月报/电商月报目前只算总部
     : TABS.filter((t) => !OWNER_ONLY.includes(t.key));
+  // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行 JB Southern 有资料:老板切到分行、或分行店长登入时才显示
+  const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || COMPANY === 'HOMEWORKSSOUTHERN');
   const canWrite = role === 'owner' || role === 'buyer';
   const showProfit = role !== 'manager' && role !== 'sales';
 
@@ -142,7 +146,7 @@ export default function App() {
           </span>
         )}
         <nav className="tabs">
-          {tabs.map((t) => (
+          {tabsForCompany.map((t) => (
             <button key={t.key} className={tab === t.key ? 'active' : ''}
                     onClick={() => setTab(t.key)}>{t.label}</button>
           ))}
@@ -169,6 +173,7 @@ export default function App() {
       {tab === 'pl' && <ProfitLoss />}
       {tab === 'report' && <OnePager />}
       {tab === 'ecom' && <EcomReport />}
+      {tab === 'branch' && <BranchActual />}
       {tab === 'pay' && <Payables showCashflow={role === 'owner' && isHQ} />}
       {tab === 'price' && <PriceEffect />}
       {tab === 'ar' && <Receivables />}

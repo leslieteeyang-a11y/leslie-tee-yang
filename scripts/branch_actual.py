@@ -4,7 +4,8 @@
 
     python scripts/branch_actual.py 2026-08            # 抓 2026-08 并推送
     python scripts/branch_actual.py                    # 预设上个月
-    python scripts/branch_actual.py --backfill 2026-01 # 2026-01 到上个月逐月
+    python scripts/branch_actual.py --backfill 2026-01 # 2026-01 到本月逐月（含本月至今）
+    python scripts/branch_actual.py --scheduled        # 排程用：上个月 + 本月至今，每天跑
     python scripts/branch_actual.py 2026-08 --dry-run  # 只印 SQL 与结果，不推送
 
 口径（使用者 2026-09-28 定）：Sales Order 全部 + 不是从 SO 转来的 Invoice − Credit Note，
@@ -26,7 +27,7 @@ from autocount_extract import month_range as month_bounds               # noqa: 
 from backfill import month_range                                        # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "branch-2026-09-28a"
+VERSION = "branch-2026-09-28b"
 AGENT_OK = "LTRIM(RTRIM(ISNULL(h.SalesAgent, ''))) <> ''"     # 排除 agent 空白的单
 
 
@@ -50,6 +51,15 @@ GROUP BY ISNULL(i.ItemGroup, ''), ISNULL(i.ItemType, '')
 SQL_AGENTS = """
 SELECT '{doc}' AS Doc, LTRIM(RTRIM(ISNULL(h.SalesAgent, ''))) AS Agent, COUNT(*) AS Docs, SUM(h.NetTotal) AS Amount
 FROM [{doc}] h WHERE h.Cancelled = 'F' AND h.DocDate >= ? AND h.DocDate <= ?
+GROUP BY LTRIM(RTRIM(ISNULL(h.SalesAgent, '')))
+"""
+
+# 各 agent 不是从 SO 转来的发票金额（明细行 FromDocType），BI 的分行页要靠它算每位 agent 的实际销售额
+SQL_AGENT_IV_DIRECT = """
+SELECT LTRIM(RTRIM(ISNULL(h.SalesAgent, ''))) AS Agent,
+       SUM(CASE WHEN ISNULL(d.FromDocType, '') <> 'SO' THEN d.SubTotal ELSE 0 END) AS Direct
+FROM [IV] h JOIN [IVDTL] d ON d.DocKey = h.DocKey
+WHERE h.Cancelled = 'F' AND h.DocDate >= ? AND h.DocDate <= ?
 GROUP BY LTRIM(RTRIM(ISNULL(h.SalesAgent, '')))
 """
 
@@ -90,6 +100,21 @@ def build_rows(so, iv, cn, category_map: dict, brand_values) -> list[dict]:
     return out
 
 
+def agent_detail(agents, direct: dict) -> list[dict]:
+    """各 agent × 单据种类的金额与单数；IV 另附「非SO发票」direct（纯函数）。"""
+    out = []
+    for doc, agent, docs, amount in agents:
+        row = {"doc": doc, "agent": agent or "(blank)", "docs": int(docs or 0), "amount": round(float(amount or 0), 2)}
+        if doc == "IV":
+            row["direct"] = round(direct.get(agent or "", 0.0), 2)
+        out.append(row)
+    return out
+
+
+def current_month() -> str:
+    return date.today().strftime("%Y-%m")
+
+
 def previous_month() -> str:
     t = date.today()
     y, m = (t.year, t.month - 1) if t.month > 1 else (t.year - 1, 12)
@@ -107,11 +132,10 @@ def run_month(cfg, base_cfg, month: str, dry: bool) -> dict:
     agents = []
     for doc in ("SO", "IV", "CN"):
         agents += [list(r) for r in fetch(conn, SQL_AGENTS.format(doc=doc), (start, end))[1]]
+    direct = {(r[0] or ""): float(r[1] or 0) for r in fetch(conn, SQL_AGENT_IV_DIRECT, (start, end))[1]}
     rows = build_rows(so, iv, cn, base_cfg.get("category_map", {}), cfg["brand_filter"]["values"])
-    detail = {
-        "agents": [{"doc": a[0], "agent": a[1] or "(blank)", "docs": int(a[2] or 0), "amount": round(float(a[3] or 0), 2)} for a in agents],
-        "excluded_blank_agent": {a[0]: round(float(a[3] or 0), 2) for a in agents if not a[1]},
-    }
+    detail = {"agents": agent_detail(agents, direct),
+              "excluded_blank_agent": {a[0]: round(float(a[3] or 0), 2) for a in agents if not a[1]}}
     total = sum(r["actual_amount"] for r in rows if r["scope"] == "all")
     print(f"{month}  分行实际销售额（全品牌）RM {total:,.2f}  "
           f"= SO {sum(r['so_amount'] for r in rows if r['scope']=='all'):,.2f}"
@@ -139,7 +163,8 @@ def main():
     ap.add_argument("month", nargs="?", help="YYYY-MM，预设上个月")
     ap.add_argument("--backfill", metavar="YYYY-MM", help="从这个月到上个月逐月抓")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--scheduled", action="store_true", help="排程模式：输出写 logs/")
+    ap.add_argument("--scheduled", action="store_true",
+                    help="排程模式：输出写 logs/，并推上个月 + 本月至今（每天跑，店长看得到当月进度）")
     a = ap.parse_args()
 
     if a.scheduled:
@@ -159,7 +184,14 @@ def main():
         print("[!] 这个账套看起来不是分行（名称没有 SOUTHERN）。若确定要用，请在 autocount.json 的 supabase.company 填 BI 的公司代码。")
         if not a.dry_run:
             sys.exit(2)
-    months = month_range(a.backfill, previous_month()) if a.backfill else [a.month or previous_month()]
+    if a.backfill:
+        months = month_range(a.backfill, current_month())          # 含本月至今
+    elif a.month:
+        months = [a.month]
+    elif a.scheduled:
+        months = [previous_month(), current_month()]                # 上个月定稿 + 本月进度
+    else:
+        months = [previous_month()]
     for m in months:
         run_month(cfg, base_cfg, m, a.dry_run)
 

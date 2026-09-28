@@ -84,7 +84,13 @@ SO，分行账套也不在 SERVER（在使用者用 AnyDesk 连的那台分行�
 （`autocount_db.book_company_name`，读 Profile/CompanyProfile.CompanyName）含 SOUTHERN 来判断，
 读不到才退回看库名。落到 `bi.branch_actual_month`（scope ×
 category）与 `bi.branch_actual_meta`（各 agent 明细），RPC `public.bi_branch_actual_upsert`，视图
-`public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。**2026-09-28 分行电脑已装好并推完 1～8 月**（8 月全品牌实际销售额 1,355,211.54 = SO 1,219,856.37 +
+`public.bi_branch_actual_month`；migration `branch_actual_month_by_category`。**分行页（2026-09-28 晚）**：使用者要「把这个列表放在 JB 里面给店长看」→ BI 网页新增分页 `实际销售`
+（`src/pages/BranchActual.tsx`，App.tsx 的 `branch` tab，MANAGER_TABS 含它，只在 COMPANY=HOMEWORKSSOUTHERN 显示；
+店长帐号 homeworksjb.manager@hotmail.com role manager）：KPI、按类别、各 agent（`branch_actual_meta.detail.agents`，
+IV 列的 `direct` = 非SO发票，b 版脚本才有）、逐月长条图。视图 migration `branch_actual_views_company_scope`
+加了 `bi_company()` 公司过滤。脚本 b 版（`branch-2026-09-28b`）：`--scheduled` 推上个月 + 本月至今、
+`--backfill` 到本月、排程 `--branch` 改每天（`task_xml(daily=True)`）；分行电脑要重跑一次 setup_branch.bat 才会换成 b 版与每天排程。
+**2026-09-28 分行电脑已装好并推完 1～8 月**（8 月全品牌实际销售额 1,355,211.54 = SO 1,219,856.37 +
 非 SO 发票 152,450.50 − 贷项 17,095.33），排程「HomeWorks Branch Actual」已登记。分行 8 月发票 agent：
 HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），

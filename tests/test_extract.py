@@ -204,3 +204,24 @@ def test_setup_branch_sets_branch_company(tmp_path, monkeypatch):
         pass
     saved = json.loads(target.read_text(encoding="utf-8"))
     assert saved["supabase"]["company"] == "HOMEWORKSSOUTHERN"
+
+
+def test_agent_detail_attaches_direct_invoice_amount():
+    """各 agent 的发票列要附上「非SO发票」金额，BI 分行页才能算每位 agent 的实际销售额。"""
+    import branch_actual
+    agents = [["SO", "EMILY", 3, 1000.0], ["IV", "EMILY", 2, 800.0], ["IV", "", 1, 50.0], ["CN", "EMILY", 1, 30.0]]
+    out = branch_actual.agent_detail(agents, {"EMILY": 300.0, "": 50.0})
+    iv = [r for r in out if r["doc"] == "IV"]
+    assert iv[0] == {"doc": "IV", "agent": "EMILY", "docs": 2, "amount": 800.0, "direct": 300.0}
+    assert iv[1]["agent"] == "(blank)" and iv[1]["direct"] == 50.0
+    assert "direct" not in out[0]                     # SO 列没有这个栏位
+
+
+def test_branch_task_xml_is_daily():
+    """分行排程要每天跑（本月至今才会每天更新），总公司的仍是每月一次。"""
+    from pathlib import Path
+    import schedule_monthly
+    daily = schedule_monthly.task_xml(Path("C:/x/run_branch.bat"), 1, "07:30", Path("C:/x"), daily=True)
+    monthly = schedule_monthly.task_xml(Path("C:/x/run_monthly.bat"), 1, "08:00", Path("C:/x"))
+    assert "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>" in daily and "ScheduleByMonth" not in daily
+    assert "ScheduleByMonth" in monthly and "ScheduleByDay" not in monthly
