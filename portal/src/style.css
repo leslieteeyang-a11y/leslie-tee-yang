@@ -147,9 +147,6 @@ td.remark { max-width: 220px; color: var(--muted); font-size: .85rem; }
 .tile button { align-self: flex-start; }
 .item-list .card { padding: 14px 16px; }
 .stock { margin: 6px 0; }
-.sync { margin: -6px 0 12px; }
-.card.install { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-left: 4px solid var(--blue); }
-.card.install p { margin: 4px 0 0; }
 
 /* ---------- 弹窗与表单 ---------- */
 .modal-back { position: fixed; inset: 0; background: rgba(15, 25, 40, .45); display: grid; place-items: start center; padding: 6vh 16px; overflow-y: auto; z-index: 50; }

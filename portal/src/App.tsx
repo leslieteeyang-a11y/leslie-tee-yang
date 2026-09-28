@@ -11,6 +11,7 @@ import Admin from "./pages/Admin";
 import Planned from "./pages/Planned";
 import Password from "./pages/Password";
 import Purchasing from "./pages/Purchasing";
+import { SyncNote } from "./sync";
 
 const ICON: Record<string, string> = {
   dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", warehouse: "▦", delivery: "⛟", sales: "¤",
@@ -78,7 +79,9 @@ export default function App() {
       page = can(me, "admin", "approve") ? <Admin me={me} onChanged={loadMe} /> : <NoAccess />;
       break;
     case "purchasing":
-      page = can(me, "purchasing", "view") ? <Purchasing me={me} sub={arg} arg1={arg2} arg2={arg3} /> : <NoAccess />;
+      page = can(me, "purchasing", "view")
+        ? <><SyncNote /><Purchasing me={me} sub={arg} arg1={arg2} arg2={arg3} /></>
+        : <NoAccess />;
       break;
     case "password":
       page = <Password />;

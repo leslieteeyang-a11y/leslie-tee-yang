@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, can, Home, Me, moduleHref, Task } from "../api";
 import { ErrorBox } from "../ui";
+import "../extra.css";
 import { canPromptInstall, dismissHint, hintDismissed, isIos, isStandalone, onInstallChange, promptInstall } from "../install";
 
 // 首页提示：把系统加到手机主画面（已安装、已关掉提示就不显示）

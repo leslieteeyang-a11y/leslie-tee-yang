@@ -1,0 +1,4 @@
+/* 第 2.1 版新增的样式（放独立档，部署时不必重传整份 style.css） */
+.sync { margin: 0 0 12px; }
+.card.install { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-left: 4px solid var(--blue); }
+.card.install p { margin: 4px 0 0; }
