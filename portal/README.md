@@ -38,6 +38,13 @@ npm run build        # 型别检查 + 打包
 PGHOST=... PGPORT=... PGUSER=postgres sh supabase/tests/run.sh
 ```
 
+## 中英双语
+
+介面预设中文，右上角 / 侧栏 / 登入页有「中文 | EN」切换。做法是 DOM 翻译层（`src/i18n.ts`）：
+只翻整段完全等于字典键的文字，员工输入的内容保持原文。新增或修改介面文字时，同步更新
+`src/i18n-dict-a.ts`（共用、首页、任务、审批、登入）、`src/i18n-dict-b.ts`（订货、员工与权限）、
+`src/i18n-dict-db.ts`（数据库来的模块 / 部门名称与错误讯息）或 `src/i18n-patterns.ts`（带数字的句子）。
+
 ## 部署
 
 非 git 部署：用 Vercel MCP `create_deployment`（`project: homeworks-ops`, `target: production`），

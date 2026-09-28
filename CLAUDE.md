@@ -98,6 +98,10 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   AutoCount 预计交货日（晚于开单日才算）> 开单日 + 供应商交期（与 BI `bi_po_open` 同规则）。120 天以上且没人跟进的旧单
   预设隐藏（总部有 ~120 张多年没结的本地 PO）；可标「关闭」。只有订货「可编辑」看得到单价 / 金额。中国货（CSxxx 供应商）
   在 AutoCount 多数没有单价，金额为 0 是正常的。
+- **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
+  字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
+  **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
+  否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
 - 路线图：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
