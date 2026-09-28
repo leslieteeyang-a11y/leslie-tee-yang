@@ -225,3 +225,16 @@ def test_branch_task_xml_is_daily():
     monthly = schedule_monthly.task_xml(Path("C:/x/run_monthly.bat"), 1, "08:00", Path("C:/x"))
     assert "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>" in daily and "ScheduleByMonth" not in daily
     assert "ScheduleByMonth" in monthly and "ScheduleByDay" not in monthly
+
+
+def test_merge_ads_prefers_bi_values_and_reports_change():
+    """BI 上填过的广告 / 直播数字要盖过本机 JSON；BI 是空的就不动本机档。"""
+    import supabase_push
+    doc = {"ads": {}, "live_sales": {"SHOPEE": 0, "TIKTOK": 0}}
+    remote = {"ads": {"SHOPEE ADS": [{"period": "1~8", "gmv": 10.0, "expense": 1.0}]}, "live_sales": {"SHOPEE": 500, "TIKTOK": 0}}
+    out, changed = supabase_push.merge_ads(dict(doc), remote)
+    assert changed and out["ads"] == remote["ads"] and out["live_sales"]["SHOPEE"] == 500
+    same, changed2 = supabase_push.merge_ads(dict(out), remote)
+    assert not changed2
+    untouched, changed3 = supabase_push.merge_ads({"ads": {"X": []}, "live_sales": {}}, {"ads": {}, "live_sales": {"SHOPEE": 0}})
+    assert not changed3 and untouched["ads"] == {"X": []}

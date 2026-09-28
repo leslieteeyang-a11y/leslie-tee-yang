@@ -170,8 +170,9 @@ Shopee Ads / Lazada Affiliate / Live Sales 三块不在 AutoCount 里，仍要�
 service_role 金钥（后台 Project Settings → API），它会测试连线，然后把今年 1 月到上个月
 每个月都从 AutoCount 重抓一次、产生 Excel、推进 BI（一个月约 1 分钟）。
 之后要补抓某段期间：双击 `backfill.bat` 输入起始月份。
-之后每月排程产生完 Excel 会自动推送；补填广告数字后再跑
-`python scripts\supabase_push.py 2026-09` 即可覆盖。
+之后每月排程产生完 Excel 会自动推送。**广告 / 直播数字**（Shopee Ads、Lazada Affiliate、Shopee AMS、
+Live Sales）不在 AutoCount：老板在 BI 网页「电商月报」按「填写广告 / 直播数字」填好即可；SERVER 下次产 Excel
+（每月排程或双击 `make_report.bat`）会自动把它拉回来放进「广告与直播」页，重推月报也不会盖掉。
 
 **分行实际销售额（BI 电商月报 Southern 旁边那一栏）**：在分行（JB Southern）那台连得到分行
 AutoCount 的电脑上，装好本程式（`setup_autocount.bat`；若它自动选到总公司账套，再双击

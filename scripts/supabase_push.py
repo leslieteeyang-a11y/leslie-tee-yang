@@ -120,6 +120,39 @@ def _read_secret(prompt: str) -> str:
     return input(prompt)
 
 
+def merge_ads(doc: dict, remote: dict | None) -> tuple[dict, bool]:
+    """把 BI 上填的 ads / live_sales 合进 data JSON（纯函数）。BI 有值就以 BI 为准；回传 (doc, 有没有改)。"""
+    changed = False
+    remote = remote or {}
+    if remote.get("ads"):
+        if doc.get("ads") != remote["ads"]:
+            doc["ads"] = remote["ads"]; changed = True
+    live = remote.get("live_sales") or {}
+    if any(float(v or 0) for v in live.values()) and doc.get("live_sales") != live:
+        doc["live_sales"] = live; changed = True
+    return doc, changed
+
+
+def pull_ads(cfg: dict, month: str) -> bool:
+    """老板在 BI 网页填的广告 / 直播数字（bi_report_set_ads）拉回 data/YYYY-MM.json，让 Excel 也有。没设定 BI 就跳过。"""
+    sb = supabase_config(cfg)
+    path = ROOT / "data" / f"{month}.json"
+    if not sb or not path.exists():
+        return False
+    company = sb.get("company") or company_of(cfg)
+    try:
+        remote = _request(sb, "POST", "/rest/v1/rpc/bi_report_get_ads", {"p_company": company, "p_month": f"{month}-01"})
+    except SystemExit as e:                     # 拉不到不影响出报表，只是广告页会空
+        print(f"（拉取 BI 上的广告数字失败，Excel 广告页沿用本机档案：{str(e).splitlines()[0]}）")
+        return False
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc, changed = merge_ads(doc, remote)
+    if changed:
+        path.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"已从 BI 拉回 {month} 的广告 / 直播数字（{', '.join(doc.get('ads', {}).keys()) or '无广告'}）。")
+    return changed
+
+
 def set_key(cfg: dict) -> dict:
     """让使用者把 service_role 金钥贴进来，写回 autocount.json（不用手改 JSON）。"""
     from autocount_db import CONFIG_PATH

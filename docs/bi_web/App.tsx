@@ -172,7 +172,7 @@ export default function App() {
       {tab === 'dash' && <Dashboard onEmpty={setEmpty} showProfit={showProfit} />}
       {tab === 'pl' && <ProfitLoss />}
       {tab === 'report' && <OnePager />}
-      {tab === 'ecom' && <EcomReport />}
+      {tab === 'ecom' && <EcomReport canEdit={role === 'owner'} />}
       {tab === 'branch' && <BranchActual />}
       {tab === 'pay' && <Payables showCashflow={role === 'owner' && isHQ} />}
       {tab === 'price' && <PriceEffect />}

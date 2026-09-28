@@ -93,6 +93,10 @@ IV 列的 `direct` = 非SO发票，b 版脚本才有）、逐月长条图。视�
 **2026-09-28 分行电脑已装好并推完 1～8 月**（8 月全品牌实际销售额 1,355,211.54 = SO 1,219,856.37 +
 非 SO 发票 152,450.50 − 贷项 17,095.33），排程「HomeWorks Branch Actual」已登记。分行 8 月发票 agent：
 HQ 330k、EMILY 238k、JC 175k、MAX 144k、WEILUN 77k、AMY 2k、空白 13k。
+**广告 / 直播数字改在 BI 填（2026-09-28 晚）**：migration `report_ads_rpc`：`bi_report_set_ads(company, month, ads, live_sales)`
+（authenticated，函数内检查 `bi_role()='owner'`）、`bi_report_get_ads`（service_role）、`bi_report_upsert` 改成新推来的 ads 为空 /
+live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomReport 的 `canEdit` prop，App 传 owner）。SERVER 端
+`supabase_push.pull_ads/merge_ads`，`run_monthly` 在 extract 之后、generate 之前拉回 data JSON。使用者说这个填写页「不用给分行看」。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

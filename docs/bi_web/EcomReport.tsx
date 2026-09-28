@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { supabase, COMPANY } from '../lib/supabase';
 import { fmtRM, fmtNum } from '../lib/format';
+import AdsEditor from '../components/AdsEditor';
 
 // 电商月报:由 HomeWorks 营运系统每月从 AutoCount 抓取后推进 bi.report_month_*(见 bi_report_upsert)。
 // 与其他页不同,这里的类别/渠道口径 = 纸本月报口径(Sales Forecast Summary),不是 bi.sale_channel。
@@ -148,7 +149,7 @@ function AdsTable({ title, rows }: { title: string; rows: AdRow[] }) {
   );
 }
 
-export default function EcomReport() {
+export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
   const [months, setMonths] = useState<Month[] | null>(null);
   const [sel, setSel] = useState<string>('');
   const [scope, setScope] = useState<'all' | 'hemos'>('all');
@@ -159,16 +160,16 @@ export default function EcomReport() {
   const [branch, setBranch] = useState<Branch[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadMonths = () =>
     supabase.from('bi_report_month').select('month,produced_by,ads,live_sales,updated_at')
       .eq('company', COMPANY).order('month', { ascending: false })
       .then(({ data, error }) => {
         if (error) { setErr(error.message); setMonths([]); return; }
         const rows = (data ?? []) as Month[];
         setMonths(rows);
-        if (rows.length && !sel) setSel(rows[0].month);
+        setSel((cur) => cur || (rows.length ? rows[0].month : ''));
       });
-  }, []);
+  useEffect(() => { loadMonths(); }, []);
 
   useEffect(() => {
     if (!sel) return;
@@ -241,6 +242,9 @@ export default function EcomReport() {
         </span>
       </div>
       {err && <div className="notice">查询失败:{err}</div>}
+      {canEdit && cur && (
+        <AdsEditor company={COMPANY} month={cur.month} ads={ads as never} live={live} onSaved={loadMonths} />
+      )}
 
       <ForecastTable title={`Sales Forecast Summary (${scope === 'all' ? 'All brand' : 'Hemos & Hemos X only'}) · ${ym(sel)}`}
                      cats={catsScoped} chs={chsScoped} branch={branchByCat} />
@@ -296,7 +300,7 @@ export default function EcomReport() {
           {Object.entries(ads).map(([name, rows]) => <AdsTable key={name} title={`${name} · ${ym(sel)}`} rows={rows} />)}
         </div>
       ) : (
-        <div className="notice">Shopee Ads / Lazada Sponsored Affiliate / Live Sales 不在 AutoCount 里,这个月还没填(填进 SERVER 的 data/{ym(sel)}.json 后再推送一次)。</div>
+        <div className="notice">Shopee Ads / Lazada Sponsored Affiliate / Live Sales 不在 AutoCount 里,这个月还没填(老板点上面「填写广告 / 直播数字」即可)。</div>
       )}
       {Object.keys(live).length > 0 && (
         <div className="grid-kpi">

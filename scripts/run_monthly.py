@@ -78,6 +78,15 @@ def push_bi(month: str) -> None:
         print(f"[!] 推送 BI 失败：{type(e).__name__}: {e}")
 
 
+def pull_ads_from_bi(month: str) -> None:
+    try:
+        from supabase_push import pull_ads
+        from autocount_db import load_autocount_config
+        pull_ads(load_autocount_config(), month)
+    except Exception as e:                       # noqa: BLE001 — 拉不到照样出报表
+        print(f"（拉取 BI 广告数字失败：{type(e).__name__}: {e}）")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     scheduled = "--scheduled" in sys.argv
@@ -92,6 +101,7 @@ def main():
         sys.exit("还没连接 AutoCount（找不到 autocount.json）。请先双击 setup_autocount.bat。")
 
     run("autocount_extract.py", month, log)
+    pull_ads_from_bi(month)                      # 老板在 BI 网页填的广告 / 直播数字 → Excel 也要有
     run("generate_report.py", month, log)
 
     out = ROOT / "output" / f"月度报表_{month}.xlsx"
@@ -102,8 +112,8 @@ def main():
 
     doc = json.loads((ROOT / "data" / f"{month}.json").read_text(encoding="utf-8"))
     if not doc.get("ads"):
-        print(f"提醒：Shopee Ads / Lazada Affiliate / Live Sales 不在 AutoCount，"
-              f"填进 data/{month}.json 后再跑一次 generate_report.py 与 supabase_push.py 即可。")
+        print(f"提醒：Shopee Ads / Lazada Affiliate / Live Sales 不在 AutoCount。"
+              f"到 BI 网页「电商月报」按「填写广告 / 直播数字」填好后，再双击 make_report.bat 重产 {month} 的 Excel 即可。")
 
 
 if __name__ == "__main__":
