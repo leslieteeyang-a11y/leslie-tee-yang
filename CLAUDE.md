@@ -105,6 +105,15 @@ live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomR
 建议转仓清单 CSV（每个负数仓从库存最多的正数仓补）；C 真正短少 → 盘点表 CSV。整理顺序：定仓位规则 → 关服务项目库存控制 →
 照清单转仓 → 分仓盘点 → 每周看这页。**写入 AutoCount 的第一条流程改为「盘点差异 → Stock Adjustment」**（比 SO 有用）；
 API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试账套 AED_HOMEWORKSSB_TEST + 跑 `check_sdk.bat`。
+**顾客积分（2026-09-28）**：使用者要记录顾客购买历史以便给奖励。规则（使用者选的）：门市散客（HQ debtor_type RETAIL；
+JB RETAIL + 空白）两边合并、RM1 = 1 分、100 分折抵 RM1、一次最少 100 分、从 2026-01-01 起算、每笔 12 个月后过期（先进先出）、
+退货扣回但扣到 0 为止。**会员号 = 电话**：从单据客户名称抽手机号（`bi.loyalty_phone`，统一成 60… / 65…），抽不到用客户主档名称，
+再不行且不是 CASH 共用账号就用 `A:公司:客户代号`；HQ 门市单 88%、JB 93% 抽得到，约 3,500 位会员。平台买家名字被遮蔽，不计。
+积分不存盘，每次从 `bi.fact_sales` 现算（`bi.loyalty_calc`，全体约 0.7 秒）；兑换 / 手动调整 / 作废存 `bi.loyalty_txn`；
+规则存 `bi.loyalty_settings`（owner 可在页面改）。RPC `public.bi_loyalty_*`（SECURITY DEFINER，函数内查角色）：查询与兑换 =
+owner/manager/sales，作废 = owner + 本门市 manager，调整与改规则 = owner。**AutoCount 不写入**：兑换后店员照常开单手动给折扣。
+Migration `loyalty_points`（+ `_cn_sign`、`_no_debt`），合并版 `docs/bi_web/loyalty_points.sql`。前端是独立页 `/loyalty.html`
+（档案在 `docs/bi_web/loyalty/`）——**尚未部署**：Vercel 连接的帐号 2026-09-28 起对 homeworks-bi 部署回 403，见 `docs/bi_web/README.md`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
