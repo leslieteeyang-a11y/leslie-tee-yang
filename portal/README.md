@@ -43,3 +43,6 @@ PGHOST=... PGPORT=... PGUSER=postgres sh supabase/tests/run.sh
 非 git 部署：用 Vercel MCP `create_deployment`（`project: homeworks-ops`, `target: production`），
 把 `package.json`、`tsconfig.json`、`vite.config.ts`、`index.html`、`src/**` 以 utf-8 内嵌上传，
 Vercel 自己 `npm install` + `vite build`。
+- **不要带 `teamId` 参数**：这个 MCP 连线带 teamId 时读专案会 404、正式部署会 403；不带就正常。
+- 没改的档用 `{file, sha, size}` 参照上一版（`sha1sum` 算），只内嵌改过的档；部署后用 `list_deployment_files`
+  核对每个档的 uid（= SHA1）与本机一致。
