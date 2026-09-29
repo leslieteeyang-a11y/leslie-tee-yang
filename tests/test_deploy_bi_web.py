@@ -343,3 +343,17 @@ def test_build_failure_is_not_told_that_it_will_go_live(monkeypatch):
     with pytest.raises(d.BuildFailed) as e:
         run(monkeypatch, final_state="ERROR")
     assert "先不要重新部署" not in str(e.value)
+
+
+def test_invalid_token_is_not_blamed_on_scope(monkeypatch):
+    import io
+    import urllib.error
+
+    def boom(req, timeout=0):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(
+            b'{"error":{"code":"forbidden","message":"Not authorized","invalidToken":true}}'))
+
+    monkeypatch.setattr(d.urllib.request, "urlopen", boom)
+    with pytest.raises(d.DeployError) as e:
+        d.Vercel("t", "team").call("GET", "/v9/projects/x")
+    assert "不认得这串金钥" in str(e.value) and "Scope" not in str(e.value).split("\n")[0]

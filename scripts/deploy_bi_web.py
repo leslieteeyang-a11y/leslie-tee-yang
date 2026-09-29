@@ -174,6 +174,9 @@ class Vercel:
                     403: "这把金钥没有权限（建金钥时 Scope 要选 leslie tee，不是个人帐号）。关掉视窗再双击 deploy_bi_web.bat 贴一把新的。",
                     404: "找不到东西（专案名称或部署编号不对）。请把这段讯息贴给 Claude。",
                     429: "Vercel 暂时限制请求次数，过几分钟再双击一次。"}.get(e.code, "")
+            if '"invalidToken":true' in detail.replace(" ", ""):   # Vercel 根本不认得这串字，跟 Scope 无关
+                hint = ("Vercel 不认得这串金钥：可能贴到的是已经删掉的旧金钥、只复制到一部分，或贴上没成功。"
+                        "请回金钥页面重建一把，复制整串，关掉视窗再双击 deploy_bi_web.bat 贴上（右键或 Ctrl+V 都可以）。")
             raise DeployError(f"Vercel 回应 {e.code}（{method} {path}）{hint}\n  {detail}",
                               status=e.code, transient=e.code == 429 or e.code >= 500)
         except urllib.error.URLError as e:
@@ -285,7 +288,7 @@ def ask_token(settings: dict) -> dict:
     except DeployError as e:
         if e.status in (401, 403, 404):
             raise DeployError(f"这把金钥不能用，什么都没存（{e}）\n"
-                              "请照上面的步骤重建一把（Scope 选 leslie tee），再双击 deploy_bi_web.bat 重贴。")
+                              "请照上面的步骤重建一把，再双击 deploy_bi_web.bat 重贴。")
         raise
     settings = {**settings, "token": tok}
     KEY_PATH.write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
