@@ -8,8 +8,8 @@ import Loyalty from '../pages/Loyalty';
 import '../styles.css';
 import './loyalty.css';
 
-// 顾客积分独立页(/loyalty.html):柜台只开这一页。登入与主看板共用同一个 Supabase session。
-// 角色:owner / manager / sales 可用;manager、sales 固定在自己门市兑换(bi_company())。
+// 顾客资料独立页(/loyalty.html,网址沿用积分时期):柜台只开这一页。登入与主看板共用同一个 Supabase session。
+// 角色:owner / manager / sales 可看可改;汇出名单只给 owner / manager。
 
 const ALLOWED = ['owner', 'manager', 'sales'];
 
@@ -38,7 +38,7 @@ function LoyaltyApp() {
     })();
   }, [session?.user?.id]);
 
-  useEffect(() => { document.title = tr(lang, '顾客积分') + ' · Homeworks'; }, [lang]);
+  useEffect(() => { document.title = tr(lang, '顾客资料') + ' · Homeworks'; }, [lang]);
 
   function switchLang(l: Lang) {
     setLangState(l);
@@ -53,7 +53,7 @@ function LoyaltyApp() {
   return (
     <div className="shell">
       <div className="topbar">
-        <h1>{t('顾客积分')}</h1>
+        <h1>{t('顾客资料')}</h1>
         <div className="spacer" />
         <span className="who">{session.user.email}{store ? ` · ${store}` : ''}</span>
         <div className="seg">
@@ -66,7 +66,7 @@ function LoyaltyApp() {
       {role === undefined && <div className="loading">{t('载入中…')}</div>}
       {roleErr && <div className="notice">{t('查询失败:')}{roleErr}</div>}
       {role !== undefined && !roleErr && !ALLOWED.includes(role ?? '') && (
-        <div className="notice">{t('这个帐号没有顾客积分的权限,请老板在 BI 加上 owner / manager / sales 角色。')}</div>
+        <div className="notice">{t('这个帐号没有顾客资料的权限,请老板在 BI 加上 owner / manager / sales 角色。')}</div>
       )}
       {role && ALLOWED.includes(role) && <Loyalty lang={lang} role={role} company={company} />}
     </div>

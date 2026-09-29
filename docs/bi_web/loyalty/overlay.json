@@ -1,8 +1,13 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是这一版，部署会停下来。其余档都是新增。",
-  "based_on_deployment": "dpl_2HzZjNwpUdrSg8iQTKsNQzXU9phT",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增。2026-09-29：积分页改成顾客资料页，底是积分页上线的那一版。",
+  "based_on_deployment": "dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV",
   "replaces": {
-    "vite.config.ts": "0c897d6f972ea1895b2f1af316e9ea51de65cd0e",
-    "src/i18n/index.ts": "6f28962c7d01c5760239cd3f935d885f70db3ec7"
+    "vite.config.ts": "ef03375a15d17c4aa9a88a0419bce1538f31461d",
+    "src/i18n/index.ts": "9b524edced23630b0f48e85a76cb860486df870d",
+    "loyalty.html": "6858ded4edcc14efac028fef5624a4c080258feb",
+    "src/i18n/loyalty.ts": "8984a090386b60e1aeb5abe4fbdf0d5838fee3f1",
+    "src/loyalty/loyalty.css": "d49c192fe32568c0d4ddfd9aeccc7e61687c2aa0",
+    "src/loyalty/main.tsx": "64f92b9a1a159599522e507adce37799d76c0a3d",
+    "src/pages/Loyalty.tsx": "65350689d3e645c51b958daac9c8f2b1f9314780"
   }
 }

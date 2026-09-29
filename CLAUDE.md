@@ -105,15 +105,17 @@ live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomR
 建议转仓清单 CSV（每个负数仓从库存最多的正数仓补）；C 真正短少 → 盘点表 CSV。整理顺序：定仓位规则 → 关服务项目库存控制 →
 照清单转仓 → 分仓盘点 → 每周看这页。**写入 AutoCount 的第一条流程改为「盘点差异 → Stock Adjustment」**（比 SO 有用）；
 API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试账套 AED_HOMEWORKSSB_TEST + 跑 `check_sdk.bat`。
-**顾客积分（2026-09-28）**：使用者要记录顾客购买历史以便给奖励。规则（使用者选的）：门市散客（HQ debtor_type RETAIL；
-JB RETAIL + 空白）两边合并、RM1 = 1 分、100 分折抵 RM1、一次最少 100 分、从 2026-01-01 起算、每笔 12 个月后过期（先进先出）、
-退货扣回但扣到 0 为止。**会员号 = 电话**：从单据客户名称抽手机号（`bi.loyalty_phone`，统一成 60… / 65…），抽不到用客户主档名称，
-再不行且不是 CASH 共用账号就用 `A:公司:客户代号`；HQ 门市单 88%、JB 93% 抽得到，约 3,500 位会员。平台买家名字被遮蔽，不计。
-积分不存盘，每次从 `bi.fact_sales` 现算（`bi.loyalty_calc`，全体约 0.7 秒）；兑换 / 手动调整 / 作废存 `bi.loyalty_txn`；
-规则存 `bi.loyalty_settings`（owner 可在页面改）。RPC `public.bi_loyalty_*`（SECURITY DEFINER，函数内查角色）：查询与兑换 =
-owner/manager/sales，作废 = owner + 本门市 manager，调整与改规则 = owner。**AutoCount 不写入**：兑换后店员照常开单手动给折扣。
-Migration `loyalty_points`（+ `_cn_sign`、`_no_debt`），合并版 `docs/bi_web/loyalty_points.sql`。前端是独立页 `/loyalty.html`
-（档案在 `docs/bi_web/loyalty/`），**2026-09-29 已上线**：使用者在 SERVER 双击 `deploy_bi_web.bat` 部署成 dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV（7 个改版档 SHA1 与本目录一致、其余 44 档不变）。Claude 的 Vercel 连接器能读不能建部署（403），以后 BI 网页改版一律做成改版目录 + overlay.json，请使用者双击 `deploy_bi_web.bat`（金钥已存在 SERVER 的 `vercel_token.json`），见 `docs/bi_web/README.md`。
+**顾客资料（2026-09-29，取代前一天的顾客积分）**：使用者说「积分我不要，主要是要有一个地方记录顾客讯息，将来可能做促销」。
+积分的表 / 函数已删（loyalty_txn 当时 0 笔）。门市散客（HQ debtor_type RETAIL；JB RETAIL + 空白，`bi.customer_eligible`）两边合并，
+**顾客编号 = 电话**（`bi.customer_phone` 从单据客户名称抽手机号统一成 60… / 65…，抽不到用客户主档名称，再不行且不是 CASH 共用账号
+就用 `A:公司:客户代号`）；购买历史从 `bi.fact_sales` 全部历史现算（视图 `bi.customer_doc`，HQ 2022-06 起、JB 2024-03 起），约 7,800 位。
+员工补的资料存 `bi.customer_profile`（名字、生日月 / 日、地区、地址、类型 屋主 / 设计师 / 承包商 / 水工 / 公司 / 其他、备注；使用者没选
+「同意收促销」栏位）。RPC：`bi_customers()`（全体清单约 1.6 秒，前端筛选：门市、最后消费、买过类别=item_group、类型、生日月、地区、
+累计消费）、`bi_customer(p_member)`、`bi_customer_save(...)`（没买过的潜在客也能新增）、`bi_customer_missing_phone(days)`；
+owner / manager / sales 可看可改，**汇出 CSV 只给 owner / manager**（前端控制）。AutoCount 不写入。Migration `customer_profiles`
+（+ `_faster_list`、`customer_doc_parse_names_once`），留底 `docs/bi_web/customer_profiles.sql`。前端沿用 `/loyalty.html` 网址与档名
+（`docs/bi_web/loyalty/`，overlay 以积分页上线版 dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV 为底）；Claude 的 Vercel 连接器能读不能建部署（403），
+由使用者在 SERVER 双击 `deploy_bi_web.bat`（金钥在 SERVER 的 `vercel_token.json`）。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

@@ -1,4 +1,4 @@
-/* 顾客积分页专用;配色沿用 styles.css 的变数 */
+/* 顾客资料页专用;配色沿用 styles.css 的变数 */
 .lp-click { cursor: pointer; }
 .lp-click:hover td { background: rgba(219, 232, 250, 0.06); }
 .lp-void td { opacity: 0.45; text-decoration: line-through; }
@@ -9,7 +9,8 @@
 .lp-form { display: flex; flex-direction: column; gap: 6px; flex: 1 1 280px; max-width: 420px; }
 .lp-form h3 { margin: 0 0 4px; font-size: 16px; }
 .lp-form label { font-size: 13px; color: var(--muted); margin-top: 4px; }
-.lp-form input, .lp-form select { width: 100%; }
+.lp-form input, .lp-form select, .lp-form textarea { width: 100%; }
+.lp-form textarea { font: inherit; resize: vertical; }
 .lp-form .btn { margin-top: 8px; align-self: flex-start; }
 .lp-row { display: flex; gap: 8px; }
 .lp-row .btn { margin-top: 0; }

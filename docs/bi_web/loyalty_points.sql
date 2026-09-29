@@ -1,3 +1,4 @@
+-- ⚠️ 已作废（2026-09-29）：使用者不要积分，改成顾客资料，见 customer_profiles.sql。此档只留历史。
 -- 顾客积分（migration `loyalty_points`，2026-09-28）
 -- 门市散客（HQ RETAIL；JB RETAIL + 空白类型）用电话当会员号，总公司与 JB 合并计算。
 -- 积分不存盘：每次从 bi.fact_sales（每天同步）现算，只有兑换 / 手动调整存在 bi.loyalty_txn。
