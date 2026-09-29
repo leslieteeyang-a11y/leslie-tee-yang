@@ -19,7 +19,7 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 
 ## 顾客积分（2026-09-28）
 
-独立页 `homeworks-bi.vercel.app/loyalty.html`（柜台只开这页，登入与主看板共用）。**还没部署**：Vercel 连接的帐号
+独立页 `homeworks-bi.vercel.app/loyalty.html`（柜台只开这页，登入与主看板共用）。**2026-09-29 已由 deploy_bi_web.bat 上线（dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV）**。以下为当时背景：Vercel 连接的帐号
 这天起对 homeworks-bi 建 preview / production 都回 403（没有部署权限），要在 Vercel 团队设定把该帐号角色调回
 Member（或 Owner）才能由 Claude 部署；或使用者自己部署。
 

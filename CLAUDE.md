@@ -113,7 +113,7 @@ JB RETAIL + 空白）两边合并、RM1 = 1 分、100 分折抵 RM1、一次最�
 规则存 `bi.loyalty_settings`（owner 可在页面改）。RPC `public.bi_loyalty_*`（SECURITY DEFINER，函数内查角色）：查询与兑换 =
 owner/manager/sales，作废 = owner + 本门市 manager，调整与改规则 = owner。**AutoCount 不写入**：兑换后店员照常开单手动给折扣。
 Migration `loyalty_points`（+ `_cn_sign`、`_no_debt`），合并版 `docs/bi_web/loyalty_points.sql`。前端是独立页 `/loyalty.html`
-（档案在 `docs/bi_web/loyalty/`）——**尚未部署**：Claude 的 Vercel 连接器（使用者重新授权后也一样）能读不能建部署（403），所以改由使用者在 SERVER 双击 `deploy_bi_web.bat`（`scripts/deploy_bi_web.py`）用自己的 Vercel 金钥部署，见 `docs/bi_web/README.md`。
+（档案在 `docs/bi_web/loyalty/`），**2026-09-29 已上线**：使用者在 SERVER 双击 `deploy_bi_web.bat` 部署成 dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV（7 个改版档 SHA1 与本目录一致、其余 44 档不变）。Claude 的 Vercel 连接器能读不能建部署（403），以后 BI 网页改版一律做成改版目录 + overlay.json，请使用者双击 `deploy_bi_web.bat`（金钥已存在 SERVER 的 `vercel_token.json`），见 `docs/bi_web/README.md`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
