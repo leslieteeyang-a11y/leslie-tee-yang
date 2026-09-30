@@ -97,16 +97,16 @@ def test_flatten_without_wrapper_and_ignores_non_files():
 
 # ── read_overlay / plan_files ────────────────────────────────────────────────
 
-# 2026-09-29 积分页上线后的线上版 dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV：多了积分页 5 个档、换了 2 个
+# 2026-09-29 顾客资料第一版上线后的线上版 dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz（先前的积分页改成顾客资料）
 LIVE_AFTER_LOYALTY = {
     **LIVE,
-    "vite.config.ts": "ef03375a15d17c4aa9a88a0419bce1538f31461d",
+    "vite.config.ts": "f26c927acac1ecaecac60ad79f178d3ac8c6fbad",
     "src/i18n/index.ts": "9b524edced23630b0f48e85a76cb860486df870d",
-    "loyalty.html": "6858ded4edcc14efac028fef5624a4c080258feb",
-    "src/i18n/loyalty.ts": "8984a090386b60e1aeb5abe4fbdf0d5838fee3f1",
-    "src/loyalty/loyalty.css": "d49c192fe32568c0d4ddfd9aeccc7e61687c2aa0",
-    "src/loyalty/main.tsx": "64f92b9a1a159599522e507adce37799d76c0a3d",
-    "src/pages/Loyalty.tsx": "65350689d3e645c51b958daac9c8f2b1f9314780",
+    "loyalty.html": "997523778355146e1492fdc53dafb7dd799c6ac6",
+    "src/i18n/loyalty.ts": "b138f825a1f51055cd79429fe146113d11b6965b",
+    "src/loyalty/loyalty.css": "0d6de45406441b6fbb901d0f5f529c015d77c257",
+    "src/loyalty/main.tsx": "23b4ff9588119f1d1f0d4162c4b8b1e1a3f0a6e4",
+    "src/pages/Loyalty.tsx": "e909207e57bb60661e28691e12e6b7602bcbc361",
 }
 
 
@@ -115,9 +115,9 @@ def test_repo_overlay_replaces_the_loyalty_page_and_keeps_everything_else():
     assert "overlay.json" not in overlay                   # 说明档本身不上传
     plan = d.plan_files(LIVE_AFTER_LOYALTY, overlay, replaces)
     assert plan["added"] == []
-    assert plan["same"] == ["src/i18n/index.ts"]           # 字典合并档这次没改
-    assert sorted(plan["replaced"]) == ["loyalty.html", "src/i18n/loyalty.ts", "src/loyalty/loyalty.css",
-                                        "src/loyalty/main.tsx", "src/pages/Loyalty.tsx", "vite.config.ts"]
+    # 第二版只改页面、字典、样式；入口与设定档原样
+    assert sorted(plan["same"]) == ["loyalty.html", "src/i18n/index.ts", "src/loyalty/main.tsx", "vite.config.ts"]
+    assert sorted(plan["replaced"]) == ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_AFTER_LOYALTY)            # 线上每个档都还在，没有漏掉任何一页
     for path, sha in LIVE_AFTER_LOYALTY.items():
@@ -222,7 +222,8 @@ def run(monkeypatch, check_only=False, final_state="READY"):
 def test_deploy_uploads_only_changed_files_and_prints_new_page(monkeypatch, capsys):
     fake = run(monkeypatch)
     overlay, _ = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = [p for p in overlay if p != "src/i18n/index.ts"]           # 字典合并档跟线上一样，不重传
+    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_AFTER_LOYALTY.get(p)]  # 跟线上一样的不重传
+    assert sorted(changed) == ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
     assert sorted(fake.uploaded) == sorted(d.sha1(overlay[p]) for p in changed)
     assert len(fake.created) == len(LIVE_AFTER_LOYALTY)
     out = capsys.readouterr().out

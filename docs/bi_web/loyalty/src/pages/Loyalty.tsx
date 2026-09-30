@@ -5,14 +5,17 @@ import { Kpi } from '../components/ChartCard';
 import { tr, type Lang } from '../lib/i18n';
 
 // 顾客资料(2026-09-29 取代积分):门市散客用电话当顾客编号,总部 + JB 合并。购买历史从 bi.fact_sales 现算,
-// 员工补的资料(名字、生日、地区、地址、类型、备注)存 bi.customer_profile(RPC public.bi_customer*,migration customer_profiles)。
-// 做促销:筛选后汇出 CSV(Excel 可开)。档名沿用 Loyalty.tsx / loyalty.html,因为线上已有这个网址。
+// 员工补的资料存 bi.customer_profile(RPC public.bi_customer*,migration customer_profiles)。
+// 2026-09-30 第二版(migration customer_crm):跟进提醒、一键 WhatsApp(话术范本)、买了 A 没买 B、同意收促销
+// (汇出与活动只收明确同意的)、顾客分级、促销活动成效、每月顾客报告。档名沿用 Loyalty.tsx / loyalty.html。
 
+type Consent = 'yes' | 'no' | null;
 type Customer = {
   member_id: string; name: string | null; stores: string | null; first_date: string | null; last_date: string | null;
-  doc_count: number; spent: number; spent_12m: number; categories: string[];
+  doc_count: number; doc_count_12m: number; spent: number; spent_12m: number; categories: string[];
   birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
-  customer_type: string | null; note: string | null; profile_updated_at: string | null;
+  customer_type: string | null; note: string | null; consent: Consent; next_contact: string | null;
+  last_contact_at: string | null; profile_created_at: string | null; profile_updated_at: string | null;
 };
 type Item = { item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number };
 type Doc = {
@@ -21,18 +24,34 @@ type Doc = {
 };
 type Profile = {
   name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
-  customer_type: string | null; note: string | null; updated_at: string; updated_by: string | null;
+  customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
+  next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
 };
 type Detail = { member_id: string; profile: Profile | null; docs: Doc[] };
 type Missing = {
   company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string;
   debtor_name: string | null; sales_agent: string | null; amount: number;
 };
+export type Settings = {
+  vip_min_12m: number; regular_min_docs: number; lapsed_days: number; lead_follow_days: number; birthday_days: number;
+  updated_at?: string | null; updated_by?: string | null;
+};
+type Template = { id: number; title: string; body: string; sort: number };
+type Campaign = {
+  id: number; name: string; message: string | null; sent_on: string; created_by: string | null; members: number;
+  buyers_30: number; revenue_30: number; buyers_60: number; revenue_60: number;
+};
+type Monthly = {
+  month: string; active: number; new_customers: number; returning_customers: number;
+  new_revenue: number; returning_revenue: number; lapsed: number;
+};
+type Agent = { agent: string; customers: number; returning_customers: number; new_customers: number; revenue: number };
 type T = (zh: string, vars?: Record<string, string | number>) => string;
 
 const n = (v: unknown) => Number(v ?? 0);
 const STORE: Record<string, string> = { HOMEWORKSSB: 'HQ', HOMEWORKSSOUTHERN: 'JB' };
 export const TYPES = ['屋主', '设计师', '承包商', '水工', '公司', '其他'];
+export const DEFAULT_SETTINGS: Settings = { vip_min_12m: 10000, regular_min_docs: 2, lapsed_days: 365, lead_follow_days: 7, birthday_days: 7 };
 
 /** 60123456789 → 012-345 6789;6591234567 → +65 9123 4567;A:公司:代号 → 代号 (HQ) */
 export function fmtMember(id: string): string {
@@ -60,9 +79,76 @@ export function cleanName(raw: string | null | undefined): string {
     .replace(/\s+/g, ' ').trim();
 }
 
-function daysSince(d: string | null): number {
+/** 范本的 {name} 换成顾客名字;没有名字时把「Hi {name}，」收成「Hi，」 */
+export function fillTemplate(body: string, name: string): string {
+  return body.replace(/\{name\}/g, name.trim()).replace(/[ \t]+([，,！!])/g, '$1');
+}
+
+/** wa.me 连结;账号型顾客(没有电话)回空字串 */
+export function waLink(id: string, text?: string): string {
+  if (!/^[0-9]+$/.test(id)) return '';
+  return `https://wa.me/${id}` + (text ? `?text=${encodeURIComponent(text)}` : '');
+}
+
+/** 本地日期 yyyy-mm-dd(不用 toISOString,避免马来西亚早上 8 点前算成前一天) */
+export function localISO(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function midnight(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function daysSince(d: string | null, today: Date = new Date()): number {
   if (!d) return Infinity;
-  return (Date.now() - new Date(d + 'T00:00:00').getTime()) / 86400000;
+  const at = d.length <= 10 ? new Date(d + 'T00:00:00') : new Date(d);
+  return (midnight(today).getTime() - midnight(at).getTime()) / 86400000;
+}
+
+/** 离下一次生日还有几天(今天生日 = 0);2/29 在平年算 3/1 */
+export function daysUntilBirthday(month: number, day: number, today: Date = new Date()): number {
+  const t0 = midnight(today);
+  let b = new Date(t0.getFullYear(), month - 1, day);
+  if (b < t0) b = new Date(t0.getFullYear() + 1, month - 1, day);
+  return Math.round((b.getTime() - t0.getTime()) / 86400000);
+}
+
+export type Tier = 'vip' | 'regular' | 'normal' | 'lapsed' | 'lead';
+export const TIERS: Tier[] = ['vip', 'regular', 'normal', 'lapsed', 'lead'];
+export const TIER_LABEL: Record<Tier, string> = { vip: 'VIP', regular: '常客', normal: '一般', lapsed: '流失', lead: '潜在客' };
+
+/** 分级:没买过 = 潜在客;最后消费超过流失天数 = 流失;近 12 个月消费 ≥ 门槛 = VIP;近 12 个月单数 ≥ 门槛 = 常客;其余一般 */
+export function tierOf(c: Pick<Customer, 'last_date' | 'spent_12m' | 'doc_count_12m'>, s: Settings, today: Date = new Date()): Tier {
+  if (!c.last_date) return 'lead';
+  if (daysSince(c.last_date, today) > s.lapsed_days) return 'lapsed';
+  if (n(c.spent_12m) >= n(s.vip_min_12m)) return 'vip';
+  if (n(c.doc_count_12m) >= n(s.regular_min_docs)) return 'regular';
+  return 'normal';
+}
+
+export type Reason = { kind: 'due' | 'birthday' | 'lead'; days: number };
+export type FollowUp = { c: Customer; reasons: Reason[] };
+
+/** 跟进提醒:约好的联络日到了、生日快到(这段期间还没联络过)、潜在客建档后 N 天都没联络 */
+export function followUps(list: Customer[], s: Settings, today: Date = new Date()): FollowUp[] {
+  const iso = localISO(today);
+  const out: FollowUp[] = [];
+  for (const c of list) {
+    const reasons: Reason[] = [];
+    const contacted = daysSince(c.last_contact_at, today);
+    if (c.next_contact && c.next_contact <= iso) reasons.push({ kind: 'due', days: daysSince(c.next_contact, today) });
+    if (c.birth_month && c.birth_day) {
+      const d = daysUntilBirthday(c.birth_month, c.birth_day, today);
+      if (d <= s.birthday_days && !(contacted <= s.birthday_days - d)) reasons.push({ kind: 'birthday', days: d });
+    }
+    if (!c.last_date && c.profile_created_at && !c.last_contact_at && !(c.next_contact && c.next_contact > iso)
+        && daysSince(c.profile_created_at, today) >= s.lead_follow_days) {
+      reasons.push({ kind: 'lead', days: daysSince(c.profile_created_at, today) });
+    }
+    if (reasons.length) out.push({ c, reasons });
+  }
+  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => (r.kind === 'due' ? 0 : r.kind === 'birthday' ? 100 + r.days : 1000)));
+  return out.sort((a, b) => rank(a) - rank(b));
 }
 
 function csvCell(v: unknown): string {
@@ -81,11 +167,14 @@ function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
 }
 
 type Filters = {
-  q: string; store: string; recency: string; minSpent: string; category: string; ctype: string; area: string; bmonth: string;
+  q: string; store: string; recency: string; minSpent: string; category: string; notCategory: string; ctype: string;
+  area: string; bmonth: string; tier: string; consent: string;
 };
-const EMPTY: Filters = { q: '', store: '', recency: '', minSpent: '', category: '', ctype: '', area: '', bmonth: '' };
+const EMPTY: Filters = {
+  q: '', store: '', recency: '', minSpent: '', category: '', notCategory: '', ctype: '', area: '', bmonth: '', tier: '', consent: '',
+};
 
-export function applyFilters(list: Customer[], f: Filters): Customer[] {
+export function applyFilters(list: Customer[], f: Filters, s: Settings = DEFAULT_SETTINGS): Customer[] {
   const text = f.q.trim().toLowerCase();
   const digits = f.q.replace(/\D/g, '').replace(/^0/, '');
   const min = n(f.minSpent);
@@ -103,68 +192,123 @@ export function applyFilters(list: Customer[], f: Filters): Customer[] {
     if (f.recency === 'none' && isFinite(age)) return false;
     if (min && n(c.spent) < min) return false;
     if (f.category && !c.categories.includes(f.category)) return false;
+    if (f.notCategory && c.categories.includes(f.notCategory)) return false;
     if (f.ctype === '-' ? c.customer_type : f.ctype && c.customer_type !== f.ctype) return false;
     if (f.area && !`${c.area ?? ''} ${c.address ?? ''}`.toLowerCase().includes(f.area.trim().toLowerCase())) return false;
     if (f.bmonth && c.birth_month !== n(f.bmonth)) return false;
+    if (f.tier && tierOf(c, s) !== f.tier) return false;
+    if (f.consent === 'yes' && c.consent !== 'yes') return false;
+    if (f.consent === 'no' && c.consent !== 'no') return false;
+    if (f.consent === 'unknown' && c.consent) return false;
     return true;
   });
 }
 
+function TierTag({ tier, t }: { tier: Tier; t: T }) {
+  return <span className={`lp-tag lp-tier-${tier}`}>{t(TIER_LABEL[tier])}</span>;
+}
+
+function ConsentTag({ consent, t }: { consent: Consent; t: T }) {
+  if (consent === 'yes') return <span className="lp-tag lp-yes" title={t('同意收促销')}>✓</span>;
+  if (consent === 'no') return <span className="lp-tag lp-no" title={t('不收促销')}>✕</span>;
+  return null;
+}
+
+/** 一键 WhatsApp:每个范本一颗按钮,开 wa.me 并记下联络时间 */
+function WaButtons({ id, name, templates, t, onTouched }: {
+  id: string; name: string; templates: Template[]; t: T; onTouched: () => void;
+}) {
+  if (!waLink(id)) return <span className="muted" style={{ fontSize: 12 }}>{t('账号型顾客没有电话,不能 WhatsApp')}</span>;
+  const touch = () => { supabase.rpc('bi_customer_touch', { p_member: id }).then(() => onTouched()); };
+  return (
+    <span className="lp-wa">
+      {templates.map((x) => (
+        <a key={x.id} className="btn" href={waLink(id, fillTemplate(x.body, name))} target="_blank" rel="noreferrer"
+           onClick={(e) => { e.stopPropagation(); touch(); }} title={fillTemplate(x.body, name)}>
+          WhatsApp · {x.title}
+        </a>
+      ))}
+      <a className="btn" href={waLink(id)} target="_blank" rel="noreferrer" onClick={(e) => { e.stopPropagation(); touch(); }}>
+        {t('WhatsApp(空白)')}
+      </a>
+    </span>
+  );
+}
+
 export default function Loyalty({ lang, role }: { lang: Lang; role: string | null; company: string | null }) {
   const t: T = (zh, vars) => tr(lang, zh, vars);
-  const canExport = role === 'owner' || role === 'manager';
+  const canManage = role === 'owner' || role === 'manager';
+  const isOwner = role === 'owner';
 
   const [list, setList] = useState<Customer[] | null>(null);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [f, setF] = useState<Filters>(EMPTY);
   const [sort, setSort] = useState<'recent' | 'spent' | 'name'>('recent');
   const [shown, setShown] = useState(100);
   const [sel, setSel] = useState<string | null>(null);
   const [newPhone, setNewPhone] = useState('');
+  const [campKey, setCampKey] = useState(0);
 
   async function load() {
     const r = await supabase.rpc('bi_customers');
     setErr(r.error ? r.error.message : null);
     setList((r.data ?? []) as Customer[]);
   }
-  useEffect(() => { load(); }, []);
+  async function loadSettings() {
+    const [s, w] = await Promise.all([supabase.rpc('bi_customer_settings'), supabase.rpc('bi_wa_templates')]);
+    if (s.data) setSettings({ ...DEFAULT_SETTINGS, ...(s.data as Settings) });
+    setTemplates((w.data ?? []) as Template[]);
+  }
+  useEffect(() => { load(); loadSettings(); }, []);
 
   const set = (k: keyof Filters) => (e: { target: { value: string } }) => { setF({ ...f, [k]: e.target.value }); setShown(100); };
   const categories = useMemo(() => Array.from(new Set((list ?? []).flatMap((c) => c.categories))).sort(), [list]);
   const filtered = useMemo(() => {
-    const out = applyFilters(list ?? [], f);
+    const out = applyFilters(list ?? [], f, settings);
     if (sort === 'spent') out.sort((a, b) => n(b.spent) - n(a.spent));
     else if (sort === 'name') out.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
     else out.sort((a, b) => ((a.last_date ?? '') < (b.last_date ?? '') ? 1 : (a.last_date ?? '') > (b.last_date ?? '') ? -1 : 0));
     return out;
-  }, [list, f, sort]);
+  }, [list, f, sort, settings]);
+  const agreed = useMemo(() => filtered.filter((c) => c.consent === 'yes'), [filtered]);
+  const follow = useMemo(() => followUps(list ?? [], settings), [list, settings]);
 
   const month = new Date().getMonth() + 1;
   const totals = useMemo(() => {
     const all = list ?? [];
+    const tiers: Record<Tier, number> = { vip: 0, regular: 0, normal: 0, lapsed: 0, lead: 0 };
+    for (const c of all) tiers[tierOf(c, settings)] += 1;
     return {
       count: all.length,
       active: all.filter((c) => daysSince(c.last_date) <= 365).length,
       profiled: all.filter((c) => c.profile_updated_at).length,
       birthday: all.filter((c) => c.birth_month === month).length,
+      consent: all.filter((c) => c.consent === 'yes').length,
+      tiers,
     };
-  }, [list, month]);
+  }, [list, month, settings]);
 
   function exportCsv() {
-    downloadCsv(`customers_${new Date().toISOString().slice(0, 10)}.csv`,
-      [t('电话(WhatsApp)'), t('电话'), t('名字'), t('类型'), t('地区'), t('地址'), t('生日'), t('门市'), t('首次消费'),
+    downloadCsv(`customers_${localISO()}.csv`,
+      [t('电话(WhatsApp)'), t('电话'), t('名字'), t('分级'), t('类型'), t('地区'), t('地址'), t('生日'), t('门市'), t('首次消费'),
         t('最后消费'), t('单数'), t('累计消费'), t('近 12 个月'), t('买过类别'), t('备注')],
-      filtered.map((c) => [waNumber(c.member_id), fmtMember(c.member_id), cleanName(c.name), c.customer_type, c.area, c.address,
-        c.birth_month ? `${c.birth_month}/${c.birth_day}` : '', c.stores, c.first_date, c.last_date, c.doc_count,
-        n(c.spent).toFixed(2), n(c.spent_12m).toFixed(2), c.categories.join(' '), c.note]));
+      agreed.map((c) => [waNumber(c.member_id), fmtMember(c.member_id), cleanName(c.name), t(TIER_LABEL[tierOf(c, settings)]),
+        c.customer_type, c.area, c.address, c.birth_month ? `${c.birth_month}/${c.birth_day}` : '', c.stores, c.first_date,
+        c.last_date, c.doc_count, n(c.spent).toFixed(2), n(c.spent_12m).toFixed(2), c.categories.join(' '), c.note]));
+  }
+
+  function open(id: string) {
+    setSel(id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function openNew() {
     const digits = newPhone.replace(/\D/g, '');
     if (digits.length < 8) return;
-    setSel(newPhone.trim());
+    open(newPhone.trim());
     setNewPhone('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   if (list === null) return <div className="loading">{t('载入中…')}</div>;
@@ -179,13 +323,33 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
       <div className="grid-kpi">
         <Kpi label={t('顾客人数')} value={fmtNum(totals.count)} sub={t('近 12 个月有消费 {a} 位', { a: fmtNum(totals.active) })} />
         <Kpi label={t('已补资料')} value={fmtNum(totals.profiled)} sub={t('有填名字 / 生日 / 地区等')} />
-        <Kpi label={t('本月生日')} value={fmtNum(totals.birthday)} sub={t('{m} 月', { m: month })} />
+        <Kpi label={t('同意收促销')} value={fmtNum(totals.consent)} sub={t('只有这些人会被汇出 / 放进活动')} />
+        <Kpi label={t('待跟进')} value={fmtNum(follow.length)} sub={t('本月生日 {b} 位', { b: fmtNum(totals.birthday) })} />
       </div>
 
-      {sel && <CustomerPanel key={sel} id={sel} t={t} onClose={() => setSel(null)} onSaved={load} />}
+      {sel && (
+        <CustomerPanel key={sel} id={sel} t={t} settings={settings} templates={templates}
+                       onClose={() => setSel(null)} onSaved={load} />
+      )}
+
+      <FollowUpList items={follow} t={t} settings={settings} templates={templates} onOpen={open} onTouched={load} />
 
       <div className="card card-block">
         <h2>{t('顾客')}</h2>
+        <div className="filters" style={{ marginBottom: 8 }}>
+          <div className="seg">
+            <button className={f.tier === '' ? 'active' : ''} onClick={() => setF({ ...f, tier: '' })}>{t('全部')}</button>
+            {TIERS.map((x) => (
+              <button key={x} className={f.tier === x ? 'active' : ''} onClick={() => { setF({ ...f, tier: x }); setShown(100); }}>
+                {t(TIER_LABEL[x])} {fmtNum(totals.tiers[x])}
+              </button>
+            ))}
+          </div>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {t('VIP = 近 12 个月消费 ≥ RM{v};常客 = 近 12 个月 ≥ {d} 张单;流失 = 超过 {l} 天没来', {
+              v: fmtNum(settings.vip_min_12m), d: settings.regular_min_docs, l: settings.lapsed_days })}
+          </span>
+        </div>
         <div className="filters" style={{ marginBottom: 8 }}>
           <input placeholder={t('电话、名字或备注')} value={f.q} onChange={set('q')} style={{ minWidth: 200 }} />
           <select value={f.store} onChange={set('store')}>
@@ -203,13 +367,23 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
             <option value="none">{t('还没买过')}</option>
           </select>
           <select value={f.category} onChange={set('category')}>
-            <option value="">{t('全部类别')}</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="">{t('买过:全部类别')}</option>
+            {categories.map((c) => <option key={c} value={c}>{t('买过 {c}', { c })}</option>)}
+          </select>
+          <select value={f.notCategory} onChange={set('notCategory')}>
+            <option value="">{t('没买过:不限')}</option>
+            {categories.map((c) => <option key={c} value={c}>{t('没买过 {c}', { c })}</option>)}
           </select>
           <select value={f.ctype} onChange={set('ctype')}>
             <option value="">{t('全部类型')}</option>
             {TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
             <option value="-">{t('未分类')}</option>
+          </select>
+          <select value={f.consent} onChange={set('consent')}>
+            <option value="">{t('同意收促销:不限')}</option>
+            <option value="yes">{t('同意')}</option>
+            <option value="no">{t('不同意')}</option>
+            <option value="unknown">{t('未确认')}</option>
           </select>
           <select value={f.bmonth} onChange={set('bmonth')}>
             <option value="">{t('生日月份')}</option>
@@ -225,27 +399,37 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
             <button className={sort === 'spent' ? 'active' : ''} onClick={() => setSort('spent')}>{t('消费最多')}</button>
             <button className={sort === 'name' ? 'active' : ''} onClick={() => setSort('name')}>{t('名字')}</button>
           </div>
-          <span className="muted" style={{ fontSize: 13 }}>{t('符合 {n} 位', { n: fmtNum(filtered.length) })}</span>
-          {canExport && <button className="btn primary" onClick={exportCsv} disabled={!filtered.length}>{t('汇出名单 (Excel)')}</button>}
+          <span className="muted lp-count" style={{ fontSize: 13 }}>
+            {t('符合 {n} 位,其中同意收促销 {y} 位', { n: fmtNum(filtered.length), y: fmtNum(agreed.length) })}
+          </span>
+          {canManage && (
+            <button className="btn primary" onClick={exportCsv} disabled={!agreed.length}>
+              {t('汇出同意名单 {n} 位 (Excel)', { n: fmtNum(agreed.length) })}
+            </button>
+          )}
           <span className="spacer" style={{ flex: 1 }} />
           <input placeholder={t('新顾客电话')} value={newPhone} onChange={(e) => setNewPhone(e.target.value)}
                  onKeyDown={(e) => { if (e.key === 'Enter') openNew(); }} style={{ width: 150 }} />
           <button className="btn" onClick={openNew}>{t('新增顾客')}</button>
         </div>
+        {canManage && <NewCampaign t={t} members={agreed.map((c) => c.member_id)} total={filtered.length}
+                                   onCreated={() => setCampKey(campKey + 1)} />}
         <div className="table-scroll">
           <table className="data">
             <thead>
               <tr>
-                <th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('类型')}</th><th>{t('地区')}</th><th>{t('门市')}</th>
-                <th>{t('最后消费')}</th><th className="num">{t('累计消费')}</th><th className="num">{t('近 12 个月')}</th><th>{t('买过类别')}</th>
+                <th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('分级')}</th><th>{t('类型')}</th><th>{t('地区')}</th>
+                <th>{t('门市')}</th><th>{t('最后消费')}</th><th className="num">{t('累计消费')}</th>
+                <th className="num">{t('近 12 个月')}</th><th>{t('买过类别')}</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} className="muted">{t('没有符合的顾客')}</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={10} className="muted">{t('没有符合的顾客')}</td></tr>}
               {filtered.slice(0, shown).map((c) => (
-                <tr key={c.member_id} className="lp-click" onClick={() => { setSel(c.member_id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{fmtMember(c.member_id)}</td>
+                <tr key={c.member_id} className="lp-click" onClick={() => open(c.member_id)}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtMember(c.member_id)} <ConsentTag consent={c.consent} t={t} /></td>
                   <td>{cleanName(c.name)}</td>
+                  <td><TierTag tier={tierOf(c, settings)} t={t} /></td>
                   <td>{c.customer_type ? t(c.customer_type) : ''}</td>
                   <td>{c.area}</td>
                   <td>{c.stores}</td>
@@ -263,18 +447,127 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
         )}
       </div>
 
+      {canManage && <Campaigns key={campKey} t={t} isOwner={isOwner} list={list} settings={settings} />}
+      <MonthlyReport t={t} settings={settings} />
+      {canManage && (
+        <SettingsPanel t={t} isOwner={isOwner} settings={settings} templates={templates} onChanged={loadSettings} />
+      )}
       <MissingPhone t={t} />
     </>
   );
 }
 
-function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose: () => void; onSaved: () => void }) {
+function FollowUpList({ items, t, settings, templates, onOpen, onTouched }: {
+  items: FollowUp[]; t: T; settings: Settings; templates: Template[]; onOpen: (id: string) => void; onTouched: () => void;
+}) {
+  const [shown, setShown] = useState(20);
+  const label = (r: Reason) => {
+    if (r.kind === 'due') return r.days > 0 ? t('约好联络日已过 {d} 天', { d: r.days }) : t('今天约好联络');
+    if (r.kind === 'birthday') return r.days === 0 ? t('今天生日 🎂') : t('{d} 天后生日 🎂', { d: r.days });
+    return t('潜在客,建档 {d} 天还没联络', { d: r.days });
+  };
+  const touch = (id: string) => { supabase.rpc('bi_customer_touch', { p_member: id }).then(() => onTouched()); };
+  return (
+    <div className="card card-block">
+      <h2>{t('跟进提醒({n} 位)', { n: fmtNum(items.length) })}</h2>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+        {t('{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了。按 WhatsApp 或「已联络」后就会从这里消失。', {
+          b: settings.birthday_days, l: settings.lead_follow_days })}
+      </p>
+      {items.length === 0 && <div className="muted">{t('目前没有要跟进的顾客 👍')}</div>}
+      {items.length > 0 && (
+        <div className="table-scroll">
+          <table className="data">
+            <thead>
+              <tr><th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('原因')}</th><th>{t('备注')}</th><th>{t('联络')}</th></tr>
+            </thead>
+            <tbody>
+              {items.slice(0, shown).map(({ c, reasons }) => (
+                <tr key={c.member_id}>
+                  <td style={{ whiteSpace: 'nowrap' }} className="lp-click" onClick={() => onOpen(c.member_id)}>
+                    {fmtMember(c.member_id)} <ConsentTag consent={c.consent} t={t} />
+                  </td>
+                  <td className="lp-click" onClick={() => onOpen(c.member_id)}>{cleanName(c.name)}</td>
+                  <td>{reasons.map((r) => <div key={r.kind}>{label(r)}</div>)}</td>
+                  <td className="muted" style={{ fontSize: 12, maxWidth: 260 }}>{c.note}</td>
+                  <td>
+                    <WaButtons id={c.member_id} name={cleanName(c.name)} templates={templates} t={t} onTouched={onTouched} />
+                    <button className="btn" onClick={() => touch(c.member_id)}>{t('已联络')}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {items.length > shown && <button className="btn" style={{ marginTop: 8 }} onClick={() => setShown(shown + 50)}>{t('显示更多')}</button>}
+    </div>
+  );
+}
+
+function NewCampaign({ t, members, total, onCreated }: { t: T; members: string[]; total: number; onCreated: () => void }) {
+  const [show, setShow] = useState(false);
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const [sentOn, setSentOn] = useState(localISO());
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function create() {
+    if (!name.trim()) { setMsg(t('活动要有名称')); return; }
+    setBusy(true);
+    const r = await supabase.rpc('bi_campaign_create', { p_name: name, p_message: message, p_sent_on: sentOn || null, p_members: members });
+    setBusy(false);
+    if (r.error) { setMsg(r.error.message); return; }
+    setMsg(t('已建立活动,名单 {n} 位。', { n: fmtNum(n((r.data as { members: number }).members)) }));
+    setName(''); setMessage('');
+    setShow(false);
+    onCreated();
+  }
+
+  if (!show) {
+    return (
+      <div className="filters" style={{ marginBottom: 8 }}>
+        <button className="btn" disabled={!members.length} onClick={() => { setShow(true); setMsg(null); }}>
+          {t('用这份名单建立促销活动')}
+        </button>
+        {msg && <span className="muted" style={{ fontSize: 13 }}>{msg}</span>}
+      </div>
+    );
+  }
+  return (
+    <div className="lp-box">
+      <h3 style={{ marginTop: 0 }}>{t('建立促销活动')}</h3>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+        {t('会放进目前筛选结果里「同意收促销」的 {y} 位(另外 {x} 位未同意或未确认,不会放进去)。之后在「促销活动」看这批人发送后 30 / 60 天的消费。', {
+          y: fmtNum(members.length), x: fmtNum(total - members.length) })}
+      </p>
+      <div className="lp-form" style={{ maxWidth: 520 }}>
+        <label>{t('活动名称(例:10 月水龙头 8 折)')}</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <label>{t('发送日期')}</label>
+        <input type="date" value={sentOn} onChange={(e) => setSentOn(e.target.value)} />
+        <label>{t('讯息内容(选填,留底用)')}</label>
+        <textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} />
+        <div className="lp-row">
+          <button className="btn primary" disabled={busy || !members.length} onClick={create}>{t('建立')}</button>
+          <button className="btn" onClick={() => setShow(false)}>{t('取消')}</button>
+        </div>
+      </div>
+      {msg && <div className="notice" style={{ marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function CustomerPanel({ id, t, settings, templates, onClose, onSaved }: {
+  id: string; t: T; settings: Settings; templates: Template[]; onClose: () => void; onSaved: () => void;
+}) {
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ name: '', bm: '', bd: '', area: '', address: '', ctype: '', note: '' });
+  const [form, setForm] = useState({ name: '', bm: '', bd: '', area: '', address: '', ctype: '', note: '', consent: '', next: '' });
 
   async function load() {
     const r = await supabase.rpc('bi_customer', { p_member: id });
@@ -286,7 +579,7 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
     setForm({
       name: p?.name ?? cleanName(det.docs[0]?.debtor_name), bm: p?.birth_month ? String(p.birth_month) : '',
       bd: p?.birth_day ? String(p.birth_day) : '', area: p?.area ?? '', address: p?.address ?? '',
-      ctype: p?.customer_type ?? '', note: p?.note ?? '',
+      ctype: p?.customer_type ?? '', note: p?.note ?? '', consent: p?.consent ?? '', next: p?.next_contact ?? '',
     });
   }
   useEffect(() => { load(); }, [id]);
@@ -299,7 +592,7 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
     const r = await supabase.rpc('bi_customer_save', {
       p_member: d?.member_id ?? id, p_name: form.name, p_birth_month: form.bm ? n(form.bm) : null,
       p_birth_day: form.bd ? n(form.bd) : null, p_area: form.area, p_address: form.address,
-      p_customer_type: form.ctype || null, p_note: form.note,
+      p_customer_type: form.ctype || null, p_note: form.note, p_consent: form.consent || null, p_next_contact: form.next || null,
     });
     setBusy(false);
     if (r.error) { setMsg(r.error.message); return; }
@@ -309,19 +602,27 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
   }
 
   const key = d?.member_id ?? id;
-  const stores = Array.from(new Set((d?.docs ?? []).map((x) => STORE[x.company] ?? x.company))).sort().join(' + ');
-  const spent = (d?.docs ?? []).reduce((s, x) => s + n(x.amount), 0);
+  const docs = d?.docs ?? [];
+  const stores = Array.from(new Set(docs.map((x) => STORE[x.company] ?? x.company))).sort().join(' + ');
+  const spent = docs.reduce((s, x) => s + n(x.amount), 0);
+  const cutoff = localISO(new Date(Date.now() - 365 * 86400000));
+  const recent = docs.filter((x) => x.doc_date > cutoff);
+  const tier = tierOf({
+    last_date: docs[0]?.doc_date ?? null, spent_12m: recent.reduce((s, x) => s + n(x.amount), 0),
+    doc_count_12m: recent.filter((x) => n(x.amount) > 0).length,
+  }, settings);
   const p = d?.profile;
 
   return (
     <div className="card card-block lp-panel">
       <div className="lp-head">
         <div>
-          <h2 style={{ marginBottom: 2 }}>{form.name || fmtMember(key)}</h2>
+          <h2 style={{ marginBottom: 2 }}>{form.name || fmtMember(key)} {d && <TierTag tier={tier} t={t} />}</h2>
           <div className="muted" style={{ fontSize: 13 }}>
             {fmtMember(key)}{stores ? ` · ${stores}` : ''}
-            {d?.docs.length ? ` · ${t('首次消费')} ${fmtDate(d.docs[d.docs.length - 1].doc_date)}` : ''}
-            {d && !d.docs.length ? ` · ${t('还没有购买纪录')}` : ''}
+            {docs.length ? ` · ${t('首次消费')} ${fmtDate(docs[docs.length - 1].doc_date)}` : ''}
+            {d && !docs.length ? ` · ${t('还没有购买纪录')}` : ''}
+            {p?.last_contact_at ? ` · ${t('上次联络')} ${new Date(p.last_contact_at).toLocaleDateString('en-MY')}` : ''}
           </div>
         </div>
         <button className="btn" onClick={onClose}>{t('关闭')}</button>
@@ -332,9 +633,12 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
 
       {d && (
         <>
+          <div style={{ marginBottom: 8 }}>
+            <WaButtons id={key} name={form.name} templates={templates} t={t} onTouched={() => { load(); onSaved(); }} />
+          </div>
           <div className="grid-kpi">
-            <Kpi label={t('累计消费')} value={fmtRM(spent)} sub={t('{n} 张单', { n: fmtNum(d.docs.filter((x) => n(x.amount) > 0).length) })} />
-            <Kpi label={t('最后消费')} value={d.docs.length ? fmtDate(d.docs[0].doc_date) : '–'} sub={d.docs[0]?.sales_agent ? t('业务员 {a}', { a: d.docs[0].sales_agent }) : ''} />
+            <Kpi label={t('累计消费')} value={fmtRM(spent)} sub={t('{n} 张单', { n: fmtNum(docs.filter((x) => n(x.amount) > 0).length) })} />
+            <Kpi label={t('最后消费')} value={docs.length ? fmtDate(docs[0].doc_date) : '–'} sub={docs[0]?.sales_agent ? t('业务员 {a}', { a: docs[0].sales_agent }) : ''} />
           </div>
 
           <div className="lp-forms">
@@ -358,6 +662,17 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
                 <option value="">{t('请选择')}</option>
                 {TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
               </select>
+              <label>{t('同意收促销讯息')}</label>
+              <select value={form.consent} onChange={upd('consent')}>
+                <option value="">{t('未确认')}</option>
+                <option value="yes">{t('同意')}</option>
+                <option value="no">{t('不同意')}</option>
+              </select>
+              {p?.consent_at && (
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {t('{w} 于 {d} 登记', { w: p.consent_by ?? '', d: new Date(p.consent_at).toLocaleDateString('en-MY') })}
+                </div>
+              )}
             </div>
             <div className="lp-form">
               <h3>&nbsp;</h3>
@@ -367,6 +682,8 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
               <input value={form.address} onChange={upd('address')} />
               <label>{t('备注(例:装修中、喜欢黑色款)')}</label>
               <textarea value={form.note} onChange={upd('note')} rows={3} />
+              <label>{t('下次联络日期(到期会出现在跟进提醒)')}</label>
+              <input type="date" value={form.next} onChange={upd('next')} />
               <button className="btn primary" disabled={busy} onClick={save}>{t('储存')}</button>
               {p?.updated_at && (
                 <div className="muted" style={{ fontSize: 12 }}>
@@ -377,7 +694,7 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
           </div>
           {msg && <div className="notice" style={{ marginTop: 8 }}>{msg}</div>}
 
-          <h3>{t('购买历史({n} 张单)', { n: fmtNum(d.docs.length) })}</h3>
+          <h3>{t('购买历史({n} 张单)', { n: fmtNum(docs.length) })}</h3>
           <div className="table-scroll">
             <table className="data">
               <thead>
@@ -386,8 +703,8 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
                 </tr>
               </thead>
               <tbody>
-                {d.docs.length === 0 && <tr><td colSpan={5} className="muted">{t('没有消费纪录')}</td></tr>}
-                {d.docs.map((x) => {
+                {docs.length === 0 && <tr><td colSpan={5} className="muted">{t('没有消费纪录')}</td></tr>}
+                {docs.map((x) => {
                   const k = `${x.company}|${x.doc_type}|${x.doc_no}`;
                   return (
                     <Fragment key={k}>
@@ -426,6 +743,281 @@ function CustomerPanel({ id, t, onClose, onSaved }: { id: string; t: T; onClose:
         </>
       )}
     </div>
+  );
+}
+
+function pct(a: number, b: number): string {
+  return b ? `${((a / b) * 100).toFixed(0)}%` : '–';
+}
+
+function Campaigns({ t, isOwner, list, settings }: { t: T; isOwner: boolean; list: Customer[]; settings: Settings }) {
+  const [rows, setRows] = useState<Campaign[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function load() {
+    const r = await supabase.rpc('bi_campaigns');
+    setErr(r.error ? r.error.message : null);
+    setRows((r.data ?? []) as Campaign[]);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function exportMembers(c: Campaign) {
+    const r = await supabase.rpc('bi_campaign_members', { p_id: c.id });
+    if (r.error) { setErr(r.error.message); return; }
+    const byId = new Map(list.map((x) => [x.member_id, x]));
+    const ids = (r.data ?? []) as string[];
+    downloadCsv(`campaign_${c.id}_${c.sent_on}.csv`,
+      [t('电话(WhatsApp)'), t('电话'), t('名字'), t('分级'), t('最后消费'), t('近 12 个月')],
+      ids.map((id) => {
+        const x = byId.get(id);
+        return [waNumber(id), fmtMember(id), cleanName(x?.name), x ? t(TIER_LABEL[tierOf(x, settings)]) : '', x?.last_date ?? '',
+          n(x?.spent_12m).toFixed(2)];
+      }));
+  }
+
+  async function remove(c: Campaign) {
+    if (!window.confirm(t('删除活动「{n}」?名单与成效纪录都会删掉。', { n: c.name }))) return;
+    const r = await supabase.rpc('bi_campaign_delete', { p_id: c.id });
+    if (r.error) { setErr(r.error.message); return; }
+    load();
+  }
+
+  const today = localISO();
+  const ended = (c: Campaign, days: number) => localISO(new Date(new Date(c.sent_on + 'T00:00:00').getTime() + days * 86400000)) <= today;
+
+  return (
+    <div className="card card-block">
+      <h2>{t('促销活动')}</h2>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+        {t('成效 = 名单上的顾客在发送日之后 30 / 60 天内来买的人数与金额(含没看到讯息自己来的,当参考)。在上面「顾客」筛好名单后按「用这份名单建立促销活动」。')}
+      </p>
+      {err && <div className="notice">{t('查询失败:')}{err}</div>}
+      {rows === null && !err && <div className="loading">{t('载入中…')}</div>}
+      {rows && (
+        <div className="table-scroll">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>{t('发送日期')}</th><th>{t('活动')}</th><th className="num">{t('名单')}</th>
+                <th className="num">{t('30 天内来买')}</th><th className="num">{t('30 天营业额')}</th>
+                <th className="num">{t('60 天内来买')}</th><th className="num">{t('60 天营业额')}</th><th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && <tr><td colSpan={8} className="muted">{t('还没有活动')}</td></tr>}
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(c.sent_on)}</td>
+                  <td>{c.name}{c.message && <div className="muted" style={{ fontSize: 12 }}>{c.message}</div>}</td>
+                  <td className="num">{fmtNum(c.members)}</td>
+                  <td className="num">
+                    {fmtNum(c.buyers_30)} ({pct(n(c.buyers_30), n(c.members))}){ended(c, 30) ? '' : ` · ${t('进行中')}`}
+                  </td>
+                  <td className="num">{fmtNum(c.revenue_30, 2)}</td>
+                  <td className="num">
+                    {fmtNum(c.buyers_60)} ({pct(n(c.buyers_60), n(c.members))}){ended(c, 60) ? '' : ` · ${t('进行中')}`}
+                  </td>
+                  <td className="num">{fmtNum(c.revenue_60, 2)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn" onClick={() => exportMembers(c)}>{t('汇出名单')}</button>
+                    {isOwner && <button className="btn" onClick={() => remove(c)}>{t('删除')}</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonthlyReport({ t, settings }: { t: T; settings: Settings }) {
+  const [rows, setRows] = useState<Monthly[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [month, setMonth] = useState('');
+  const [agents, setAgents] = useState<Agent[] | null>(null);
+
+  async function load() {
+    const r = await supabase.rpc('bi_customer_monthly', { p_months: 12 });
+    setErr(r.error ? r.error.message : null);
+    const data = ((r.data ?? []) as Monthly[]).slice().reverse();
+    setRows(data);
+    if (data.length) pick(data[0].month);
+  }
+
+  async function pick(m: string) {
+    setMonth(m);
+    setAgents(null);
+    const from = new Date(m.slice(0, 10) + 'T00:00:00');
+    const to = new Date(from.getFullYear(), from.getMonth() + 1, 0);
+    const r = await supabase.rpc('bi_customer_agents', { p_from: localISO(from), p_to: localISO(to) });
+    if (r.error) { setErr(r.error.message); return; }
+    setAgents((r.data ?? []) as Agent[]);
+  }
+
+  return (
+    <details className="card card-block" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && rows === null) load(); }}>
+      <summary><h2 style={{ display: 'inline' }}>{t('每月顾客报告')}</h2></summary>
+      <p className="muted" style={{ fontSize: 13 }}>
+        {t('新客 = 那个月第一次买;回头客 = 以前买过、那个月又来;流失 = 最后一次消费满 {l} 天、在那个月变成流失的人数。只算门市散客,本月是到今天为止。', {
+          l: settings.lapsed_days })}
+      </p>
+      {err && <div className="notice">{t('查询失败:')}{err}</div>}
+      {rows === null && !err && <div className="loading">{t('载入中…')}</div>}
+      {rows && (
+        <div className="table-scroll">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>{t('月份')}</th><th className="num">{t('来买的顾客')}</th><th className="num">{t('新客')}</th>
+                <th className="num">{t('回头客')}</th><th className="num">{t('回头客占比')}</th>
+                <th className="num">{t('新客营业额')}</th><th className="num">{t('回头客营业额')}</th><th className="num">{t('流失')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.month} className={'lp-click' + (r.month === month ? ' lp-sel' : '')} onClick={() => pick(r.month)}>
+                  <td>{r.month.slice(0, 7)}</td>
+                  <td className="num">{fmtNum(r.active)}</td>
+                  <td className="num">{fmtNum(r.new_customers)}</td>
+                  <td className="num">{fmtNum(r.returning_customers)}</td>
+                  <td className="num">{pct(n(r.returning_customers), n(r.active))}</td>
+                  <td className="num">{fmtNum(r.new_revenue, 2)}</td>
+                  <td className="num">{fmtNum(r.returning_revenue, 2)}</td>
+                  <td className="num">{fmtNum(r.lapsed)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {month && (
+        <>
+          <h3>{t('{m} 各业务员的顾客', { m: month.slice(0, 7) })}</h3>
+          {agents === null && <div className="loading">{t('载入中…')}</div>}
+          {agents && (
+            <div className="table-scroll">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>{t('业务员')}</th><th className="num">{t('顾客')}</th><th className="num">{t('回头客')}</th>
+                    <th className="num">{t('新客')}</th><th className="num">{t('营业额')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agents.length === 0 && <tr><td colSpan={5} className="muted">{t('这个月没有门市散客的单')}</td></tr>}
+                  {agents.map((a) => (
+                    <tr key={a.agent}>
+                      <td>{a.agent}</td>
+                      <td className="num">{fmtNum(a.customers)}</td>
+                      <td className="num">{fmtNum(a.returning_customers)}</td>
+                      <td className="num">{fmtNum(a.new_customers)}</td>
+                      <td className="num">{fmtNum(a.revenue, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </details>
+  );
+}
+
+function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
+  t: T; isOwner: boolean; settings: Settings; templates: Template[]; onChanged: () => void;
+}) {
+  const [s, setS] = useState({
+    vip: String(settings.vip_min_12m), docs: String(settings.regular_min_docs), lapsed: String(settings.lapsed_days),
+    lead: String(settings.lead_follow_days), bday: String(settings.birthday_days),
+  });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [edit, setEdit] = useState<Template | null>(null);
+  useEffect(() => {
+    setS({
+      vip: String(settings.vip_min_12m), docs: String(settings.regular_min_docs), lapsed: String(settings.lapsed_days),
+      lead: String(settings.lead_follow_days), bday: String(settings.birthday_days),
+    });
+  }, [settings]);
+
+  async function saveSettings() {
+    const r = await supabase.rpc('bi_customer_set_settings', {
+      p_vip_min_12m: n(s.vip), p_regular_min_docs: n(s.docs), p_lapsed_days: n(s.lapsed),
+      p_lead_follow_days: n(s.lead), p_birthday_days: n(s.bday),
+    });
+    setMsg(r.error ? r.error.message : t('已储存。'));
+    if (!r.error) onChanged();
+  }
+
+  async function saveTemplate() {
+    if (!edit) return;
+    const r = await supabase.rpc('bi_wa_template_save', { p_id: edit.id || null, p_title: edit.title, p_body: edit.body, p_sort: n(edit.sort) });
+    setMsg(r.error ? r.error.message : t('已储存。'));
+    if (!r.error) { setEdit(null); onChanged(); }
+  }
+
+  async function removeTemplate(x: Template) {
+    if (!window.confirm(t('删除范本「{n}」?', { n: x.title }))) return;
+    const r = await supabase.rpc('bi_wa_template_delete', { p_id: x.id });
+    setMsg(r.error ? r.error.message : null);
+    if (!r.error) onChanged();
+  }
+
+  const upd = (k: keyof typeof s) => (e: { target: { value: string } }) => setS({ ...s, [k]: e.target.value });
+
+  return (
+    <details className="card card-block">
+      <summary><h2 style={{ display: 'inline' }}>{t('设定:分级门槛与 WhatsApp 范本')}</h2></summary>
+      {msg && <div className="notice" style={{ marginTop: 8 }}>{msg}</div>}
+      <div className="lp-forms">
+        <div className="lp-form">
+          <h3>{t('分级与提醒')}</h3>
+          <label>{t('VIP:近 12 个月消费至少 (RM)')}</label>
+          <input value={s.vip} onChange={upd('vip')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('常客:近 12 个月至少几张单')}</label>
+          <input value={s.docs} onChange={upd('docs')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('流失:超过几天没来')}</label>
+          <input value={s.lapsed} onChange={upd('lapsed')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('潜在客:建档几天没联络就提醒')}</label>
+          <input value={s.lead} onChange={upd('lead')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('生日:提前几天提醒')}</label>
+          <input value={s.bday} onChange={upd('bday')} inputMode="numeric" disabled={!isOwner} />
+          {isOwner ? <button className="btn primary" onClick={saveSettings}>{t('储存')}</button>
+            : <div className="muted" style={{ fontSize: 12 }}>{t('只有老板可以改')}</div>}
+        </div>
+        <div className="lp-form" style={{ maxWidth: 560 }}>
+          <h3>{t('WhatsApp 范本')}</h3>
+          <div className="muted" style={{ fontSize: 12 }}>{t('内容里的 {name} 会换成顾客名字。')}</div>
+          {templates.map((x) => (
+            <div key={x.id} className="lp-tpl">
+              <b>{x.title}</b>
+              <div className="muted" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{x.body}</div>
+              <div className="lp-row">
+                <button className="btn" onClick={() => setEdit({ ...x })}>{t('修改')}</button>
+                <button className="btn" onClick={() => removeTemplate(x)}>{t('删除')}</button>
+              </div>
+            </div>
+          ))}
+          {!edit && <button className="btn" onClick={() => setEdit({ id: 0, title: '', body: 'Hi {name}，', sort: templates.length + 1 })}>{t('新增范本')}</button>}
+          {edit && (
+            <div className="lp-box">
+              <label>{t('标题(按钮上显示)')}</label>
+              <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+              <label>{t('内容')}</label>
+              <textarea rows={4} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
+              <label>{t('排序')}</label>
+              <input value={String(edit.sort)} onChange={(e) => setEdit({ ...edit, sort: n(e.target.value) })} inputMode="numeric" />
+              <div className="lp-row">
+                <button className="btn primary" onClick={saveTemplate}>{t('储存')}</button>
+                <button className="btn" onClick={() => setEdit(null)}>{t('取消')}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }
 

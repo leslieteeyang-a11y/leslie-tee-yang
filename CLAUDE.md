@@ -114,8 +114,16 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 累计消费）、`bi_customer(p_member)`、`bi_customer_save(...)`（没买过的潜在客也能新增）、`bi_customer_missing_phone(days)`；
 owner / manager / sales 可看可改，**汇出 CSV 只给 owner / manager**（前端控制）。AutoCount 不写入。Migration `customer_profiles`
 （+ `_faster_list`、`customer_doc_parse_names_once`），留底 `docs/bi_web/customer_profiles.sql`。前端沿用 `/loyalty.html` 网址与档名
-（`docs/bi_web/loyalty/`，overlay 以积分页上线版 dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV 为底）；Claude 的 Vercel 连接器能读不能建部署（403），
-由使用者在 SERVER 双击 `deploy_bi_web.bat`（金钥在 SERVER 的 `vercel_token.json`）。
+（`docs/bi_web/loyalty/`）；Claude 的 Vercel 连接器能读不能建部署（403），
+由使用者在 SERVER 双击 `deploy_bi_web.bat`（金钥在 SERVER 的 `vercel_token.json`）。第一版 9/29 已上线（dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz）。
+**顾客资料第二版（2026-09-30，migration `customer_crm`，留底 `docs/bi_web/customer_crm.sql`）**，使用者 7 项全选：
+跟进提醒（7 天内生日、潜在客建档 7 天没联络、员工自订「下次联络日」到期；按 WhatsApp / 已联络 → `bi_customer_touch` 记
+`last_contact_at` 就消失）、一键 WhatsApp（范本 `bi.customer_wa_template`，`{name}` 换名字，wa.me 连结）、买了 A 没买 B（前端筛选）、
+同意收促销 `consent` = yes / no / null(未确认)，**汇出 CSV 与建活动只收 yes**（`bi_campaign_create` 在数据库端再过滤一次）、分级
+（前端 `tierOf`：没买过 = 潜在客；超过 365 天 = 流失；近 12 个月 ≥ RM10,000 = VIP；近 12 个月 ≥ 2 张单 = 常客；其余一般；门槛存
+`bi.customer_settings`，owner 可改）、促销活动（`bi.customer_campaign(_member)`，成效 = 名单上的人发送后 30 / 60 天的消费）、每月顾客报告
+（`bi_customer_monthly` 新客 / 回头客 / 流失、`bi_customer_agents` 各业务员）。`bi_customer_save` 改成 10 个参数（旧 8 参数版已删，
+第二版网页上线前线上页的「储存」会失败）。overlay 以 dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz 为底，只换 Loyalty.tsx / loyalty.ts / loyalty.css。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
@@ -165,7 +173,7 @@ latestDeployment）。
 | `scripts/deploy_bi_web.py` + `deploy_bi_web.bat` | BI 网页（Vercel homeworks-bi）改版上线：用使用者自己的 Vercel 金钥（`vercel_token.json`，不进 git），线上档原样引用、只传改版目录（预设 `docs/bi_web/loyalty/`）的档；`overlay.json` 写明换掉哪些线上档与当初的底，线上被改过就停；`--check` 只检查、`--set-key` 换金钥 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，65 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
+| `tests/` | `python -m pytest tests -q`，67 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）
