@@ -2,11 +2,12 @@
 title HomeWorks - branch actual sales to BI
 cd /d "%~dp0"
 echo.
-echo  HomeWorks - branch (JB Southern) actual sales to HomeWorks BI
-echo  ------------------------------------------------------------
+echo  HomeWorks - branch (JB Southern / KL) actual sales to HomeWorks BI
+echo  -----------------------------------------------------------------
 echo  1. paste the Supabase secret key (or press Enter to reuse the saved one)
 echo  2. test the connection
-echo  3. push Jan .. last month of this year, then register the monthly schedule
+echo  3. push Jan .. this month, then register the daily schedule
+echo  (which branch = read from the account book's company name: SOUTHERN or KL)
 echo.
 where python >nul 2>nul
 if errorlevel 1 (

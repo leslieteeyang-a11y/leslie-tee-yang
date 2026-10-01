@@ -22,7 +22,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import load_autocount_config  # noqa: E402
 
-BRANCH_COMPANY = "HOMEWORKSSOUTHERN"      # BI 同步管线里分行（JB Southern）账套的公司代码
+# 分行账套 → BI 公司代码。键是公司名称里的关键字（AutoCount Profile.CompanyName），值是 BI 的 company。
+# 新开分行在这里加一行即可（BI 网页 lib/supabase.ts 的 COMPANIES 也要加同一个代码）。
+BRANCHES = {"SOUTHERN": "HOMEWORKSSOUTHERN", "KL": "HOMEWORKSKL"}
+BRANCH_COMPANY = BRANCHES["SOUTHERN"]      # 旧名，给仍引用它的地方用
 CHANNEL_KEYS = ("shopee", "lazada", "cash", "online", "referral", "shuigong", "southern", "tiktok", "shopify")
 
 
@@ -193,6 +196,19 @@ def setup_flow(cfg: dict) -> None:
         sys.exit("有月份失败，细节在 logs\\ 里最新的档案。")
 
 
+def branch_company_for(name: str | None) -> str | None:
+    """公司名称 → BI 公司代码：'HOMEWORKS (SOUTHERN) SDN. BHD.' → HOMEWORKSSOUTHERN，'HOMEWORKS KL SDN BHD' → HOMEWORKSKL；
+    认不出（例如总公司 'HOMEWORKS SDN. BHD.'）回 None。KL 用整词比对，避免名字里碰巧有 KL 两个字母。"""
+    import re
+    if not name:
+        return None
+    up = name.upper()
+    for key, code in BRANCHES.items():
+        if re.search(rf"(?<![A-Z]){key}(?![A-Z])", up):
+            return code
+    return None
+
+
 def book_company_name_of(cfg: dict):
     """连上 autocount.json 指定的账套读公司名称；连不上就交给使用者去查（回 None 由库名判断）。"""
     from autocount_db import book_company_name, connect
@@ -203,8 +219,10 @@ def book_company_name_of(cfg: dict):
         return None
 
 
-def setup_branch_flow(cfg: dict) -> None:
-    """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。"""
+def setup_branch_flow(cfg: dict, company_arg: str | None = None) -> None:
+    """setup_branch.bat 用（分行电脑）：贴金钥 → 测连线 → 今年 1 月到上个月的分行实际销售额推进 BI。
+    分行是哪一家，先看账套的公司名称（SOUTHERN → HOMEWORKSSOUTHERN、KL → HOMEWORKSKL）；
+    读不到名称时，可用 --company 指定，或沿用 autocount.json 已填的 supabase.company。"""
     import subprocess
     from datetime import date
     from autocount_db import CONFIG_PATH
@@ -213,21 +231,31 @@ def setup_branch_flow(cfg: dict) -> None:
     hq = example["connection"].get("preferred_database", "")
     if not db:
         sys.exit("autocount.json 还没有连线设定。请先双击 setup_autocount.bat。")
+    codes = " / ".join(BRANCHES.values())
+    if company_arg and company_arg.upper() not in BRANCHES.values():
+        sys.exit(f"[X] --company 只能是 {codes}，不是 {company_arg}。要加新分行请先在 scripts/supabase_push.py 的 BRANCHES 加一行。")
     name = book_company_name_of(cfg)
-    fix = ("    请双击 choose_book.bat，在清单里选分行（JB Southern）的账套，再跑一次 setup_branch.bat。\n"
+    fix = ("    请双击 choose_book.bat，在清单里选分行（JB Southern / KL）的账套，再跑一次 setup_branch.bat。\n"
            "    清单里没有分行账套的话，代表它在别台电脑：照抄分行 AutoCount 登入画面的 Server 名称输入。")
+    sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
+    detected = branch_company_for(name)
     if name is not None:
         print(f"账套 {db} 的公司名称：{name}")
-        if "SOUTHERN" not in name.upper():
-            sys.exit(f"[X] 这个账套是「{name}」，不是分行（公司名称没有 SOUTHERN）。\n{fix}")
+        if detected is None:
+            sys.exit(f"[X] 这个账套是「{name}」，不是分行（公司名称没有 {' / '.join(BRANCHES)}）。\n{fix}")
     elif hq and db.upper() == hq.upper():   # 读不到公司名称才退回看库名；分行库名 AED_HOMEWORKSSBJB 只是前缀相同，要用相等比
         sys.exit(f"[X] 目前连的是总公司账套 {db}，不是分行的。\n{fix}")
-    sb = {**(example.get("supabase") or {}), **(cfg.get("supabase") or {})}
-    if not sb.get("company"):
-        sb["company"] = BRANCH_COMPANY          # 分行账套名不一定含 SOUTHERN，BI 的公司代码固定是这个
+    company = (company_arg or "").upper() or detected or sb.get("company")
+    if not company:
+        sys.exit(f"[X] 读不到账套的公司名称，无法判断是哪家分行。请加参数指定：\n"
+                 f"    python scripts\\supabase_push.py --setup-branch --company HOMEWORKSKL   （或 {codes}）")
+    if detected and company != detected:
+        print(f"[!] 账套公司名称是「{name}」（{detected}），但指定的是 {company}；照指定的推。")
+    if sb.get("company") != company:
+        sb["company"] = company
         cfg["supabase"] = sb
         CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"账套 {db} → BI 公司代码 {sb['company']}")
+    print(f"账套 {db} → BI 公司代码 {company}")
     cfg = set_key(cfg)
     check(cfg)
     start = f"{date.today().year}-01"
@@ -240,7 +268,8 @@ def setup_branch_flow(cfg: dict) -> None:
 def main():
     cfg = load_autocount_config()
     if "--setup-branch" in sys.argv:
-        setup_branch_flow(cfg)
+        company_arg = sys.argv[sys.argv.index("--company") + 1] if "--company" in sys.argv else None
+        setup_branch_flow(cfg, company_arg)
         return
     if "--setup" in sys.argv:
         setup_flow(cfg)

@@ -128,8 +128,8 @@ export default function App() {
     : role === 'sales' ? TABS.filter((t) => SALES_TABS.includes(t.key))
     : role === 'owner' ? TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom')) // 月报/电商月报目前只算总部
     : TABS.filter((t) => !OWNER_ONLY.includes(t.key));
-  // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行 JB Southern 有资料:老板切到分行、或分行店长登入时才显示
-  const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || COMPANY === 'HOMEWORKSSOUTHERN');
+  // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行账套有资料(JB Southern、KL…):老板切到分行、或分行店长登入时才显示
+  const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || !isHQ);
   const canWrite = role === 'owner' || role === 'buyer';
   const showProfit = role !== 'manager' && role !== 'sales';
 

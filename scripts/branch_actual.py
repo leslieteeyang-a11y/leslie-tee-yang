@@ -25,9 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config          # noqa: E402
 from autocount_extract import month_range as month_bounds               # noqa: E402
 from backfill import month_range                                        # noqa: E402
-from supabase_push import _request, company_of, supabase_config         # noqa: E402
+from supabase_push import BRANCHES, _request, company_of, supabase_config  # noqa: E402
 
-VERSION = "branch-2026-09-28b"
+VERSION = "branch-2026-10-01c"
 AGENT_OK = "LTRIM(RTRIM(ISNULL(h.SalesAgent, ''))) <> ''"     # 排除 agent 空白的单
 
 
@@ -180,8 +180,9 @@ def main():
     db = cfg["connection"]["database"]
     company = (cfg.get("supabase") or {}).get("company") or company_of(cfg)
     print(f"账套 {db} → BI 公司代码 {company}")
-    if "SOUTHERN" not in company.upper():
-        print("[!] 这个账套看起来不是分行（名称没有 SOUTHERN）。若确定要用，请在 autocount.json 的 supabase.company 填 BI 的公司代码。")
+    if company.upper() not in BRANCHES.values():
+        print(f"[!] {company} 不是已知的分行公司代码（{' / '.join(BRANCHES.values())}）。"
+              "请重跑 setup_branch.bat；新分行要先在 scripts/supabase_push.py 的 BRANCHES 加上。")
         if not a.dry_run:
             sys.exit(2)
     if a.backfill:

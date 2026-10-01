@@ -31,6 +31,7 @@ const d: Record<string, string> = {
   '载入中…': 'Loading…',
   '总部': 'HQ',
   'JB Southern': 'JB Southern',
+  'KL': 'KL',
   '正在看:{c}': 'Viewing: {c}',
   '退出': 'Sign out',
   '当前账号看不到任何数据:要么该邮箱未加入白名单(bi.allowed_users),要么同步尚未运行。请联系管理员。': 'This account cannot see any data: either the email is not on the allow list (bi.allowed_users) or the sync has not run yet. Please contact the administrator.',

@@ -189,8 +189,10 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
         supabase.from('bi_report_month_sku').select('month,platform,sku,qty').eq('company', COMPANY)
           .gte('month', `${year}-01-01`).lte('month', `${year}-12-31`),
         supabase.from('bi_report_month_top10').select('direction,rank,sku,lazada_qty,shopee_qty').eq('company', COMPANY).eq('month', sel).order('rank'),
-        // 分行(JB Southern 账套)当月实际销售额,按类别,由分行电脑推送(bi_branch_actual_upsert)
-        supabase.from('bi_branch_actual_month').select('scope,category,so_amount,so_open,iv_amount,iv_direct,cn_amount,actual_amount').eq('month', sel),
+        // 分行(JB Southern 账套)当月实际销售额,按类别,由分行电脑推送(bi_branch_actual_upsert)。
+        // 这栏在 Southern 旁边,只取 Southern;KL 等其他分行的实际销售在各自的「实际销售」分页看
+        supabase.from('bi_branch_actual_month').select('scope,category,so_amount,so_open,iv_amount,iv_direct,cn_amount,actual_amount')
+          .eq('company', 'HOMEWORKSSOUTHERN').eq('month', sel),
       ]);
       const e = a.error ?? b.error ?? c.error ?? d.error;
       setErr(e ? e.message : null);

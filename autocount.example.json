@@ -103,7 +103,7 @@
     "count": 10
   },
   "supabase": {
-    "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。company：推进 BI 用的公司代码，留空 = 账套名去掉 AED_（总部 HOMEWORKSSB、分行 HOMEWORKSSOUTHERN）。",
+    "_说明": "HomeWorks BI（Supabase）。填了 service_key 之后，每月产生报表会自动把成品推进 BI 的 bi.report_month_* 表。service_key 在 Supabase 后台 Project Settings > API > service_role（保密，autocount.json 不会上传）。留空 = 不推送。company：推进 BI 用的公司代码，留空 = 账套名去掉 AED_（总部 HOMEWORKSSB；分行由 setup_branch 依公司名称自动填：JB HOMEWORKSSOUTHERN、KL HOMEWORKSKL）。",
     "url": "https://vwljnypzgfqhatkgulqs.supabase.co",
     "publishable_key": "sb_publishable__elDWkBfCa5ajEQLR0NmRQ_p5a3089Q",
     "service_key": "",

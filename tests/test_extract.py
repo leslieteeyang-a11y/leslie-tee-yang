@@ -190,20 +190,51 @@ def test_setup_branch_trusts_company_name_over_db_name(tmp_path, monkeypatch):
         supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}})
 
 
-def test_setup_branch_sets_branch_company(tmp_path, monkeypatch):
-    """分行账套名不一定含 SOUTHERN；流程要自动把 BI 公司代码填成 HOMEWORKSSOUTHERN 并存档。"""
+def test_setup_branch_needs_company_when_name_unknown(tmp_path, monkeypatch):
+    """读不到公司名称、库名也不是总公司时，不能再预设成 JB Southern（现在有两家分行）：要求 --company，并把它存档。"""
     import json
+    import pytest
     import supabase_push
     target = tmp_path / "autocount.json"
     monkeypatch.setattr("autocount_db.CONFIG_PATH", target)
     monkeypatch.setattr(supabase_push, "set_key", lambda cfg: (_ for _ in ()).throw(SystemExit("stop")))
     monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: None)
-    try:
+    with pytest.raises(SystemExit, match="--company"):
         supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}})
-    except SystemExit:
-        pass
-    saved = json.loads(target.read_text(encoding="utf-8"))
-    assert saved["supabase"]["company"] == "HOMEWORKSSOUTHERN"
+    assert not target.exists()
+    with pytest.raises(SystemExit, match="stop"):
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}}, "homeworkskl")
+    assert json.loads(target.read_text(encoding="utf-8"))["supabase"]["company"] == "HOMEWORKSKL"
+    with pytest.raises(SystemExit, match="只能是"):
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSJB"}}, "HOMEWORKSPENANG")
+
+
+def test_branch_company_detected_from_book_name():
+    """KL 分行（HOMEWORKS KL SDN BHD）与 JB Southern 都要能从账套公司名称认出；总公司认不出；KL 要整词比对。"""
+    import json
+    import pytest
+    import supabase_push
+    f = supabase_push.branch_company_for
+    assert f("HOMEWORKS (SOUTHERN) SDN. BHD.") == "HOMEWORKSSOUTHERN"
+    assert f("HOMEWORKS KL SDN BHD") == "HOMEWORKSKL"
+    assert f("Homeworks KL Sdn. Bhd.") == "HOMEWORKSKL"
+    assert f("HOMEWORKS SDN. BHD.") is None
+    assert f("SPARKLE HOMEWORKS SDN BHD") is None          # KL 夹在单字里不算
+    assert f(None) is None
+
+
+def test_setup_branch_kl_book_saves_kl_company(tmp_path, monkeypatch):
+    import json
+    import pytest
+    import supabase_push
+    target = tmp_path / "autocount.json"
+    monkeypatch.setattr("autocount_db.CONFIG_PATH", target)
+    monkeypatch.setattr(supabase_push, "set_key", lambda cfg: (_ for _ in ()).throw(SystemExit("stop")))
+    monkeypatch.setattr(supabase_push, "book_company_name_of", lambda cfg: "HOMEWORKS KL SDN BHD")
+    with pytest.raises(SystemExit, match="stop"):
+        supabase_push.setup_branch_flow({"connection": {"database": "AED_HOMEWORKSSB"},
+                                         "supabase": {"company": "HOMEWORKSSOUTHERN"}})   # 从 JB 复制来的旧设定要被改掉
+    assert json.loads(target.read_text(encoding="utf-8"))["supabase"]["company"] == "HOMEWORKSKL"
 
 
 def test_agent_detail_attaches_direct_invoice_amount():

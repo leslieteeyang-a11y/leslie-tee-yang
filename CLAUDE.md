@@ -105,6 +105,13 @@ live_sales 全 0 时保留旧值。前端 `src/components/AdsEditor.tsx`（EcomR
 建议转仓清单 CSV（每个负数仓从库存最多的正数仓补）；C 真正短少 → 盘点表 CSV。整理顺序：定仓位规则 → 关服务项目库存控制 →
 照清单转仓 → 分仓盘点 → 每周看这页。**写入 AutoCount 的第一条流程改为「盘点差异 → Stock Adjustment」**（比 SO 有用）；
 API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试账套 AED_HOMEWORKSSB_TEST + 跑 `check_sdk.bat`。
+**第二家分行 HOMEWORKS KL SDN BHD（2026-10-01）**：分行流程改通用。`supabase_push.BRANCHES` = {SOUTHERN: HOMEWORKSSOUTHERN, KL: HOMEWORKSKL}，
+`branch_company_for(公司名称)` 整词比对关键字决定 BI 公司代码；读不到名称时要 `--setup-branch --company HOMEWORKSKL`（不再预设 Southern）。
+`branch_actual.py` 版本 branch-2026-10-01c，只接受 BRANCHES 里的代码。BI 前端 `lib/supabase.ts` COMPANIES 加 HOMEWORKSKL: 'KL'（这个档原本不在仓库，
+2026-10-01 从 Vercel 取回重建后放进 docs/bi_web/src/lib/）；App.tsx 的「实际销售」分页改成非总部都显示；EcomReport 的「当月实际销售额」栏
+固定只取 HOMEWORKSSOUTHERN。Supabase 不用改结构（RLS 与视图都按 company 过滤）；KL 店长 / 订货员帐号要加进 `bi.allowed_users`（company = HOMEWORKSKL）。
+**注意**：BI 的销售 / 库存 / 应收等「每日同步」管线（不在 GitHub，SERVER 上的 bi_sync）目前只同步 HOMEWORKSSB 与 HOMEWORKSSOUTHERN；KL 要有完整 BI 得把那条管线
+也接到 KL 的账套，本专案只负责「实际销售」那一页。KL 在总公司账套里的客户代号（2026-10-01 时 dim_customer 还没有）出现后，要加进 channel_rules 当新渠道，否则会落到水工。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
 字典键就是中文原文，英文缺键退回中文；右上角 `LangToggle` 记 localStorage `bi_lang`），字典分七档在 `src/i18n/`。
 完整原始码副本在 `docs/bi_web/src/`；分批部署工具 `docs/bi_web/mkpayload.py` + `deploy_manifest.json`，

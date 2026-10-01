@@ -42,3 +42,11 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 - 顺序：infra（i18n 骨架 + App + 空字典）→ manager → finance → ecom → pages1 → pages2 → purchasing。中途每批都是可用状态
   （还没翻的页面就显示中文）。
 - 使用者看到旧版时按 Ctrl+F5 强制重新载入。
+
+## 2026-10-01：第二家分行 HOMEWORKS KL（公司代码 HOMEWORKSKL）
+- `src/lib/supabase.ts` 现在也在这里了（之前仓库里没有；从 Vercel 档案树抓回、尾段依 App.tsx 的用法重建）。`COMPANIES` 加
+  `HOMEWORKSKL: 'KL'`，`HQ` 常数；非老板角色登入后固定切到 `allowed_users.company`。
+- `App.tsx`：「实际销售」分页改成 `!isHQ` 就显示（任何分行）。`EcomReport.tsx`：Southern 旁那栏固定 `.eq('company','HOMEWORKSSOUTHERN')`，
+  不然老板看总部时会把 KL 的数字也加进去。
+- 部署批 `kl`（mkpayload.py）：supabase.ts + App.tsx + EcomReport.tsx + core.ts。
+- 加 KL 使用者：`insert into bi.allowed_users(email, role, company, note) values ('…', 'manager', 'HOMEWORKSKL', 'KL店长')`（用 Supabase MCP 跑）。

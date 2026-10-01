@@ -12,6 +12,7 @@ BATCH = {
   "ecom": ["src/pages/EcomReport.tsx", "src/components/AdsEditor.tsx", "src/pages/BranchActual.tsx", "src/i18n/ecom.ts"],
   "pages1": ["src/pages/Dashboard.tsx", "src/pages/ProfitLoss.tsx", "src/pages/StockPage.tsx", "src/pages/ItemRanking.tsx", "src/i18n/pages1.ts"],
   "pages2": ["src/pages/OnePager.tsx", "src/pages/SalesLines.tsx", "src/pages/PriceEffect.tsx", "src/pages/SlowMovers.tsx", "src/i18n/pages2.ts"],
+  "kl": ["src/lib/supabase.ts", "src/App.tsx", "src/pages/EcomReport.tsx", "src/i18n/core.ts"],
   "purchasing": ["src/pages/Purchasing.tsx", "src/pages/OpenOrders.tsx", "src/pages/SyncLog.tsx", "src/i18n/purchasing.ts"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
