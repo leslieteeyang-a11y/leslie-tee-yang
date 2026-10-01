@@ -98,11 +98,21 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   AutoCount 预计交货日（晚于开单日才算）> 开单日 + 供应商交期（与 BI `bi_po_open` 同规则）。120 天以上且没人跟进的旧单
   预设隐藏（总部有 ~120 张多年没结的本地 PO）；可标「关闭」。只有订货「可编辑」看得到单价 / 金额。中国货（CSxxx 供应商）
   在 AutoCount 多数没有单价，金额为 0 是正常的。
+- 已上线（打卡 + 补卡，2026-10-01，移植自使用者朋友给的 AttendX 白牌 HR 系统，规则见 AttendX docs/FEATURES-AND-RULES.md §2–3）：
+  模块 `attendance`（所有部门「可编辑」= 打自己的卡；主管升「可审批」= 审自己部门补卡、看团队）；HR 设定要 `hr` ≥ 可编辑。
+  `ops.attendance`（一人一天一笔：上班 / 午休 / 下班 + 自拍路径 + GPS）、`ops.punch_correction`（主管 → HR 两段；HR 可直接定案）、
+  `ops.geofence`（打卡点，按分店）、`ops.hr_shift`（班别，预设时间沿用 AttendX，**要请 HR 改成 HomeWorks 实际时间**）、
+  `ops.holiday`、`ops.work_saturday`、`ops.field_checkin`；`ops.staff` 加 manager_id / shift / geofence_exempt / friday_prayer / join_date。
+  自拍放 Storage 私有 bucket `ops-hr`（路径 `<staff_id>/…`，policy 呼叫 `public.ops_hr_file_ok`），前端压到 480px JPEG 约 30 KB。
+  时间一律 Asia/Kuala_Lumpur；测试用 `ops.fake_now`（只在有 `ops_test_marker` schema 的本机测试库生效）。
+  测试：`portal/supabase/tests/att_test.sql`（run.sh 会接著 ops_test.sql 跑）。管理层预设对「人事」可审批 → 店长批补卡一次定案。
+  AttendX 原始码只在对话上传的 zip 里，没有放进 repo；之后的请假、加班、薪资照同样方式逐模块搬。
+  **注意**：Supabase 资料库已 434 MB（免费方案上限 500 MB，主要是 BI 资料），照片放 Storage 不占资料库。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
-- 路线图：2 销售；
+- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 → 加班 → 薪资；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，

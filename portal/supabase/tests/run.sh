@@ -9,3 +9,4 @@ trap 'dropdb "$DB"' EXIT
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/stub_supabase.sql" >/dev/null
 for f in "$HERE"/../migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$f" >/dev/null; done
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/ops_test.sql"
+psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/att_test.sql"

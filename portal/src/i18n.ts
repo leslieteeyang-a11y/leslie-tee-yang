@@ -11,6 +11,8 @@ import { DICT_A } from "./i18n-dict-a";
 import { DICT_B } from "./i18n-dict-b";
 import { DICT_DB } from "./i18n-dict-db";
 import { PATTERNS } from "./i18n-patterns";
+import { DICT_ATT } from "./i18n-dict-att";
+import { PATTERNS_ATT } from "./i18n-patterns-att";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -28,7 +30,8 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_A, ...DICT_B, ...DICT_DB };
+const DICT: Record<string, string> = { ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT };
+const ALL_PATTERNS = [...PATTERNS, ...PATTERNS_ATT];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */
@@ -39,9 +42,15 @@ export function tr(text: string): string {
   const core = text.trim();
   const hit = DICT[core];
   if (hit !== undefined) return lead + hit + trail;
-  for (const [re, fn] of PATTERNS) {
+  for (const [re, fn] of ALL_PATTERNS) {
     const m = core.match(re);
     if (m) return lead + fn(m, (s) => DICT[s] ?? s) + trail;
+  }
+  // 用「 · 」串起来的几段（例：免打卡范围 · 到职 2026-09-01）：每段各自翻
+  if (core.includes(" · ")) {
+    const parts = core.split(" · ");
+    const out = parts.map((x) => tr(x));
+    if (out.some((x, i) => x !== parts[i])) return lead + out.join(" · ") + trail;
   }
   return text;
 }
@@ -58,8 +67,6 @@ function translateNode(node: Node): void {
   if (node.nodeType !== Node.ELEMENT_NODE) return;
   const el = node as Element;
   if (el.tagName === "SCRIPT" || el.tagName === "STYLE") return;
-  // 输入框里员工正在打的字不动
-  if (el.tagName === "TEXTAREA") return;
   for (const a of ATTRS) {
     const v = el.getAttribute(a);
     if (v && CJK.test(v)) {
@@ -67,6 +74,8 @@ function translateNode(node: Node): void {
       if (t !== v) el.setAttribute(a, t);
     }
   }
+  // 输入框里员工正在打的字不动（placeholder 上面已经翻了）
+  if (el.tagName === "TEXTAREA") return;
   el.childNodes.forEach(translateNode);
 }
 

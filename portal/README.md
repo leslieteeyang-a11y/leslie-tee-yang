@@ -1,6 +1,6 @@
 # HomeWorks 营运系统（员工各部门用）
 
-给各部门员工用的网页：首页、任务、审批、员工与权限、订货与 ETA；仓库、送货、HR… 依路线图陆续加上。
+给各部门员工用的网页：首页、任务、审批、员工与权限、订货与 ETA、打卡；仓库、送货、HR… 依路线图陆续加上。
 与 HomeWorks BI 用同一个 Supabase 专案、同一套登入，但**员工名单分开**（`ops.staff`），
 所以仓库、HR 的员工进得了营运系统，却看不到 BI 的财务数据。
 
@@ -14,7 +14,8 @@
 | 路径 | 用途 |
 |---|---|
 | `src/api.ts` | 型别与所有 `ops_*` 呼叫 |
-| `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Admin / Planned（规划中模块）/ Login / Password |
+| `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Attendance（打卡）/ Admin / Planned（规划中模块）/ Login / Password |
+| `src/att/`、`src/att-api.ts`、`src/att.css` | 打卡模块：Today（打卡、补下班卡、外勤签到）、Camera（自拍）、Records（逐日纪录、月报 CSV）、Board（团队今天）、Corrections（补卡）、Settings（HR 设定） |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
 | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
@@ -38,12 +39,22 @@ npm run build        # 型别检查 + 打包
 PGHOST=... PGPORT=... PGUSER=postgres sh supabase/tests/run.sh
 ```
 
+## 打卡（移植自 AttendX）
+
+- 员工：按「上班 / 下班」→ 读 GPS → 前镜头自拍 → 照片上传到 Storage `ops-hr/<staff_id>/<日期>/…` → `ops_att_punch`。
+  上班卡要在分店打卡点范围内（免打卡范围的人除外）；中午 11:00–15:00 下班再上班 = 午休。
+- 之前有一天没打下班卡 → 挡住今天的上班卡，要先「补下班卡」（立刻生效，主管 / HR 驳回就还原）。
+- 补卡：员工 14 天内自己申请 → 直属主管（没设就是部门主管）→ HR 定案；HR 可以改定案时间、替员工申请。
+- 主管 / HR：「团队今天」看谁还没打卡、迟到、照片；「月报」可下载 CSV。
+- HR 设定：打卡点（站在现场按「用我现在的位置」）、班别、员工设定（班别、直属主管、免打卡范围、星期五午休、到职日）、
+  每月上班星期六、公共假日。
+
 ## 中英双语
 
 介面预设中文，右上角 / 侧栏 / 登入页有「中文 | EN」切换。做法是 DOM 翻译层（`src/i18n.ts`）：
 只翻整段完全等于字典键的文字，员工输入的内容保持原文。新增或修改介面文字时，同步更新
 `src/i18n-dict-a.ts`（共用、首页、任务、审批、登入）、`src/i18n-dict-b.ts`（订货、员工与权限）、
-`src/i18n-dict-db.ts`（数据库来的模块 / 部门名称与错误讯息）或 `src/i18n-patterns.ts`（带数字的句子）。
+`src/i18n-dict-db.ts`（数据库来的模块 / 部门名称与错误讯息）、`src/i18n-dict-att.ts` / `src/i18n-patterns-att.ts`（打卡模块）或 `src/i18n-patterns.ts`（带数字的句子）。
 
 ## 部署
 

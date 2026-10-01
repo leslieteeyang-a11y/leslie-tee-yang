@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, can, Home, Me, moduleHref, Task } from "../api";
+import { hhmm } from "../att-api";
 import { ErrorBox } from "../ui";
 import "../extra.css";
+import "../att.css";
 import { canPromptInstall, dismissHint, hintDismissed, isIos, isStandalone, onInstallChange, promptInstall } from "../install";
 
 // 首页提示：把系统加到手机主画面（已安装、已关掉提示就不显示）
@@ -31,8 +33,25 @@ function InstallHint() {
   );
 }
 
+// 首页的打卡卡片（ops_home 回传的 att；没有打卡模块的人是 null）
+type HomeAtt = { clock_in: string | null; clock_out: string | null; lunch_in: string | null; workday: boolean; open_shift: boolean };
+
+function AttCard({ a }: { a: HomeAtt }) {
+  const text = a.open_shift ? "你之前有一天没打下班卡，请先补上。"
+    : !a.clock_in ? (a.workday ? "今天还没打上班卡。" : "今天休息。")
+    : a.clock_out ? `上班 ${hhmm(a.clock_in)} · 下班 ${hhmm(a.clock_out)}`
+    : `上班 ${hhmm(a.clock_in)} · 还没下班`;
+  const warn = a.open_shift || (!a.clock_in && a.workday);
+  return (
+    <a className={"card att-home" + (warn ? " warn" : "")} href="#/attendance">
+      <span><b>⏱ 今天打卡</b><br /><span className={warn ? "late" : "muted"}>{text}</span></span>
+      <span className="go">{!a.clock_in || a.clock_out ? "去打卡 →" : "去打下班卡 →"}</span>
+    </a>
+  );
+}
+
 export default function HomePage({ me }: { me: Me }) {
-  const [home, setHome] = useState<Home | null>(null);
+  const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number }) | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
 
@@ -50,12 +69,16 @@ export default function HomePage({ me }: { me: Me }) {
       <h1>{hello}，{me.staff.name}</h1>
       <ErrorBox error={error} />
       <InstallHint />
+      {home?.att && <AttCard a={home.att} />}
       {home && (
         <div className="kpis">
           <a className="kpi" href="#/tasks"><b>{home.my_open_tasks}</b><span>我的待办任务</span></a>
           <a className={"kpi" + (home.my_overdue ? " warn" : "")} href="#/tasks"><b>{home.my_overdue}</b><span>已逾期</span></a>
           <a className={"kpi" + (home.approvals_waiting ? " warn" : "")} href="#/approvals"><b>{home.approvals_waiting}</b><span>等我审批</span></a>
           <a className="kpi" href="#/approvals"><b>{home.my_pending_requests}</b><span>我的申请（待批）</span></a>
+          {!!home.corrections_waiting && (
+            <a className="kpi warn" href="#/attendance/corrections"><b>{home.corrections_waiting}</b><span>补卡等我审核</span></a>
+          )}
           {home.po_overdue != null && (
             <a className={"kpi" + (home.po_overdue ? " warn" : "")} href="#/purchasing"><b>{home.po_overdue}</b><span>PO 已过预计到货日</span></a>
           )}

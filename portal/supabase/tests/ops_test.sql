@@ -30,7 +30,7 @@ select pg_temp.as_user('BOSS@example.com');
 do $$ declare m jsonb := public.ops_me(); begin
   assert m->'staff'->>'role' = 'admin', 'owner should be admin';
   assert m->'staff'->>'branch' = 'ALL', 'owner branch ALL';
-  assert (select count(*) from jsonb_array_elements(m->'modules') e where e->>'level' = 'approve') = 13, 'admin all modules';
+  assert (select count(*) from jsonb_array_elements(m->'modules') e where e->>'level' = 'approve') = 14, 'admin all modules';
 end $$;
 
 -- 4. admin 新增仓库员工，且 buyer 不能进员工与权限

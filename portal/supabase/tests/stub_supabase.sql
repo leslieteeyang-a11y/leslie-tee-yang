@@ -63,3 +63,11 @@ insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, cr
                              location, uom, qty, transferred_qty, unit_price, est_delivery) values
   ('HOMEWORKSSB', 7, 'PO-CN5', current_date - 40, '4000-M002', 'CS065', 'ST001', 'RAXON HOSE', 'SRGADING', 'SETS', 1, 0, null, current_date - 35),
   ('HOMEWORKSSB', 8, 'PO-CN45', current_date - 50, '4000-M002', 'CS065', 'ST001', 'RAXON HOSE', 'SRGADING', 'SETS', 1, 0, null, current_date - 5);
+
+-- 打卡（2026-10-01）：Storage 的表（只取用到的栏位）；ops_test_marker 让 ops.now() 可以用 ops.fake_now 改时间
+create schema storage;
+create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint,
+  allowed_mime_types text[]);
+create table storage.objects (id bigint generated always as identity, bucket_id text, name text, metadata jsonb);
+alter table storage.objects enable row level security;
+create schema ops_test_marker;

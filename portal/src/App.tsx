@@ -11,11 +11,12 @@ import Admin from "./pages/Admin";
 import Planned from "./pages/Planned";
 import Password from "./pages/Password";
 import Purchasing from "./pages/Purchasing";
+import Attendance from "./pages/Attendance";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
 
 const ICON: Record<string, string> = {
-  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", warehouse: "▦", delivery: "⛟", sales: "¤",
+  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", warehouse: "▦", delivery: "⛟", sales: "¤",
   collection: "₪", commission: "%", hr: "☺", payroll: "▤", reports: "▥", admin: "⚙",
 };
 
@@ -83,6 +84,9 @@ export default function App() {
       page = can(me, "purchasing", "view")
         ? <><SyncNote /><Purchasing me={me} sub={arg} arg1={arg2} arg2={arg3} /></>
         : <NoAccess />;
+      break;
+    case "attendance":
+      page = can(me, "attendance", "view") ? <Attendance me={me} sub={arg} /> : <NoAccess />;
       break;
     case "password":
       page = <Password />;
