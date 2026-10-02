@@ -63,7 +63,7 @@ export default function Settings({ me }: { me: Me }) {
                   <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div></td>
                   <td>{shiftName(x.shift)}</td>
                   <td className="hide-sm">{nameOf(x.manager_id) || <span className="muted">部门主管</span>}</td>
-                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.friday_prayer && "星期五午休多一小时", x.join_date && `到职 ${x.join_date}`].filter(Boolean).join(" · ")}</td>
+                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`].filter(Boolean).join(" · ")}</td>
                   <td><a href="#" onClick={(e) => { e.preventDefault(); setStaff(x); }}>修改</a></td>
                 </tr>
               ))}
@@ -211,7 +211,6 @@ function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; on
         </label>
         <label>到职日（选填；之前的日子不算缺勤）<input type="date" value={v.join_date || ""} onChange={(e) => setV({ ...v, join_date: e.target.value })} /></label>
         <label className="check"><input type="checkbox" checked={v.geofence_exempt} onChange={(e) => setV({ ...v, geofence_exempt: e.target.checked })} /> 免打卡范围（业务、司机、外勤；仍会记录位置）</label>
-        <label className="check"><input type="checkbox" checked={v.friday_prayer} onChange={(e) => setV({ ...v, friday_prayer: e.target.checked })} /> 星期五午休延长一小时（回教男性员工礼拜）</label>
         <ErrorBox error={error} />
         <div className="actions"><button type="button" className="ghost" onClick={onClose}>取消</button><button disabled={busy}>{busy ? "储存中…" : "储存"}</button></div>
       </form>
