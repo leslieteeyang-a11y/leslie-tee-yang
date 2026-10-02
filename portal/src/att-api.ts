@@ -137,7 +137,7 @@ export const CORR_STATUS_CLASS: Record<CorrStatus, string> = {
   pending_hod: "pending", pending_hr: "pending", approved: "approved", rejected: "rejected", cancelled: "cancelled",
 };
 export const SAT_RULE_LABEL: Record<Shift["sat_rule"], string> = {
-  every: "每个星期六上半天", designated: "每月指定一个星期六", none: "星期六不上班",
+  every: "每个星期六上班", designated: "每月指定一个星期六", none: "星期六不上班",
 };
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {

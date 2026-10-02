@@ -40,8 +40,8 @@ export default function Settings({ me }: { me: Me }) {
       </section>
 
       <section className="card">
-        <div className="page-head"><h2>班别</h2><button className="ghost" onClick={() => setShift({ sat_rule: "designated", start_time: "09:00", lunch_start: "13:00", lunch_end: "14:00", end_time: "18:00", sat_end: "13:00" })}>＋ 新班别</button></div>
-        <p className="muted small">迟到、早退、午休迟回都按员工的班别算。预设时间是从 AttendX 带过来的，请改成 HomeWorks 实际的上下班时间。</p>
+        <div className="page-head"><h2>班别</h2><button className="ghost" onClick={() => setShift({ sat_rule: "every", start_time: "09:00", lunch_start: "12:30", lunch_end: "13:30", end_time: "17:30", sat_end: "17:30" })}>＋ 新班别</button></div>
+        <p className="muted small">迟到、早退、午休迟回都按员工的班别算。</p>
         <ul className="list">
           {s.shifts.map((x) => (
             <li key={x.code}>

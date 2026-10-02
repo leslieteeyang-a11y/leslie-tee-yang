@@ -32,6 +32,12 @@ grant execute on all functions in schema pg_temp to authenticated;
 grant usage on schema storage to authenticated;
 grant select on storage.objects to authenticated;   -- 只为了让测试能检查 policy 函数；正式环境由 Storage 管
 
+-- 下面 0–9 段用 AttendX 的原始班别（08:30 上班、每月指定星期六）测规则；
+-- HomeWorks 实际时间（20261002_ops_att_hours）在最后一段测。
+update ops.hr_shift set start_time = '08:30', lunch_start = '12:30', lunch_end = '13:30', sat_end = '12:30',
+  end_time = case code when 'office' then '17:45'::time else '17:30'::time end,
+  sat_rule = case code when 'office' then 'designated' else 'every' end;
+
 -- 0. 设定：HQ 打卡点、门市小美从 9 月就到职
 select pg_temp.at('2026-10-05 07:00:00+08');
 set role authenticated;
@@ -255,6 +261,32 @@ select pg_temp.as_user('buyer@example.com');
 do $$ begin
   assert jsonb_array_length(public.ops_att_corrections('todo')) = 1, 'direct manager hod';
   assert jsonb_array_length(public.ops_att_board()->'rows') = 1, 'direct manager board';
+end $$;
+
+-- 10. HomeWorks 实际时间：星期一到六 09:00–17:30，星期六整天也有午休，星期日休息
+reset role;
+update ops.hr_shift set start_time = '09:00', lunch_start = '12:30', lunch_end = '13:30',
+                        end_time = '17:30', sat_end = '17:30', sat_rule = 'every';
+do $$ declare st ops.staff; s record; begin
+  select * into st from ops.staff where email = 'hqsales@example.com';
+  select * into s from ops.att_schedule(st, '2026-10-17');           -- 星期六
+  assert s.workday and s.has_lunch and s.t_end = '17:30' and s.t_start = '09:00', 'saturday full day';
+  select * into s from ops.att_schedule(st, '2026-10-18');           -- 星期日
+  assert not s.workday, 'sunday off';
+end $$;
+set role authenticated;
+select pg_temp.as_user('hqsales@example.com');
+select pg_temp.at('2026-10-17 08:58:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('hqsales@example.com', '2026-10-17/in.jpg')));
+select pg_temp.at('2026-10-17 12:32:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-17/o1.jpg')));
+select pg_temp.at('2026-10-17 13:29:00+08');
+do $$ declare t jsonb; begin
+  t := public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('hqsales@example.com', '2026-10-17/in2.jpg')));
+  assert t->'record'->>'lunch_out' is not null and t->'record'->>'clock_out' is null
+     and (t->'record'->>'late_min')::int = 0, 'saturday lunch: ' || t::text;
 end $$;
 
 reset role;

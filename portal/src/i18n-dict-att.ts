@@ -26,7 +26,7 @@ export const DICT_ATT: Record<string, string> = {
   "今天休息": "Day off today",
   "等主管审核": "Waiting for manager",
   "等 HR 审核": "Waiting for HR",
-  "每个星期六上半天": "Every Saturday (half day)",
+  "每个星期六上班": "Every Saturday",
   "每月指定一个星期六": "One set Saturday a month",
   "星期六不上班": "No Saturday work",
   "周日": "Sun", "周一": "Mon", "周二": "Tue", "周三": "Wed", "周四": "Thu", "周五": "Fri", "周六": "Sat",
@@ -150,8 +150,7 @@ export const DICT_ATT: Record<string, string> = {
   "还没有打卡点。": "No check-in points yet.",
   "班别": "Shifts",
   "＋ 新班别": "+ New shift",
-  "迟到、早退、午休迟回都按员工的班别算。预设时间是从 AttendX 带过来的，请改成 HomeWorks 实际的上下班时间。":
-    "Late, early and lunch lateness follow each person's shift. The default times came from AttendX — please change them to HomeWorks' real hours.",
+  "迟到、早退、午休迟回都按员工的班别算。": "Late, early and lunch lateness follow each person's shift.",
   "员工打卡设定": "Staff attendance settings",
   "直属主管": "Manager",
   "部门主管": "Dept. manager",
