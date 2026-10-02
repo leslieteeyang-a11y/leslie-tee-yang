@@ -11,6 +11,7 @@
 .att-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 button.big { padding: 16px; font-size: 1.15rem; font-weight: 600; border-radius: 12px; }
 button.big.out { background: var(--navy-2); }
+button.big.lunch { background: #b45309; }
 button.big:disabled { opacity: .35; }
 button.small-btn { padding: 4px 10px; font-size: .85rem; }
 .warn-card { border-left: 4px solid var(--amber); }

@@ -5,7 +5,7 @@ import { ErrorBox } from "../ui";
 import Camera from "./Camera";
 import { att, AttToday, distanceM, Fix, getFix, hhmm, mapLink, minsLabel, uploadPhoto, weekday } from "../att-api";
 
-type Action = "in" | "out" | "checkin";
+type Action = "in" | "out" | "lunch_out" | "lunch_in" | "checkin";
 
 export default function Today({ me }: { me: Me }) {
   const [t, setT] = useState<AttToday | null>(null);
@@ -32,8 +32,15 @@ export default function Today({ me }: { me: Me }) {
 
   const r = t.record;
   const canIn = !t.open_shift && (!r?.clock_in || !!r.clock_out);
-  const canOut = !!r?.clock_in && !r.clock_out;
   const s = t.schedule;
+  const atLunch = !!r?.lunch_out && !r.lunch_in && !r.clock_out;
+  const canOut = !!r?.clock_in && !r.clock_out && !atLunch;
+  const canLunchOut = canOut && !r?.lunch_out && !!s.lunch_min;
+  // 左边的大按键依状态变：上班 → 午休下班 → 午休上班；午休打完就停在「上班」（不可按）
+  const left: [Action, string, boolean] = canIn ? ["in", r?.clock_out ? "上班（回来）" : "上班", true]
+    : atLunch ? ["lunch_in", "午休上班", true]
+    : canLunchOut ? ["lunch_out", "午休下班", true]
+    : ["in", "上班", false];
   const nearest = fix && t.fences.length
     ? t.fences.map((f) => ({ f, d: distanceM(fix, f) })).sort((a, b) => (a.d - a.f.radius) - (b.d - b.f.radius))[0]
     : null;
@@ -42,7 +49,7 @@ export default function Today({ me }: { me: Me }) {
   async function begin(a: Action) {
     setError(""); setNotice(""); setCamError(""); setGpsMsg("");
     setAction(a);
-    if (a === "out" && !t!.fences.length) return;
+    if (a !== "in" && a !== "checkin" && !t!.fences.length) return;
     setGpsMsg("正在读取你的位置…");
     try {
       const f = await getFix();
@@ -56,7 +63,7 @@ export default function Today({ me }: { me: Me }) {
 
   async function confirm(photo: Blob) {
     if (!action) return;
-    if (action !== "out" && !fix && (action === "checkin" || (!t!.geofence_exempt && t!.fences.length))) {
+    if (!fix && (action === "checkin" || (action === "in" && !t!.geofence_exempt && t!.fences.length))) {
       setCamError(gpsMsg || "还没有位置，请稍等或检查定位。");
       return;
     }
@@ -72,6 +79,7 @@ export default function Today({ me }: { me: Me }) {
       const nr = next.record;
       setNotice(action === "checkin" ? "已签到。"
         : action === "out" ? `已打下班卡 ${hhmm(nr?.clock_out)}。`
+        : action === "lunch_out" ? `已打午休下班卡 ${hhmm(nr?.lunch_out)}。`
         : nr?.lunch_in && !r?.lunch_in ? `欢迎回来，午休 ${hhmm(nr.lunch_out)}–${hhmm(nr.lunch_in)} 已记录。`
         : `已打上班卡 ${hhmm(nr?.clock_in)}。`);
       setAction(null);
@@ -109,15 +117,13 @@ export default function Today({ me }: { me: Me }) {
         {notice && <div className="ok">{notice}</div>}
         {t.open_shift ? null : (
           <div className="att-buttons">
-            <button className="big" disabled={!canIn} onClick={() => begin("in")}>
-              {r?.clock_out ? "上班（回来）" : "上班"}
+            <button className={"big" + (left[0].startsWith("lunch") ? " lunch" : "")} disabled={!left[2]} onClick={() => begin(left[0])}>
+              {left[1]}
             </button>
             <button className="big out" disabled={!canOut} onClick={() => begin("out")}>下班</button>
           </div>
         )}
-        {canOut && !r?.lunch_out && s.lunch_min && (
-          <p className="muted small">去吃午饭时按「下班」，回来按「上班」，系统会自动记成午休。</p>
-        )}
+        {atLunch && <p className="muted small">{`午休中（${hhmm(r!.lunch_out)} 开始）· 回来按「午休上班」`}</p>}
         {t.pending_corrections > 0 && (
           <p className="small"><a href="#/attendance/corrections">{`你有 ${t.pending_corrections} 张补卡在审核中 →`}</a></p>
         )}
@@ -144,8 +150,8 @@ export default function Today({ me }: { me: Me }) {
       </section>
 
       {action && (
-        <Camera title={action === "in" ? "上班打卡" : action === "out" ? "下班打卡" : "外勤签到"}
-                confirmLabel={action === "checkin" ? "确认签到" : action === "in" ? "确认上班" : "确认下班"}
+        <Camera title={{ in: "上班打卡", out: "下班打卡", lunch_out: "午休下班打卡", lunch_in: "午休上班打卡", checkin: "外勤签到" }[action]}
+                confirmLabel={{ in: "确认上班", out: "确认下班", lunch_out: "确认午休下班", lunch_in: "确认午休上班", checkin: "确认签到" }[action]}
                 busy={busy} error={camError} onConfirm={confirm} onClose={() => setAction(null)}>
           <p className={"small " + (gpsMsg && !fix ? (gpsMsg.startsWith("正在") ? "muted" : "late") : "muted")}>
             {gpsMsg || (fix ? (nearest && !t.geofence_exempt && action === "in"

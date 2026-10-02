@@ -101,7 +101,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - 已上线（打卡 + 补卡，2026-10-01，移植自使用者朋友给的 AttendX 白牌 HR 系统，规则见 AttendX docs/FEATURES-AND-RULES.md §2–3）：
   模块 `attendance`（所有部门「可编辑」= 打自己的卡；主管升「可审批」= 审自己部门补卡、看团队）；HR 设定要 `hr` ≥ 可编辑。
   `ops.attendance`（一人一天一笔：上班 / 午休 / 下班 + 自拍路径 + GPS）、`ops.punch_correction`（主管 → HR 两段；HR 可直接定案）、
-  `ops.geofence`（打卡点，按分店）、`ops.hr_shift`（班别；2026-10-02 起 HomeWorks 实际时间 = 星期一到六 09:00–17:30、星期日休，migration `ops_att_hours`；**午休不定时段、一次一小时**（`ops_att_flex_lunch`：迟回 = 实际休息超过 lunch_end − lunch_start 的分钟数；星期五也一样一小时，`ops_att_no_friday` 拿掉了 AttendX 的星期五礼拜加时（friday_prayer 栏位保留但不用）；lunch_start 只当外出公务补卡的名义时间；下班卡在 10:30–16:00 之间再打上班 = 吃饭回来；整天的星期六也有午休）。「每月指定星期六」功能保留但没有班别使用，设定页自动隐藏）、
+  `ops.geofence`（打卡点，按分店）、`ops.hr_shift`（班别；2026-10-02 起 HomeWorks 实际时间 = 星期一到六 09:00–17:30、星期日休，migration `ops_att_hours`；**午休不定时段、一次一小时**（`ops_att_flex_lunch`：迟回 = 实际休息超过 lunch_end − lunch_start 的分钟数；星期五也一样一小时，`ops_att_no_friday` 拿掉了 AttendX 的星期五礼拜加时（friday_prayer 栏位保留但不用）；lunch_start 只当外出公务补卡的名义时间；打卡页有「午休下班」「午休上班」按键（`ops_att_lunch_buttons`，punch 动作 lunch_out / lunch_in；午休中不能直接下班），旧的「下班卡在 10:30–16:00 之间再打上班 = 吃饭回来」仍保留；整天的星期六也有午休）。「每月指定星期六」功能保留但没有班别使用，设定页自动隐藏）、
   `ops.holiday`、`ops.work_saturday`、`ops.field_checkin`；`ops.staff` 加 manager_id / shift / geofence_exempt / friday_prayer / join_date。
   自拍放 Storage 私有 bucket `ops-hr`（路径 `<staff_id>/…`，policy 呼叫 `public.ops_hr_file_ok`），前端压到 480px JPEG 约 30 KB。
   时间一律 Asia/Kuala_Lumpur；测试用 `ops.fake_now`（只在有 `ops_test_marker` schema 的本机测试库生效）。

@@ -303,5 +303,27 @@ do $$ declare t jsonb; begin
   assert (t->'record'->>'lunch_late_min')::int = 10 and (t->'schedule'->>'lunch_min')::int = 60, 'flex lunch: ' || t::text;
 end $$;
 
+-- 11. 午休按键：午休下班 / 午休上班（不必先按下班）
+select pg_temp.at('2026-10-19 17:40:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-19/o2.jpg')));
+select pg_temp.at('2026-10-20 08:57:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/in.jpg')));
+select pg_temp.expect_error($q$select public.ops_att_punch(jsonb_build_object('action','lunch_in',
+  'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/x.jpg')))$q$, '还没打午休下班卡');
+select pg_temp.at('2026-10-20 13:10:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'lunch_out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/lo.jpg')));
+select pg_temp.expect_error($q$select public.ops_att_punch(jsonb_build_object('action','out',
+  'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/x2.jpg')))$q$, '还在午休');
+select pg_temp.at('2026-10-20 14:15:00+08');
+do $$ declare t jsonb; begin
+  t := public.ops_att_punch(jsonb_build_object('action', 'lunch_in', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/li.jpg')));
+  assert t->'record'->>'lunch_out' is not null and t->'record'->>'lunch_in' is not null
+     and t->'record'->>'clock_out' is null and (t->'record'->>'lunch_late_min')::int = 5
+     and t->'record'->>'selfie_lunch_in' like '%/li.jpg', 'lunch buttons: ' || t::text;
+end $$;
+select pg_temp.expect_error($q$select public.ops_att_punch(jsonb_build_object('action','lunch_out',
+  'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/x3.jpg')))$q$, '已经打过午休下班卡');
+
 reset role;
 select 'ALL ATTENDANCE TESTS PASSED' as result;

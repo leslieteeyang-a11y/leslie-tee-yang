@@ -14,6 +14,8 @@ export const PATTERNS_ATT: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^你有 (\d+) 张补卡在审核中 →$/, (m) => `You have ${m[1]} correction(s) under review →`],
   [/^已打上班卡 (.+)。$/, (m) => `Clocked in at ${m[1]}.`],
   [/^已打下班卡 (.+)。$/, (m) => `Clocked out at ${m[1]}.`],
+  [/^已打午休下班卡 (.+)。$/, (m) => `Lunch out at ${m[1]}.`],
+  [/^午休中（(.+) 开始）· 回来按「午休上班」$/, (m) => `On lunch (since ${m[1]}) · press "Lunch in" when you're back`],
   [/^欢迎回来，午休 (.+) 已记录。$/, (m) => `Welcome back — lunch ${m[1]} recorded.`],
   [/^✓ 你在「(.+)」范围内（约 (\d+) 公尺）$/, (m) => `✓ You're inside "${m[1]}" (about ${m[2]} m)`],
   [/^✗ 你离「(.+)」约 (\d+) 公尺，超出 (\d+) 公尺范围$/, (m) => `✗ You're about ${m[2]} m from "${m[1]}", outside the ${m[3]} m zone`],
