@@ -71,7 +71,7 @@ end $$;
 select pg_temp.expect_error($q$select public.ops_att_punch(jsonb_build_object('action','in','lat',1.5,'lng',103.7,
   'selfie', pg_temp.photo('hqsales@example.com', '2026-10-05/in4.jpg')))$q$, '已经打过上班卡');
 
--- 2. 12:31 下班（去吃饭）→ 13:33 上班（自动记午休，迟回 3 分钟）→ 17:50 下班
+-- 2. 12:31 下班（去吃饭）→ 13:33 上班（自动记午休 62 分钟，超过 1 小时 → 迟回 2 分钟）→ 17:50 下班
 select pg_temp.at('2026-10-05 12:31:00+08');
 select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-05/o1.jpg')));
 select pg_temp.at('2026-10-05 13:33:40+08');
@@ -79,7 +79,7 @@ do $$ declare t jsonb; begin
   t := public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
                                                'selfie', pg_temp.photo('hqsales@example.com', '2026-10-05/i2.jpg')));
   assert t->'record'->>'lunch_out' is not null and t->'record'->>'clock_out' is null, 'lunch recorded: ' || t::text;
-  assert (t->'record'->>'lunch_late_min')::int = 3, 'lunch late 3';
+  assert (t->'record'->>'lunch_late_min')::int = 2, 'lunch 62 min = late 2';
 end $$;
 select pg_temp.at('2026-10-05 17:50:00+08');
 do $$ declare t jsonb; begin
@@ -286,7 +286,21 @@ do $$ declare t jsonb; begin
   t := public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
                                                'selfie', pg_temp.photo('hqsales@example.com', '2026-10-17/in2.jpg')));
   assert t->'record'->>'lunch_out' is not null and t->'record'->>'clock_out' is null
-     and (t->'record'->>'late_min')::int = 0, 'saturday lunch: ' || t::text;
+     and (t->'record'->>'late_min')::int = 0 and (t->'record'->>'lunch_late_min')::int = 0, 'saturday lunch: ' || t::text;
+end $$;
+-- 午休不定时段：14:00 才去吃，15:10 回来 = 70 分钟 → 迟回 10 分钟（不是看几点回来）
+select pg_temp.at('2026-10-17 17:35:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-17/o2.jpg')));
+select pg_temp.at('2026-10-19 08:59:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('hqsales@example.com', '2026-10-19/in.jpg')));
+select pg_temp.at('2026-10-19 14:00:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('hqsales@example.com', '2026-10-19/o1.jpg')));
+select pg_temp.at('2026-10-19 15:10:30+08');
+do $$ declare t jsonb; begin
+  t := public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('hqsales@example.com', '2026-10-19/in2.jpg')));
+  assert (t->'record'->>'lunch_late_min')::int = 10 and (t->'schedule'->>'lunch_min')::int = 60, 'flex lunch: ' || t::text;
 end $$;
 
 reset role;

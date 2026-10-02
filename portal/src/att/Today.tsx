@@ -92,7 +92,7 @@ export default function Today({ me }: { me: Me }) {
         </div>
         <div className="att-sched">
           {s.workday ? (
-            <span>{t.shift?.name}{` · ${s.start} – ${s.end}`}{s.lunch_in_due ? ` · 午休回来 ${s.lunch_in_due}` : ""}</span>
+            <span>{t.shift?.name}{` · ${s.start} – ${s.end}`}{s.lunch_min ? ` · 午休 ${minsLabel(s.lunch_min)}` : ""}</span>
           ) : <span className="badge">{s.holiday || "今天休息"}</span>}
           {t.geofence_exempt ? <span className="muted small">免打卡范围（外勤）</span>
             : t.fences.length ? <span className="muted small">{"打卡点："}{t.fences.map((f, i) => <span key={i}>{i ? "、" : ""}{f.name}{`（${f.radius} 公尺内）`}</span>)}</span>
@@ -115,7 +115,7 @@ export default function Today({ me }: { me: Me }) {
             <button className="big out" disabled={!canOut} onClick={() => begin("out")}>下班</button>
           </div>
         )}
-        {canOut && !r?.lunch_out && s.lunch_in_due && (
+        {canOut && !r?.lunch_out && s.lunch_min && (
           <p className="muted small">去吃午饭时按「下班」，回来按「上班」，系统会自动记成午休。</p>
         )}
         {t.pending_corrections > 0 && (

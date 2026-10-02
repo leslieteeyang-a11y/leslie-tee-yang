@@ -2,7 +2,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { BRANCH_LABEL, Me } from "../api";
 import { Empty, ErrorBox, Modal } from "../ui";
-import { att, AttSettings, AttStaff, Fence, getFix, mapLink, SAT_RULE_LABEL, Shift, weekday } from "../att-api";
+import { att, AttSettings, AttStaff, Fence, getFix, mapLink, minsLabel, SAT_RULE_LABEL, Shift, weekday } from "../att-api";
 
 export default function Settings({ me }: { me: Me }) {
   const [s, setS] = useState<AttSettings | null>(null);
@@ -45,7 +45,7 @@ export default function Settings({ me }: { me: Me }) {
         <ul className="list">
           {s.shifts.map((x) => (
             <li key={x.code}>
-              <span><b>{x.name}</b> <span className="muted">{`· ${x.start_time}–${x.end_time} · 午休 ${x.lunch_start}–${x.lunch_end} · `}{SAT_RULE_LABEL[x.sat_rule]}{x.sat_rule !== "none" ? `（到 ${x.sat_end}）` : ""}</span></span>
+              <span><b>{x.name}</b> <span className="muted">{`· ${x.start_time}–${x.end_time} · 午休 ${minsLabel(lunchLen(x))} · `}{SAT_RULE_LABEL[x.sat_rule]}{x.sat_rule !== "none" ? `（到 ${x.sat_end}）` : ""}</span></span>
               <a href="#" onClick={(e) => { e.preventDefault(); setShift(x); }}>修改</a>
             </li>
           ))}
@@ -63,7 +63,7 @@ export default function Settings({ me }: { me: Me }) {
                   <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div></td>
                   <td>{shiftName(x.shift)}</td>
                   <td className="hide-sm">{nameOf(x.manager_id) || <span className="muted">部门主管</span>}</td>
-                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.friday_prayer && "星期五午休到 14:30", x.join_date && `到职 ${x.join_date}`].filter(Boolean).join(" · ")}</td>
+                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.friday_prayer && "星期五午休多一小时", x.join_date && `到职 ${x.join_date}`].filter(Boolean).join(" · ")}</td>
                   <td><a href="#" onClick={(e) => { e.preventDefault(); setStaff(x); }}>修改</a></td>
                 </tr>
               ))}
@@ -80,6 +80,12 @@ export default function Settings({ me }: { me: Me }) {
       {staff && <StaffForm x={staff} s={s} onClose={() => setStaff(null)} onSaved={() => { setStaff(null); load(); }} />}
     </>
   );
+}
+
+function lunchLen(x: Partial<Shift>): number {
+  if (!x.lunch_start || !x.lunch_end) return 60;
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  return mins(x.lunch_end) - mins(x.lunch_start);
 }
 
 function useSave(onSaved: () => void) {
@@ -104,9 +110,17 @@ function ShiftForm({ s, onClose, onSaved }: { s: Partial<Shift>; onClose: () => 
   const { error, busy, save } = useSave(onSaved);
   const set = (k: keyof Shift) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   const isNew = !s.code;
+  // 午休不定时段：只设长度；lunch_start 只是名义时间（外出公务补卡用），lunch_end = lunch_start + 长度
+  const [len, setLen] = useState(lunchLen(s));
+  const withLunch = (): Partial<Shift> => {
+    const start = v.lunch_start || "12:30";
+    const [h, m] = start.split(":").map(Number);
+    const end = h * 60 + m + len;
+    return { ...v, lunch_start: start, lunch_end: `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}` };
+  };
   return (
     <Modal title={isNew ? "新班别" : `修改：${s.name}`} onClose={onClose}>
-      <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.saveShift(v)); }}>
+      <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.saveShift(withLunch())); }}>
         <div className="row">
           <label>名称<input value={v.name || ""} onChange={set("name")} required /></label>
           {isNew && <label>代号（英文小写）<input value={v.code || ""} onChange={set("code")} required pattern="[a-z0-9_]{2,20}" placeholder="例：showroom" /></label>}
@@ -116,8 +130,7 @@ function ShiftForm({ s, onClose, onSaved }: { s: Partial<Shift>; onClose: () => 
           <label>下班<input type="time" value={v.end_time || ""} onChange={set("end_time")} required /></label>
         </div>
         <div className="row">
-          <label>午休开始<input type="time" value={v.lunch_start || ""} onChange={set("lunch_start")} required /></label>
-          <label>午休结束<input type="time" value={v.lunch_end || ""} onChange={set("lunch_end")} required /></label>
+          <label>午休长度（分钟，时段自由）<input type="number" min={15} max={180} step={5} value={len} onChange={(e) => setLen(Number(e.target.value))} required /></label>
         </div>
         <div className="row">
           <label>星期六

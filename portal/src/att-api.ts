@@ -7,7 +7,7 @@ export interface DayStats {
   holiday: string | null;
   start: string;
   end: string;
-  lunch_in_due: string | null;
+  lunch_min: number | null;
   late_min: number;
   lunch_late_min: number;
   early_min: number;
