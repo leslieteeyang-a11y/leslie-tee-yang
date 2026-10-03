@@ -203,7 +203,7 @@ function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; on
             {s.shifts.map((h) => <option key={h.code} value={h.code}>{h.name}</option>)}
           </select>
         </label>
-        <label>直属主管（第一段审核补卡、请假）
+        <label>直属主管（看得到他的出勤）
           <select value={v.manager_id ?? ""} onChange={(e) => setV({ ...v, manager_id: e.target.value ? Number(e.target.value) : null })}>
             <option value="">不指定：同部门的主管</option>
             {s.staff.filter((p) => p.id !== x.id).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.department_name}</option>)}

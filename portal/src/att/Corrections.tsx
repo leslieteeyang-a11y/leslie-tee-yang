@@ -128,7 +128,7 @@ function CorrectionForm({ me, date, onClose, onSaved }: { me: Me; date: string; 
         <label>证明（选填：照片或 PDF）
           <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         </label>
-        <p className="muted small">14 天以内的可以自己申请；先给直属主管审核，再给 HR 定案。</p>
+        <p className="muted small">14 天以内的可以自己申请，交给 HR 审核。</p>
         <ErrorBox error={error} />
         <div className="actions">
           <button type="button" className="ghost" onClick={onClose}>取消</button>

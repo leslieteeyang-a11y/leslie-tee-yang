@@ -1,5 +1,10 @@
 // 介面用语（三）：打卡模块（含资料库来的班别名称、错误讯息）。键 = 画面上整段中文（去头尾空白）。
 export const DICT_ATT: Record<string, string> = {
+  "自己补的下班卡不能撤回，请等 HR 审核。": "A self-filed clock-out can't be withdrawn — please wait for HR.",
+  "直属主管（看得到他的出勤）": "Manager (can see their attendance)",
+  "那天有打上班卡、没打下班卡。先补上当天的下班时间，才能打今天的卡。补上后会送 HR 审核，被驳回就会还原。": "You clocked in that day but never clocked out. Enter that day's clock-out time before you can clock in today. It goes to HR for review and is undone if rejected.",
+  "已补下班卡，已送 HR 审核。现在可以打今天的卡了。": "Clock-out filed and sent to HR. You can clock in today now.",
+  "14 天以内的可以自己申请，交给 HR 审核。": "You can request corrections for the last 14 days. HR reviews them.",
   // 分页 / 共用
   "打卡": "Attendance",
   "我的纪录": "My records",
@@ -241,8 +246,7 @@ export const DICT_ATT: Record<string, string> = {
   "这一天的这个卡已经有一张补卡在审核中了。": "There's already a correction for this punch under review.",
   "找不到这张补卡。": "Correction not found.",
   "这张补卡已经处理过了。": "This correction has already been decided.",
-  "你不能审这张补卡（不能审自己的；第一段要直属主管，第二段要 HR）。":
-    "You can't review this correction (not your own; first step is the manager, second step is HR).",
+  "只有 HR 可以审补卡（也不能审自己的）。": "Only HR can review corrections (and not their own).",
   "自己补的下班卡不能撤回，请等主管审核。": "A self-filed clock-out can't be withdrawn — please wait for your manager.",
   "班别时间不对：要「上班 < 午休开始 < 午休结束 < 下班」，代号只能用小写英文、数字。":
     "Shift times are invalid: clock-in < lunch start < lunch end < clock-out; the code may only use lowercase letters and digits.",

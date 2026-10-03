@@ -123,14 +123,14 @@ do $$ declare t jsonb; begin
 end $$;
 select pg_temp.expect_error($q$select public.ops_att_correction_cancel((public.ops_att_corrections('mine')->0->>'id')::bigint)$q$, '不能撤回');
 
--- 4. 补卡：星期一的上班卡改成 08:30（主管 → HR）
+-- 4. 补卡：星期一的上班卡改成 08:30（只要 HR 批）
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"13:00","reason":"打卡机慢了"}')$q$, '不像是上班');
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"lunch_in","time":"12:00","reason":"打卡机慢了"}')$q$, '顺序不对');
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-09-01","punch":"clock_in","time":"08:30","reason":"打卡机慢了"}')$q$, '14 天');
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-07","punch":"clock_out","time":"18:00","reason":"打卡机慢了"}')$q$, '还没到');
 do $$ declare c jsonb; begin
   c := public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:30","reason":"门口排队打卡"}');
-  assert c->>'status' = 'pending_hod' and not (c->>'can_decide')::boolean and c->>'original' is not null, 'created: ' || c::text;
+  assert c->>'status' = 'pending_hr' and not (c->>'can_decide')::boolean and c->>'original' is not null, 'created: ' || c::text;
 end $$;
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:31","reason":"门口排队打卡"}')$q$, '审核中');
 
@@ -143,18 +143,13 @@ do $$ begin assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, '
 select pg_temp.expect_error('select public.ops_att_board()', '审批权限');
 select pg_temp.expect_error($q$select public.ops_att_correction_decide(1, 'approve')$q$, '不能审');
 
--- 管理层预设对「人事」可审批 = 一次定案；这里把店长的人事降成只看，测两段流程：店长 = 第一段、HR = 第二段
+-- 只有 HR 批补卡：把店长的人事降成只看，店长就审不到（只看得到团队看板）
 select pg_temp.as_user('boss@example.com');
 select public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('mgr@example.com'), 'email', 'mgr@example.com',
                                                 'overrides', jsonb_build_object('hr', 'view')));
 select pg_temp.as_user('mgr@example.com');
-do $$ declare l jsonb := public.ops_att_corrections('todo'); c jsonb; begin
-  assert jsonb_array_length(l) = 2, 'mgr todo 2: ' || l::text;
-  foreach c in array array(select jsonb_array_elements(l)) loop
-    c := public.ops_att_correction_decide((c->>'id')::bigint, 'approve', '');
-    assert c->>'status' = 'pending_hr' and c->>'hod_name' is not null, 'to HR';
-  end loop;
-  assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, 'mgr done';
+do $$ declare l jsonb := public.ops_att_corrections('todo'); begin
+  assert jsonb_array_length(l) = 0, 'mgr is not HR, no todo: ' || l::text;
   -- 店长看得到门市小美的看板与月报
   assert exists (select 1 from jsonb_array_elements(public.ops_att_board('2026-10-05')->'rows') r where r->>'name' = '门市小美'),
     'board';
@@ -186,7 +181,7 @@ select pg_temp.as_user('hr@example.com');
 do $$ declare c jsonb; begin
   c := public.ops_att_correction_create(jsonb_build_object('staff_id', pg_temp.sid('hqsales@example.com'),
          'date', '2026-10-07', 'punch', 'clock_out', 'time', '18:30', 'reason', 'HR 依监视器补登'));
-  assert c->>'status' = 'pending_hod', 'hr filed';
+  assert c->>'status' = 'pending_hr', 'hr filed';
   -- HR 不能审自己开的？可以：申请人是员工本人，不是 HR
   c := public.ops_att_correction_decide((c->>'id')::bigint, 'approve', '', '18:35');
   assert c->>'status' = 'approved' and c->>'time' = '18:35', 'hr override time: ' || c::text;
@@ -247,7 +242,7 @@ do $$ declare t jsonb; begin
                                                        'selfie', pg_temp.photo('jbsales@example.com', 'c1.jpg')));
   assert jsonb_array_length(t->'checkins') = 1, 'checkin';
 end $$;
--- 设 buyer 为门市小美的直属主管 → 店长就不再是第一段审核人
+-- 设 buyer 为门市小美的直属主管：看得到她的看板，但补卡还是只有 HR 审
 select pg_temp.as_user('boss@example.com');
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'),
                                                    'manager_id', pg_temp.sid('buyer@example.com')));
@@ -256,10 +251,10 @@ select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_objec
 select pg_temp.as_user('hqsales@example.com');
 select public.ops_att_correction_create('{"date":"2026-10-08","punch":"clock_in","time":"08:30","reason":"测试直属主管"}');
 select pg_temp.as_user('mgr@example.com');
-do $$ begin assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, 'mgr not hod anymore'; end $$;
+do $$ begin assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, 'mgr no todo'; end $$;
 select pg_temp.as_user('buyer@example.com');
 do $$ begin
-  assert jsonb_array_length(public.ops_att_corrections('todo')) = 1, 'direct manager hod';
+  assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, 'direct manager does not approve corrections';
   assert jsonb_array_length(public.ops_att_board()->'rows') = 1, 'direct manager board';
 end $$;
 

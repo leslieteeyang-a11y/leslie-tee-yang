@@ -129,7 +129,7 @@ export default function Today({ me }: { me: Me }) {
         )}
       </section>
 
-      {t.open_shift && <SelfClose date={t.open_shift} onDone={(n) => { setT(n); setNotice("已补下班卡，已送主管审核。现在可以打今天的卡了。"); }} />}
+      {t.open_shift && <SelfClose date={t.open_shift} onDone={(n) => { setT(n); setNotice("已补下班卡，已送 HR 审核。现在可以打今天的卡了。"); }} />}
 
       <section className="card">
         <div className="page-head">
@@ -183,7 +183,7 @@ function Slot({ label, ts, to, extra, warn }: { label: string; ts?: string | nul
   );
 }
 
-// 之前某天没打下班卡：填下班时间 + 原因，立刻写入并送主管审核
+// 之前某天没打下班卡：填下班时间 + 原因，立刻写入并送 HR 审核
 function SelfClose({ date, onDone }: { date: string; onDone: (t: AttToday) => void }) {
   const [time, setTime] = useState("");
   const [reason, setReason] = useState("");
@@ -204,7 +204,7 @@ function SelfClose({ date, onDone }: { date: string; onDone: (t: AttToday) => vo
     <section className="card warn-card">
       <h2>补下班卡</h2>
       <p><b>{`${date}（${weekday(date)}）`}</b></p>
-      <p>{"那天有打上班卡、没打下班卡。先补上当天的下班时间，才能打今天的卡。补上后会送主管审核，被驳回就会还原。"}</p>
+      <p>{"那天有打上班卡、没打下班卡。先补上当天的下班时间，才能打今天的卡。补上后会送 HR 审核，被驳回就会还原。"}</p>
       <form className="form" onSubmit={submit}>
         <div className="row">
           <label>下班时间<input type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></label>
