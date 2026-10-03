@@ -11,3 +11,4 @@ for f in "$HERE"/../migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -d "$DB" -f 
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/ops_test.sql"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/att_test.sql"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/leave_test.sql"
+psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/wh_test.sql"

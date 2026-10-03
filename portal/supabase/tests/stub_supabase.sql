@@ -71,3 +71,20 @@ create table storage.buckets (id text primary key, name text, public boolean, fi
 create table storage.objects (id bigint generated always as identity, bucket_id text, name text, metadata jsonb);
 alter table storage.objects enable row level security;
 create schema ops_test_marker;
+
+-- 仓库（2026-10-04）
+create table bi.fact_sales (company text, doc_type text, doc_key bigint, dtl_key bigint, doc_no text, doc_date date,
+  debtor_code text, debtor_name text, item_code text, item_description text, qty numeric, uom text, unit_price numeric,
+  sub_total numeric, cost numeric, profit numeric, sales_agent text);
+create table bi.fact_open_order (company text, doc_no text, dtl_key bigint, doc_date date, debtor_code text,
+  debtor_name text, item_code text, item_description text, qty numeric, transferred_qty numeric, outstanding_qty numeric,
+  unit_price numeric, outstanding_amount numeric);
+insert into bi.dim_item values ('HOMEWORKSSB', 'ST003', 'HEMOS BASIN HM-UB001', 'SANITARY', 'HEMOS', 'PCS'),
+  ('HOMEWORKSSB', 'ST004', 'HEMOS WC ONE PIECE', 'SANITARY', 'HEMOS', 'SETS');
+insert into bi.fact_stock values ('HOMEWORKSSB', 'ST002', 'HQ', -2, 0), ('HOMEWORKSSB', 'ST003', 'HQ', 10, 300),
+  ('HOMEWORKSSB', 'ST004', 'HQ', 4, 1200), ('HOMEWORKSSB', 'ST003', 'DEFECTS', 1, 30),
+  ('HOMEWORKSSB', 'ST004', 'DISPLAY', 1, 300);
+insert into bi.fact_sales (company, doc_type, doc_no, doc_date, item_code, qty) values
+  ('HOMEWORKSSB', 'IV', 'IV-1', current_date - 5, 'ST003', 40), ('HOMEWORKSSB', 'IV', 'IV-2', current_date - 5, 'ST004', 2);
+insert into bi.fact_open_order (company, doc_no, dtl_key, doc_date, debtor_name, item_code, qty, transferred_qty, outstanding_qty)
+  values ('HOMEWORKSSB', 'SO-1', 1, current_date - 2, 'ABC PLUMBING', 'ST003', 3, 0, 3);

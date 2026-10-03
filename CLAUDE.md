@@ -116,11 +116,20 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   **只有 HR 批**（`ops.leave_can_decide` = att_is_hr、不能批自己）；员工可撤回审核中的、或开始前撤回已批的；已开始的只有 HR 能取消。
   打卡联动：`ops.att_stats` 回传 `leave`，整天假不算缺勤 / 迟到 / 早退，上午半天不算迟到、下午半天不算早退；月报加「请假」天数。
   `ops.staff.gender`（HR 在打卡设定填）。没填到职日 = 当第一年且不按比例。测试 `portal/supabase/tests/leave_test.sql`。
+- 已上线（仓库第一版，2026-10-04；使用者决定先做仓库再做加班 / 薪资）：问题是「进货点得清、几个星期后就不准」、半年盘一次（5 人 3 天），
+  系统里 HOMEWORKSSB 有 1,296 个 SKU×仓位库存为负数 → 漏记的是货进来后的搬动，所以**先做条码 + 流程，不上 RFID**（使用者问过 RFID，
+  建议之后在 SRGADING 大货小规模试）。模块 `warehouse`（仓库部可编辑 = 盘点 / 登记搬动；主管、管理层可审批 = 标已输入、审差异、看成本）。
+  `ops.wh_location`（从 bi.fact_stock 带入的仓位；要不要盘、每天几件）、`ops.wh_barcode`（纸箱原条码 → 商品）、`ops.wh_move`
+  （调仓 / 报坏 / 展示 / 样品 / 退货 / 报废，pending → 负责人在 AutoCount 开单后标 done）、`ops.wh_count`（盲盘；应有 = AutoCount 库存
+  + 还没输入的搬动；不符先请再数，第二次才算差异；审核 adjusted / ignored / 重盘）。每日清单：负库存 → 90 天销量 → 库存值，30 天内盘过跳过。
+  **对 AutoCount 仍只读**：搬动、差异都是清单，员工手动在 AutoCount 输入。条码 = 商品代号的 Code 128（`src/wh/code128.ts`，已用 ZXing
+  解码验证）；扫码：Android 用 BarcodeDetector，iPhone 动态载入 `@zxing/browser`；蓝牙扫描枪当键盘用。库存同步每天 09/12/15/18 点（KL）。
+  测试 `portal/supabase/tests/wh_test.sql`。第二版待做：出货拣货扫码（要即时的订单资料）、进货对 PO 点收。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
-- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ → 加班（按打卡自动算）→ 薪资（算到实发，含 EPF / SOCSO / EIS / PCB 与工资单）；其余：2 销售；
+- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 加班（按打卡自动算）→ 薪资（算到实发，含 EPF / SOCSO / EIS / PCB 与工资单）；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，

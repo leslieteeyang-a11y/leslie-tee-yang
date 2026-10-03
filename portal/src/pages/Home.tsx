@@ -53,7 +53,8 @@ function AttCard({ a }: { a: HomeAtt }) {
 }
 
 export default function HomePage({ me }: { me: Me }) {
-  const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number; leave_waiting?: number; my_pending_leave?: number }) | null>(null);
+  const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number; leave_waiting?: number; my_pending_leave?: number;
+    wh_moves_pending?: number | null; wh_variances?: number | null; wh_counted_today?: number | null }) | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
 
@@ -86,6 +87,15 @@ export default function HomePage({ me }: { me: Me }) {
           )}
           {!!home.my_pending_leave && (
             <a className="kpi" href="#/leave"><b>{home.my_pending_leave}</b><span>我的请假（审核中）</span></a>
+          )}
+          {!!home.wh_variances && (
+            <a className="kpi warn" href="#/warehouse/review"><b>{home.wh_variances}</b><span>盘点差异待审核</span></a>
+          )}
+          {!!home.wh_moves_pending && (
+            <a className="kpi warn" href="#/warehouse/moves"><b>{home.wh_moves_pending}</b><span>搬动待输入 AutoCount</span></a>
+          )}
+          {home.wh_counted_today != null && (
+            <a className="kpi" href="#/warehouse/count"><b>{home.wh_counted_today}</b><span>我今天盘了几件</span></a>
           )}
           {home.po_overdue != null && (
             <a className={"kpi" + (home.po_overdue ? " warn" : "")} href="#/purchasing"><b>{home.po_overdue}</b><span>PO 已过预计到货日</span></a>
