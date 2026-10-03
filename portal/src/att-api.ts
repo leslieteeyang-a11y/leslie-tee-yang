@@ -13,6 +13,7 @@ export interface DayStats {
   early_min: number;
   worked_min: number | null;
   missing_out: boolean;
+  leave?: { part: "full" | "am" | "pm"; type: string; name: string } | null;
 }
 export interface AttRecord extends DayStats {
   clock_in: string | null;
@@ -68,6 +69,7 @@ export interface MonthRow {
   lunch_late_min: number;
   early_days: number;
   missing_out: number;
+  leave_days: number;
   worked_min: number;
 }
 export type Punch = "clock_in" | "lunch_out" | "lunch_in" | "clock_out";
@@ -118,6 +120,7 @@ export interface AttStaff {
   geofence_exempt: boolean;
   friday_prayer: boolean;
   join_date: string | null;
+  gender: "M" | "F" | null;
 }
 export interface AttSettings {
   shifts: Shift[];

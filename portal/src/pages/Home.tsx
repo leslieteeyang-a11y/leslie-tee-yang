@@ -34,14 +34,16 @@ function InstallHint() {
 }
 
 // 首页的打卡卡片（ops_home 回传的 att；没有打卡模块的人是 null）
-type HomeAtt = { clock_in: string | null; clock_out: string | null; lunch_in: string | null; workday: boolean; open_shift: boolean };
+type HomeAtt = { clock_in: string | null; clock_out: string | null; lunch_in: string | null; workday: boolean; open_shift: boolean;
+  leave?: { part: string; name: string } | null };
 
 function AttCard({ a }: { a: HomeAtt }) {
   const text = a.open_shift ? "你之前有一天没打下班卡，请先补上。"
+    : !a.clock_in && a.leave?.part === "full" ? `今天请假（${a.leave.name}）。`
     : !a.clock_in ? (a.workday ? "今天还没打上班卡。" : "今天休息。")
     : a.clock_out ? `上班 ${hhmm(a.clock_in)} · 下班 ${hhmm(a.clock_out)}`
     : `上班 ${hhmm(a.clock_in)} · 还没下班`;
-  const warn = a.open_shift || (!a.clock_in && a.workday);
+  const warn = a.open_shift || (!a.clock_in && a.workday && a.leave?.part !== "full");
   return (
     <a className={"card att-home" + (warn ? " warn" : "")} href="#/attendance">
       <span><b>⏱ 今天打卡</b><br /><span className={warn ? "late" : "muted"}>{text}</span></span>
@@ -51,7 +53,7 @@ function AttCard({ a }: { a: HomeAtt }) {
 }
 
 export default function HomePage({ me }: { me: Me }) {
-  const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number }) | null>(null);
+  const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number; leave_waiting?: number; my_pending_leave?: number }) | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
 
@@ -78,6 +80,12 @@ export default function HomePage({ me }: { me: Me }) {
           <a className="kpi" href="#/approvals"><b>{home.my_pending_requests}</b><span>我的申请（待批）</span></a>
           {!!home.corrections_waiting && (
             <a className="kpi warn" href="#/attendance/corrections"><b>{home.corrections_waiting}</b><span>补卡等我审核</span></a>
+          )}
+          {!!home.leave_waiting && (
+            <a className="kpi warn" href="#/hr/todo"><b>{home.leave_waiting}</b><span>请假等我审核</span></a>
+          )}
+          {!!home.my_pending_leave && (
+            <a className="kpi" href="#/leave"><b>{home.my_pending_leave}</b><span>我的请假（审核中）</span></a>
           )}
           {home.po_overdue != null && (
             <a className={"kpi" + (home.po_overdue ? " warn" : "")} href="#/purchasing"><b>{home.po_overdue}</b><span>PO 已过预计到货日</span></a>

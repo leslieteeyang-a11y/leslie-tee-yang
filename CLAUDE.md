@@ -108,11 +108,19 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   测试：`portal/supabase/tests/att_test.sql`（run.sh 会接著 ops_test.sql 跑）。「HR」= 对 `hr` 模块可审批的人（管理层预设有）。
   AttendX 原始码只在对话上传的 zip 里，没有放进 repo；之后的请假、加班、薪资照同样方式逐模块搬。
   **注意**：Supabase 资料库已 434 MB（免费方案上限 500 MB，主要是 BI 资料），照片放 Storage 不占资料库。
+- 已上线（请假，2026-10-03，参考 AttendX §7 简化）：模块 `leave`（所有部门可编辑 = 自己申请）+ `hr`「人事」页上线（请假审核 /
+  纪录 / 假期余额 / 假别设定；打卡设定仍在打卡页）。`ops.leave_type`（年假、病假按劳工法 s.60E/60F 与年资：8/12/16、14/18/22，
+  到职那年年假按月比例；住院 60、产假 98 日历天限女、陪产假 7 日历天限男且满 12 个月、婚假 3、丧假每次 3 日历天、无薪不设余额；
+  HR 可改天数 / 半天 / 附件 / 启用）、`ops.leave_adjust`（结转、上线前已休，可正可负，要写原因）、`ops.leave_request`
+  （full/am/pm；不能跨年；天数依员工班表算上班日，日历天假别算日历天；审核中也扣余额；批准时再查一次余额）。
+  **只有 HR 批**（`ops.leave_can_decide` = att_is_hr、不能批自己）；员工可撤回审核中的、或开始前撤回已批的；已开始的只有 HR 能取消。
+  打卡联动：`ops.att_stats` 回传 `leave`，整天假不算缺勤 / 迟到 / 早退，上午半天不算迟到、下午半天不算早退；月报加「请假」天数。
+  `ops.staff.gender`（HR 在打卡设定填）。没填到职日 = 当第一年且不按比例。测试 `portal/supabase/tests/leave_test.sql`。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
-- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 → 加班 → 薪资；其余：2 销售；
+- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ → 加班（按打卡自动算）→ 薪资（算到实发，含 EPF / SOCSO / EIS / PCB 与工资单）；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，

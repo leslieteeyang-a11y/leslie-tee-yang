@@ -63,7 +63,7 @@ export default function Settings({ me }: { me: Me }) {
                   <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div></td>
                   <td>{shiftName(x.shift)}</td>
                   <td className="hide-sm">{nameOf(x.manager_id) || <span className="muted">部门主管</span>}</td>
-                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`].filter(Boolean).join(" · ")}</td>
+                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`, x.gender && (x.gender === "F" ? "女" : "男")].filter(Boolean).join(" · ")}</td>
                   <td><a href="#" onClick={(e) => { e.preventDefault(); setStaff(x); }}>修改</a></td>
                 </tr>
               ))}
@@ -197,7 +197,7 @@ function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; on
   const { error, busy, save } = useSave(onSaved);
   return (
     <Modal title={`打卡设定：${x.name}`} onClose={onClose}>
-      <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.setStaff({ ...v, join_date: v.join_date || "" })); }}>
+      <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.setStaff({ ...v, join_date: v.join_date || "", gender: v.gender || "" })); }}>
         <label>班别
           <select value={v.shift} onChange={(e) => setV({ ...v, shift: e.target.value })}>
             {s.shifts.map((h) => <option key={h.code} value={h.code}>{h.name}</option>)}
@@ -209,7 +209,16 @@ function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; on
             {s.staff.filter((p) => p.id !== x.id).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.department_name}</option>)}
           </select>
         </label>
-        <label>到职日（选填；之前的日子不算缺勤）<input type="date" value={v.join_date || ""} onChange={(e) => setV({ ...v, join_date: e.target.value })} /></label>
+        <div className="row">
+          <label>到职日（年假 / 病假按年资算；之前的日子不算缺勤）<input type="date" value={v.join_date || ""} onChange={(e) => setV({ ...v, join_date: e.target.value })} /></label>
+          <label>性别（产假 / 陪产假用）
+            <select value={v.gender || ""} onChange={(e) => setV({ ...v, gender: (e.target.value || null) as AttStaff["gender"] })}>
+              <option value="">未填</option>
+              <option value="F">女</option>
+              <option value="M">男</option>
+            </select>
+          </label>
+        </div>
         <label className="check"><input type="checkbox" checked={v.geofence_exempt} onChange={(e) => setV({ ...v, geofence_exempt: e.target.checked })} /> 免打卡范围（业务、司机、外勤；仍会记录位置）</label>
         <ErrorBox error={error} />
         <div className="actions"><button type="button" className="ghost" onClick={onClose}>取消</button><button disabled={busy}>{busy ? "储存中…" : "储存"}</button></div>

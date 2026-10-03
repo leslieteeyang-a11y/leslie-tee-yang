@@ -1,0 +1,11 @@
+/* 请假模块 */
+.lv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.lv-card { background: var(--card); border-radius: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(15, 42, 74, .08);
+  display: flex; flex-direction: column; gap: 2px; border-left: 4px solid var(--green); min-width: 0; }
+.lv-card span { color: var(--muted); font-size: .85rem; }
+.lv-card b { font-size: 1.7rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.lv-card small { color: var(--muted); font-size: .75rem; }
+.lv-card.empty { border-left-color: var(--red); }
+.lv-card.empty b { color: var(--red); }
+.modal .lv-cards .lv-card { box-shadow: none; background: var(--bg); }
+input.search { max-width: 200px; }

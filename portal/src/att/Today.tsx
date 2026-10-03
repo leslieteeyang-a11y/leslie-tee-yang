@@ -102,6 +102,7 @@ export default function Today({ me }: { me: Me }) {
           {s.workday ? (
             <span>{t.shift?.name}{` · ${s.start} – ${s.end}`}{s.lunch_min ? ` · 午休 ${minsLabel(s.lunch_min)}` : ""}</span>
           ) : <span className="badge">{s.holiday || "今天休息"}</span>}
+          {s.leave && <span className="badge">{s.leave.part === "full" ? `今天请假：${s.leave.name}` : `${s.leave.part === "am" ? "上午" : "下午"}请假：${s.leave.name}`}</span>}
           {t.geofence_exempt ? <span className="muted small">免打卡范围（外勤）</span>
             : t.fences.length ? <span className="muted small">{"打卡点："}{t.fences.map((f, i) => <span key={i}>{i ? "、" : ""}{f.name}{`（${f.radius} 公尺内）`}</span>)}</span>
             : <span className="muted small">分店还没设打卡点，任何地方都能打卡。</span>}

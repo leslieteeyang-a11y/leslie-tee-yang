@@ -18,7 +18,8 @@ export function MonthPicker({ ym, onChange }: { ym: string; onChange: (ym: strin
 export function DayTags({ d, today }: { d: AttRecord; today?: string }) {
   const tags: [string, string][] = [];
   if (!d.workday) tags.push([d.holiday || "休息日", "muted"]);
-  if (d.workday && !d.clock_in && today && d.date < today) tags.push(["缺勤", "late"]);
+  if (d.leave) tags.push([d.leave.part === "full" ? d.leave.name : `${d.leave.name}（${d.leave.part === "am" ? "上午" : "下午"}）`, "tag"]);
+  if (d.workday && !d.clock_in && today && d.date < today && d.leave?.part !== "full") tags.push(["缺勤", "late"]);
   if (d.late_min) tags.push([`迟到 ${minsLabel(d.late_min)}`, "late"]);
   if (d.lunch_late_min) tags.push([`午休迟回 ${minsLabel(d.lunch_late_min)}`, "late"]);
   if (d.early_min) tags.push([`早退 ${minsLabel(d.early_min)}`, "late"]);
@@ -45,7 +46,7 @@ export function DaysTable({ staffId, initialYm, onCorrect }: {
 
   const sum = (data?.days || []).reduce((a, d) => ({
     late: a.late + (d.late_min ? 1 : 0), worked: a.worked + (d.worked_min || 0),
-    absent: a.absent + (d.workday && !d.clock_in && d.date < today ? 1 : 0),
+    absent: a.absent + (d.workday && !d.clock_in && d.date < today && d.leave?.part !== "full" ? 1 : 0),
   }), { late: 0, worked: 0, absent: 0 });
 
   return (
@@ -118,6 +119,7 @@ export function Photo({ path }: { path: string | null | undefined }) {
     return () => { on = false; };
   }, [path]);
   if (!path) return <div className="photo none">没有照片</div>;
+  if (path.endsWith(".pdf")) return url ? <a className="photo none" href={url} target="_blank" rel="noreferrer">📄 PDF</a> : <div className="photo none">…</div>;
   return url ? <a href={url} target="_blank" rel="noreferrer"><img className="photo" src={url} alt="" loading="lazy" /></a>
     : <div className="photo none">…</div>;
 }
@@ -136,8 +138,8 @@ export function MonthReport() {
 
   function csv() {
     if (!rows) return;
-    const head = ["员工", "部门", "工作日", "出勤", "缺勤", "迟到天数", "迟到分钟", "午休迟回天数", "午休迟回分钟", "早退天数", "漏打下班卡", "工时(小时)"];
-    const lines = rows.map((r) => [r.name, r.department_name, r.workdays, r.present, r.absent, r.late_days, r.late_min,
+    const head = ["员工", "部门", "工作日", "出勤", "缺勤", "请假天数", "迟到天数", "迟到分钟", "午休迟回天数", "午休迟回分钟", "早退天数", "漏打下班卡", "工时(小时)"];
+    const lines = rows.map((r) => [r.name, r.department_name, r.workdays, r.present, r.absent, Number(r.leave_days), r.late_days, r.late_min,
       r.lunch_late_days, r.lunch_late_min, r.early_days, r.missing_out, (r.worked_min / 60).toFixed(2)]);
     const T = (s: string) => (getLang() === "en" ? tr(s) : s);
     const text = [head.map(T), ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
@@ -158,7 +160,7 @@ export function MonthReport() {
         <div className="table-wrap">
           <table>
             <thead><tr>
-              <th>员工</th><th className="num">工作日</th><th className="num">出勤</th><th className="num">缺勤</th>
+              <th>员工</th><th className="num">工作日</th><th className="num">出勤</th><th className="num">缺勤</th><th className="num">请假</th>
               <th className="num">迟到</th><th className="num hide-sm">午休迟回</th><th className="num hide-sm">早退</th>
               <th className="num hide-sm">漏打</th><th className="num hide-sm">工时</th>
             </tr></thead>
@@ -169,6 +171,7 @@ export function MonthReport() {
                   <td className="num">{r.workdays}</td>
                   <td className="num">{r.present}</td>
                   <td className={"num" + (r.absent ? " late" : "")}>{r.absent}</td>
+                  <td className="num">{Number(r.leave_days)}</td>
                   <td className={"num" + (r.late_days ? " late" : "")}>{r.late_days ? `${r.late_days} 天 / ${minsLabel(r.late_min)}` : 0}</td>
                   <td className="num hide-sm">{r.lunch_late_days ? `${r.lunch_late_days} 天 / ${minsLabel(r.lunch_late_min)}` : 0}</td>
                   <td className="num hide-sm">{r.early_days}</td>
@@ -180,7 +183,7 @@ export function MonthReport() {
           </table>
         </div>
       )}
-      <p className="muted small">缺勤 = 工作日没有上班卡（之后请假模块上线后会扣掉请假日）。点员工看逐日纪录与照片。</p>
+      <p className="muted small">缺勤 = 工作日没有上班卡，也没有请整天假（请假 = 已批准的天数）。点员工看逐日纪录与照片。</p>
       {person && (
         <Modal title={person.name} onClose={() => setPerson(null)} wide>
           <DaysTable staffId={person.staff_id} initialYm={ym} />
