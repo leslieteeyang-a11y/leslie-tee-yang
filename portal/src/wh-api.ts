@@ -101,3 +101,12 @@ export function whenLabel(ts: string | null | undefined): string {
   const p = Object.fromEntries(kl.formatToParts(new Date(ts)).map((x) => [x.type, x.value]));
   return `${p.month}-${p.day} ${p.hour}:${p.minute}`;
 }
+
+export function moveText(m: Move): string {
+  const route = m.from_loc && m.to_loc ? `${m.from_loc} → ${m.to_loc}` : m.from_loc ? `${m.from_loc} →` : `→ ${m.to_loc}`;
+  return `${MOVE_KIND_SHORT[m.kind]} ${qtyLabel(m.qty)} · ${route}`;
+}
+export function countClass(c: Count): string {
+  return c.status === "match" || c.status === "adjusted" ? "approved" : c.status === "variance" ? "rejected" : "cancelled";
+}
+
