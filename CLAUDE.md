@@ -125,11 +125,18 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   **对 AutoCount 仍只读**：搬动、差异都是清单，员工手动在 AutoCount 输入。条码 = 商品代号的 Code 128（`src/wh/code128.ts`，已用 ZXing
   解码验证）；扫码：Android 用 BarcodeDetector，iPhone 动态载入 `@zxing/browser`；蓝牙扫描枪当键盘用。库存同步每天 09/12/15/18 点（KL）。
   测试 `portal/supabase/tests/wh_test.sql`。第二版待做：出货拣货扫码（要即时的订单资料）、进货对 PO 点收。
+- 已上线（薪资，2026-10-04；把 HR 原本的独立薪资网页搬进来，原站 homeworks-payroll.vercel.app 先并行一个月）：模块 `payroll`
+  **只有 hr 与 mgmt 部门**（migration `ops_payroll` 删掉其他部门的 dept_module）；员工在首页「我的工资单」（`#/mypay`，`ops_pay_my`）只看 HR 已发布的自己的单。
+  计算 `src/payroll/calc.ts` 逐字移植原系统（EPF 第三附表、SOCSO 第 4 类 + SKBBK、EIS、加班 = 底薪 ÷ 工作天 ÷ 8 × 1.5、迟到每 3 次扣半天、
+  迟到 ≥ 5 次团体佣金归零、包错货 RM10、不够扣记结欠）；`node scripts/payroll_parity.mjs <原 index.html>` 与原系统随机比对（10 万组 0 差异；
+  原 HTML 不在 repo，含员工资料的 payroll-docs 也不要放进 repo）。计算在前端，结果连 inputs 存 `ops.pay_record`（staff+年+月+base/comm 唯一；
+  改了就退回草稿）；`ops.pay_profile` 每人薪资资料、`ops.pay_setting` 参数。`ops.pay_att` 从打卡 / 请假带入：迟到次数 = 上班迟到 + 午休迟回天数，
+  无薪假天数；缺勤（没打卡没请假）只显示、不自动扣（使用者决定）。加班时数先手填，等加班模块。不搬旧资料。测试 `portal/supabase/tests/pay_test.sql`。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
-- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 加班（按打卡自动算）→ 薪资（算到实发，含 EPF / SOCSO / EIS / PCB 与工资单）；其余：2 销售；
+- 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，
