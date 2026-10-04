@@ -50,3 +50,14 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   不然老板看总部时会把 KL 的数字也加进去。
 - 部署批 `kl`（mkpayload.py）：supabase.ts + App.tsx + EcomReport.tsx + core.ts。
 - 加 KL 使用者：`insert into bi.allowed_users(email, role, company, note) values ('…', 'manager', 'HOMEWORKSKL', 'KL店长')`（用 Supabase MCP 跑）。
+
+## 2026-10-04：每一页提速（Supabase 端，前端没改，不用重新部署）
+- 症结：15 个 public 视图每次都即时扫 `bi.fact_sales`（55 万行），老板帐号量到 3～18 秒；authenticated 的 statement_timeout 是 8 秒，
+  所以手机上常常「canceling statement due to statement timeout」。
+- 做法与「每月一页纸」快照相同：建九个物化视图 `bi.mv_*`（`heavy_views_materialized`），pg_cron `bi_heavy_views_refresh`
+  每 2 小时（`25 */2 * * *`）跑 `bi.refresh_heavy_views()` 并行重算（`refresh … concurrently`，重算中页面照常可读）；
+  再用 `create or replace view` 把 15 个视图改读 mv（`heavy_views_rewire`、`heavy_views_rewire_purchase`，SQL 留在 `docs/bi_sql/`）。
+- 物化视图没有 RLS，所以每个视图都补 `bi_is_allowed()` + `bi_company()` 公司过滤，角色门槛与原视图相同；已用 JB 店长帐号验证只看得到自家公司。
+- 结果：全部 < 1.5 秒（采购建议 1.5 秒，其余多在 50 毫秒内）；8 月合计与原始明细核对一致。代价：数字最多慢 2 小时
+  （每日同步 04:05 UTC 后，最晚 06:25 UTC 就会反映）。
+- 以后新视图若慢：把重的聚合搬进新的 mv、加进 `bi.refresh_heavy_views()`，视图只读 mv。每个 mv 都要有唯一索引才能 concurrently 重算。

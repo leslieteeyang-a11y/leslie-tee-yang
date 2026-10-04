@@ -116,6 +116,10 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 老板手机上一直「canceling statement due to statement timeout」。改成 `bi.onepager_snapshot`（RLS 只给 owner）+ `bi.refresh_onepager()`
 （security definer，口径同旧视图，只加了 doc_date 下界走索引）+ pg_cron `bi_onepager_refresh` 每 2 小时（`15 */2 * * *`）重算；视图改读快照、
 尾端多 `refreshed_at`。migration：`onepager_snapshot_table` / `onepager_refresh_fn` / `onepager_cron`（pg_cron 在此首次启用）。
+**全站提速（2026-10-04）**：使用者要「每一页都加快显示」→ 15 个最慢的 public 视图（商品 / 客户排行、警示、店长页、调价效果、采购建议的 sold）
+改读九个物化视图 `bi.mv_*`，pg_cron `bi_heavy_views_refresh` 每 2 小时（`25 */2 * * *`）跑 `bi.refresh_heavy_views()` 并行重算；每个视图补
+`bi_is_allowed()` + `bi_company()` 过滤（mv 没有 RLS）。全部从 3～18 秒降到 < 1.5 秒，数字最多慢 2 小时。migration：`heavy_views_materialized` /
+`heavy_views_rewire` / `heavy_views_rewire_purchase`，SQL 副本在 `docs/bi_sql/`，细节见 `docs/bi_web/README.md`。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
