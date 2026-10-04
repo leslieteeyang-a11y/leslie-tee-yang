@@ -112,6 +112,12 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 固定只取 HOMEWORKSSOUTHERN。Supabase 不用改结构（RLS 与视图都按 company 过滤）；KL 店长 / 订货员帐号要加进 `bi.allowed_users`（company = HOMEWORKSKL）。
 **注意**：BI 的销售 / 库存 / 应收等「每日同步」管线（不在 GitHub，SERVER 上的 bi_sync）目前只同步 HOMEWORKSSB 与 HOMEWORKSSOUTHERN；KL 要有完整 BI 得把那条管线
 也接到 KL 的账套，本专案只负责「实际销售」那一页。KL 在总公司账套里的客户代号（2026-10-01 时 dim_customer 还没有）出现后，要加进 channel_rules 当新渠道，否则会落到水工。
+**每月一页纸改快照（2026-10-04）**：`public.bi_onepager` 原本即时扫 fact_sales 55 万行，超过 authenticated 的 8 秒 statement_timeout，
+老板手机上一直「canceling statement due to statement timeout」。改成 `bi.onepager_snapshot`（RLS 只给 owner）+ `bi.refresh_onepager()`
+（security definer，口径同旧视图，只加了 doc_date 下界走索引）+ pg_cron `bi_onepager_refresh` 每 2 小时（`15 */2 * * *`）重算；视图改读快照、
+尾端多 `refreshed_at`。migration：`onepager_snapshot_table` / `onepager_refresh_fn` / `onepager_cron`（pg_cron 在此首次启用）。
+**MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
+整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
 字典键就是中文原文，英文缺键退回中文；右上角 `LangToggle` 记 localStorage `bi_lang`），字典分七档在 `src/i18n/`。
 完整原始码副本在 `docs/bi_web/src/`；分批部署工具 `docs/bi_web/mkpayload.py` + `deploy_manifest.json`，
