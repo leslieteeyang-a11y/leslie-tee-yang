@@ -119,7 +119,8 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 **全站提速（2026-10-04）**：使用者要「每一页都加快显示」→ 15 个最慢的 public 视图（商品 / 客户排行、警示、店长页、调价效果、采购建议的 sold）
 改读九个物化视图 `bi.mv_*`，pg_cron `bi_heavy_views_refresh` 每 2 小时（`25 */2 * * *`）跑 `bi.refresh_heavy_views()` 并行重算；每个视图补
 `bi_is_allowed()` + `bi_company()` 过滤（mv 没有 RLS）。全部从 3～18 秒降到 < 1.5 秒，数字最多慢 2 小时。migration：`heavy_views_materialized` /
-`heavy_views_rewire` / `heavy_views_rewire_purchase`，SQL 副本在 `docs/bi_sql/`，细节见 `docs/bi_web/README.md`。
+`heavy_views_rewire` / `heavy_views_rewire_purchase`，SQL 副本在 `docs/bi_sql/`，细节见 `docs/bi_web/README.md`。同晚总览页仍超时（`bi_sales_monthly` / `bi_sales_daily` 整表扫），
+再加 4 个 mv（`heavy_views_materialized_2` / `heavy_views_rewire_2`），共 13 个 mv；前端只剩 `bi_sales_lines(_nc)` 直接扫 fact_sales（走日期索引）。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，

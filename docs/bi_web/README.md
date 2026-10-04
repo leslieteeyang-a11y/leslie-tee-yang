@@ -61,3 +61,7 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 - 结果：全部 < 1.5 秒（采购建议 1.5 秒，其余多在 50 毫秒内）；8 月合计与原始明细核对一致。代价：数字最多慢 2 小时
   （每日同步 04:05 UTC 后，最晚 06:25 UTC 就会反映）。
 - 以后新视图若慢：把重的聚合搬进新的 mv、加进 `bi.refresh_heavy_views()`，视图只读 mv。每个 mv 都要有唯一索引才能 concurrently 重算。
+- **同晚补充**：总览页仍超时 → `bi_sales_monthly`（整表扫 fact_sales 326MB 算月汇总）与 `bi_sales_daily` 两条并发、手机冷快取就超过 8 秒。
+  再加 4 个 mv：`mv_sales_monthly` / `mv_sales_daily` / `mv_mgr_channel_daily` / `mv_alert_low_stock`（`heavy_views_materialized_2`），
+  视图 `bi_sales_monthly(_nc)` / `bi_sales_daily` / `bi_mgr_channel_daily` / `bi_alert_low_stock` 改读 mv（`heavy_views_rewire_2`），
+  `bi.refresh_heavy_views()` 现在重算 13 个。前端还会直接扫 fact_sales 的只剩 `bi_sales_lines(_nc)`（销售明细页，按日期范围走索引，不改）。
