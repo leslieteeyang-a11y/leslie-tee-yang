@@ -15,6 +15,8 @@ import Attendance from "./pages/Attendance";
 import Leave from "./pages/Leave";
 import Hr from "./pages/Hr";
 import Warehouse from "./pages/Warehouse";
+import Payroll from "./pages/Payroll";
+import MyPay from "./pages/MyPay";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
 
@@ -96,6 +98,12 @@ export default function App() {
       break;
     case "warehouse":
       page = can(me, "warehouse", "view") ? <><SyncNote /><Warehouse me={me} sub={arg} /></> : <NoAccess />;
+      break;
+    case "payroll":
+      page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
+      break;
+    case "mypay":
+      page = <MyPay />;
       break;
     case "hr":
       page = can(me, "hr", "view") ? <Hr me={me} sub={arg} /> : <NoAccess />;

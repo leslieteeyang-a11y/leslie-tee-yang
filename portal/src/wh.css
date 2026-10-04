@@ -36,7 +36,7 @@ select.narrow-select { width: auto; }
 .label-desc { font-size: 6.5pt; line-height: 1.15; max-height: 2.3em; overflow: hidden; }
 #label-print { display: none; }
 @media print {
-  body > *:not(#label-print) { display: none !important; }
+  body:has(#label-print) > *:not(#label-print) { display: none !important; }
   #label-print { display: block; }
   #label-print .label { break-inside: avoid; page-break-inside: avoid; }
   #label-print.roll .label { break-after: page; page-break-after: always; }

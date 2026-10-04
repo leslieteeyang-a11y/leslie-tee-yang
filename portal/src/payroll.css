@@ -1,0 +1,45 @@
+/* 薪资模块 */
+.pay-totbar { background: var(--navy); color: #fff; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pay-totbar > div { display: flex; justify-content: space-between; gap: 12px; }
+.pay-totbar b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.pay-totbar .muted { color: #cbd5e1; }
+.pay-row { padding: 14px 16px; }
+.pay-row.saved { border-left: 4px solid var(--green); }
+.pay-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.pay-top .ap { margin-left: 6px; }
+.pay-amt { font-size: 1.25rem; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pay-in { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 10px 0 6px; }
+.pay-in label { display: flex; flex-direction: column; gap: 2px; font-size: .8rem; color: var(--muted); }
+.pay-in input { padding: 6px 8px; height: 34px; box-sizing: border-box; }
+select.pay-mon { width: auto; min-width: 110px; flex: 0 0 auto; }
+.pay-in label.wide { grid-column: 1 / -1; }
+.pay-save { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pay-save p { flex-basis: 100%; margin: 4px 0 0; }
+.pay-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.pay-checks label.check { flex: 0 0 auto; white-space: nowrap; }
+.pay-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+tr.total td { font-weight: 600; }
+/* 工资单 */
+.ps { background: #fff; color: #111; padding: 18px 20px; border: 1px solid #e5e7eb; border-radius: 8px; max-width: 560px; margin: 0 auto 12px; font-size: 13px; }
+.ps .ph { display: flex; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 8px; }
+.ps .co { font-weight: 700; }
+.ps .ti { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
+.ps .pd { text-align: right; font-size: 12px; }
+.ps .who { font-weight: 700; font-size: 14px; margin: 6px 0 10px; }
+.ps table { width: 100%; border-collapse: collapse; margin-bottom: 10px; box-shadow: none; }
+.ps th { text-align: left; background: #f3f4f6; padding: 5px 8px; font-size: 12px; color: #111; }
+.ps td { padding: 4px 8px; border-bottom: 1px solid #f1f1f1; }
+.ps .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ps .zh { color: #6b7280; font-size: 11px; margin-left: 6px; }
+.ps tr.t td { font-weight: 600; border-top: 1px solid #111; }
+.ps tr.pnet td { font-weight: 700; font-size: 14px; background: #f9fafb; border-top: 2px solid #111; }
+.ps .ft { font-size: 11px; color: #6b7280; margin-top: 6px; }
+#pay-print { display: none; }
+@media print {
+  body:has(#pay-print) > *:not(#pay-print) { display: none !important; }
+  #pay-print { display: block; }
+  #pay-print .ps { border: none; max-width: none; break-after: page; page-break-after: always; }
+  html, body { background: #fff !important; margin: 0; padding: 0; }
+}
+/* 英文模式：工资单只留英文 */
+html[lang="en"] .ps .zh { display: none; }

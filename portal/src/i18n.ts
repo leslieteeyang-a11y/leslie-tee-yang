@@ -15,6 +15,7 @@ import { DICT_ATT } from "./i18n-dict-att";
 import { PATTERNS_ATT } from "./i18n-patterns-att";
 import { DICT_LEAVE, PATTERNS_LEAVE } from "./i18n-dict-leave";
 import { DICT_WH, PATTERNS_WH } from "./i18n-dict-wh";
+import { DICT_PAY, PATTERNS_PAY } from "./i18n-dict-pay";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -32,8 +33,8 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
-const ALL_PATTERNS = [...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
+const DICT: Record<string, string> = { ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
+const ALL_PATTERNS = [...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */

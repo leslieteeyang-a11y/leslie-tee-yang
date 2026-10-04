@@ -73,6 +73,7 @@ export default function HomePage({ me }: { me: Me }) {
       <ErrorBox error={error} />
       <InstallHint />
       {home?.att && <AttCard a={home.att} />}
+      <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
       {home && (
         <div className="kpis">
           <a className="kpi" href="#/tasks"><b>{home.my_open_tasks}</b><span>我的待办任务</span></a>
