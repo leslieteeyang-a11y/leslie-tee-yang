@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>薪资管理系统</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --paper:#E8EBE6; --card:#FFFFFF; --ink:#172420; --ink2:#4C5C55;
+  --line:#D3D9D0; --jade:#1D6B57; --jade-soft:#E4EFE9;
+  --rust:#A6402C; --rust-soft:#F6E7E3; --gold:#8A6A15; --gold-soft:#F2EEDF;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;padding-bottom:90px}
+h1,h2,h3{margin:0}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px}
+header{padding:18px 0 12px}
+header .t{font-family:Georgia,"Songti SC",serif;font-size:23px;letter-spacing:.5px}
+header .s{font-size:12px;color:var(--ink2);letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:40;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:11px 2px 13px;font-family:inherit;font-size:11.5px;color:var(--ink2);cursor:pointer}
+nav button .ic{display:block;font-size:17px;line-height:1.2}
+nav button.on{color:var(--jade);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.card h3{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink2);margin-bottom:10px;font-weight:600}
+label{display:block;font-size:12.5px;color:var(--ink2);margin:0 0 4px}
+input:not([type=checkbox]),select,textarea{width:100%;font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink)}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-offset:-1px;border-color:var(--jade)}
+.row{display:flex;gap:9px;flex-wrap:wrap}.row>div{flex:1;min-width:110px}
+.f{margin-bottom:10px}
+button.btn{font-family:inherit;font-size:14px;font-weight:600;padding:10px 15px;border-radius:8px;border:1px solid var(--jade);background:var(--jade);color:#fff;cursor:pointer}
+button.btn.alt{background:#fff;color:var(--jade)}
+button.btn.warn{background:#fff;color:var(--rust);border-color:var(--rust)}
+button.btn.sm{font-size:12.5px;padding:6px 10px;border-radius:6px}
+.hint{font-size:12px;color:var(--ink2);margin-top:5px}
+.empty{text-align:center;padding:28px 14px;color:var(--ink2);font-size:14px}
+.seg{display:flex;background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;padding:11px 4px;font-family:inherit;font-size:14.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button.on{background:var(--ink);color:#fff}
+.emp{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.emp:last-child{border-bottom:0}
+.emp .nm{font-weight:600}
+.emp .mt{font-size:12px;color:var(--ink2);margin-top:2px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;background:var(--jade-soft);color:var(--jade);margin-right:5px}
+.tag.g{background:var(--gold-soft);color:var(--gold)}
+.tag.q{background:#EDEFEC;color:var(--ink2)}
+.chk{display:flex;flex-direction:column;gap:2px;margin:8px 0}
+.chk label{display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--ink);padding:7px 0;margin:0;border-bottom:1px solid #F0F2EE}
+.chk label:last-child{border-bottom:0}
+.chk input{width:auto}
+.slip{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.slip .hd{padding:12px 14px;border-bottom:1px dashed var(--line);display:flex;justify-content:space-between;align-items:baseline}
+.slip .hd .n{font-weight:700;font-size:16px}
+.slip .hd .p{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.slip .bd{padding:6px 14px}
+.ln{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:14px;border-bottom:1px solid #F0F2EE}
+.ln:last-child{border-bottom:0}
+.ln .k{color:var(--ink2)}
+.ln .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.ln.add .v{color:var(--jade)}
+.ln.sub .v{color:var(--rust)}
+.ln.sec{border-top:1px dashed var(--line);margin-top:6px;padding-top:9px}
+.ln.sec .k{font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink2);font-weight:600}
+.net{background:var(--ink);color:#fff;padding:13px 14px;display:flex;justify-content:space-between;align-items:baseline}
+.net.gold{background:var(--gold)}
+.net .k{font-size:12px;letter-spacing:2px;text-transform:uppercase;opacity:.85}
+.net .v{font-family:var(--mono);font-size:21px;font-weight:700}
+.er{padding:9px 14px;background:#F7F9F6;border-top:1px solid var(--line);font-size:12px;color:var(--ink2);font-family:var(--mono)}
+.auto{background:var(--rust-soft);border:1px solid #E7C9C1;color:var(--rust);border-radius:7px;padding:8px 10px;font-size:12.5px;margin:8px 0 0}
+.hrow{border:1px solid var(--line);background:#fff;border-radius:10px;padding:12px;margin-bottom:10px}
+.hrow.comm{border-left:4px solid var(--gold)}
+.hrow.base{border-left:4px solid var(--jade)}
+.hrow .top{display:flex;justify-content:space-between;align-items:baseline}
+.hrow .amt{font-family:var(--mono);font-weight:700;font-size:16px}
+.hrow .sub{font-size:12px;color:var(--ink2);margin-top:3px;font-family:var(--mono)}
+.hrow .acts{display:flex;gap:7px;margin-top:9px}
+.totbar{background:var(--ink);color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-family:var(--mono);font-size:13px}
+.totbar div{display:flex;justify-content:space-between;padding:2px 0}
+.note{border-left:3px solid var(--gold);background:#fff;border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:9px}
+.note .d{font-size:11.5px;color:var(--ink2);font-family:var(--mono)}
+.note.done{opacity:.5}
+input[type=checkbox]{-webkit-appearance:checkbox;appearance:checkbox;width:20px;height:20px;min-width:20px;margin:0;padding:0;border:0;background:none;accent-color:var(--jade,#334C8C);flex:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;background:var(--ink);color:#fff;padding:9px 16px;border-radius:22px;font-size:13.5px;z-index:60;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
+.warnbox{background:var(--rust-soft);border:1px solid #E7C9C1;color:var(--rust);border-radius:8px;padding:9px 11px;font-size:13px;margin-bottom:10px}
+hr.d{border:0;border-top:1px dashed var(--line);margin:12px 0}
+#gate{position:fixed;inset:0;background:var(--paper);z-index:200;display:none;overflow:auto;padding:28px 16px}
+#gate .box{max-width:420px;margin:6vh auto}
+#gate h2{font-family:Georgia,"Songti SC",serif;font-size:24px;margin:0 0 4px}
+#gate .sub{font-size:13px;color:var(--ink2);margin-bottom:20px}
+.syncdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.syncdot.on{background:var(--jade)}.syncdot.off{background:var(--rust)}.syncdot.busy{background:var(--gold)}
+.brow{background:#fff;border:1px solid var(--line);border-left:4px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.brow.saved{border-left-color:var(--jade)}
+.brow .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.brow .nm{font-weight:600;font-size:14px}
+.brow .amt{font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap}
+.brow .bin{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:6px;margin-top:8px}
+.brow .bin label{font-size:11px;margin:0 0 2px}
+.brow .bin input{padding:6px 7px;font-size:14px}
+.brow .bx{font-size:11.5px;color:var(--rust);margin-top:5px}
+.brow .bx:empty{display:none}
+#printArea{display:none}
+@page{size:A4;margin:14mm}
+@media print{
+  body.printing{background:#fff;padding:0}
+  body.printing>*:not(#printArea){display:none!important}
+  body.printing #printArea{display:block}
+}
+.ps{font-family:Arial,"Microsoft YaHei","PingFang SC",sans-serif;color:#000;font-size:12.5px;max-width:720px;margin:0 auto;break-after:page;page-break-after:always}
+.ps:last-child{break-after:auto;page-break-after:auto}
+.ps .ph{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+.ps .co{font-size:17px;font-weight:700}
+.ps .ti{font-size:13px;letter-spacing:2px;margin-top:2px}
+.ps .pd{text-align:right;font-size:12px}
+.ps .who{font-size:14px;font-weight:700;margin:0 0 10px}
+.ps table{width:100%;border-collapse:collapse;margin-bottom:12px}
+.ps th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #000;padding:5px 4px;background:#f2f2f2}
+.ps td{padding:4px;border-bottom:1px solid #ddd}
+.ps td.n{text-align:right;font-family:Consolas,Menlo,monospace;white-space:nowrap}
+.ps .zh{color:#666;font-size:11px;margin-left:5px}
+.ps tr.t td{font-weight:700;border-top:1px solid #000;border-bottom:0}
+.ps tr.pnet td{font-weight:700;font-size:14px;background:#f2f2f2;border-bottom:2px solid #000}
+.ps .ft{font-size:10.5px;color:#666;margin-top:14px}
+#syncbar{position:fixed;top:0;left:0;right:0;background:var(--ink);color:#fff;font-size:12px;padding:5px 12px;z-index:150;display:none;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1 class="t">薪资管理系统</h1><div class="s">Payroll · Malaysia · 云端版 v3</div></header>
+  <div id="view"></div>
+</div>
+<nav>
+  <button data-t="calc" class="on"><span class="ic">▤</span>计算</button>
+  <button data-t="emp"><span class="ic">☰</span>员工</button>
+  <button data-t="hist"><span class="ic">⤓</span>历史</button>
+  <button data-t="note"><span class="ic">✎</span>备忘</button>
+  <button data-t="set"><span class="ic">⚙</span>设定</button>
+</nav>
+<div class="toast" id="toast"></div>
+<div id="syncbar"></div>
+<div id="printArea"></div>
+<div id="gate"><div class="box">
+  <h2>薪资管理系统</h2>
+  <div class="sub">资料存在你自己的 Supabase，手机电脑自动同步</div>
+  <div class="card" id="cfgCard">
+    <h3>第一步 · 连接 Supabase</h3>
+    <div class="f"><label>Project URL</label><input id="g_url" placeholder="https://xxxx.supabase.co"></div>
+    <div class="f"><label>anon public key</label><input id="g_key" placeholder="eyJhbGciOi..."></div>
+    <button class="btn" style="width:100%" onclick="saveCfg()">保存并连接</button>
+    <div class="hint">在 Supabase 后台 Settings → API 里复制。只存在这台机器，不会外传。</div>
+  </div>
+  <div class="card" id="authCard" style="display:none">
+    <h3>第二步 · 登入</h3>
+    <div class="f"><label>Email</label><input id="g_email" type="email" autocomplete="username"></div>
+    <div class="f"><label>密码</label><input id="g_pw" type="password" autocomplete="current-password"></div>
+    <button class="btn" style="width:100%" onclick="doLogin()">登入</button>
+    <button class="btn alt sm" style="width:100%;margin-top:8px" onclick="doSignup()">第一次用 · 注册</button>
+    <div class="hint" id="authMsg"></div>
+    <div class="hint">用户名就是你的 email。密码自己设，至少 6 个字。</div>
+    <hr class="d">
+    <button class="btn alt sm" style="width:100%" onclick="clearCfg()">换一个 Supabase 项目</button>
+  </div>
+</div></div>
+
+<script>
+const K={emp:'payroll:employees',hist:'payroll:history',note:'payroll:notes',trash:'payroll:trash',set:'payroll:settings'};
+const TRASH_DAYS=30;
+const K_SNAP='payroll:snapshots', K_META='payroll:meta';
+
+/* 存储：在 Claude 里用 window.storage；下载成文件后自动改用浏览器本机存储 */
+/* 本机快取（离线也能用），云端是 Supabase */
+const STORE={
+  async get(k){ const v=localStorage.getItem(k); return v?{key:k,value:v}:null; },
+  async set(k,v){ localStorage.setItem(k,v); return {key:k,value:v}; }
+};
+let SB=null, USER=null, CFG={url:'',key:''}, SYNCED={emp:{},hist:{},note:{},trash:{},set:null}, SYNCED_OK=false;
+const LISTS=['emp','hist','note','trash'];
+/* SYNCED = 云端上次确认的内容。存进本机，重开 App 才知道哪些改动还没推上去 */
+const K_SYNCED='payroll:synced', K_OWNER='payroll:owner';
+function loadSynced(){
+  SYNCED={emp:{},hist:{},note:{},trash:{},set:null}; SYNCED_OK=false;
+  try{ const o=JSON.parse(localStorage.getItem(K_SYNCED)||'null');
+    if(o&&USER&&o.uid===USER.id&&o.data){ SYNCED={...SYNCED,...o.data}; SYNCED_OK=true; } }catch(e){}
+}
+function saveSynced(){ if(!USER)return; try{ localStorage.setItem(K_SYNCED,JSON.stringify({uid:USER.id,data:SYNCED})); }catch(e){} }
+/* 本机快取是谁的。换人登入就先清掉，免得看到上一个人的资料 */
+function localOwner(){
+  const o=localStorage.getItem(K_OWNER); if(o)return o;
+  try{ const s=JSON.parse(localStorage.getItem(K_SYNCED)||'null'); return s&&s.uid||null; }catch(e){ return null; }
+}
+function clearLocal(){ [...Object.values(K),K_SNAP,K_META,K_SYNCED,K_OWNER].forEach(k=>localStorage.removeItem(k)); }
+/* 还没传上云端的项目数 */
+function pendingCount(){
+  if(!SYNCED_OK)return 0;
+  let n=0;
+  LISTS.filter(k=>!(k==='trash'&&TRASH_NO_DB)).forEach(k=>{ const ids=new Set(S[k].map(x=>x.id));
+    S[k].forEach(x=>{ if(SYNCED[k][x.id]!==JSON.stringify(x))n++; });
+    Object.keys(SYNCED[k]).forEach(id=>{ if(!ids.has(id))n++; }); });
+  if(JSON.stringify(S.set)!==SYNCED.set)n++;
+  return n;
+}
+/* 同步动作排队，一次一个，避免拉取和推送互相盖 */
+let SYNC_Q=Promise.resolve(), RETRY=null, TRASH_NO_DB=false;
+const queue=fn=>(SYNC_Q=SYNC_Q.then(fn,fn));
+/* 部署时可以直接填好 Supabase 的 Project URL 和 anon public key（这两样本来就是公开的），
+   每台电脑就不用再输入。留空 = 第一次打开时在画面上输入 */
+const PRESET_CFG={url:'',key:''};
+function loadCfg(){ try{ CFG=JSON.parse(localStorage.getItem('payroll:sbcfg')||'{}'); }catch(e){ CFG={}; }
+  if(!(CFG.url&&CFG.key)&&!CFG.manual&&PRESET_CFG.url&&PRESET_CFG.key)CFG={...PRESET_CFG};
+  return CFG.url&&CFG.key; }
+function saveCfg(){
+  const u=document.getElementById('g_url').value.trim().replace(/\/$/,'');
+  const k=document.getElementById('g_key').value.trim();
+  if(!u||!k){ gateMsg('两样都要填'); return; }
+  CFG={url:u,key:k}; localStorage.setItem('payroll:sbcfg',JSON.stringify(CFG));
+  initSB(); showAuth();
+}
+function clearCfg(){ localStorage.setItem('payroll:sbcfg','{"manual":1}'); location.reload(); }   // manual：不要再套用 PRESET_CFG
+function initSB(){ try{ SB=window.supabase.createClient(CFG.url,CFG.key);
+  SB.auth.onAuthStateChange(ev=>{ if(ev==='SIGNED_OUT')sessionLost(); });   // 别处登出／凭证失效
+  return true; }catch(e){ gateMsg('连不上：'+e.message); return false; } }
+function gateMsg(m){ const el=document.getElementById('authMsg'); if(el)el.textContent=m; }
+function showGate(){ document.getElementById('gate').style.display='block'; }
+function showAuth(){ document.getElementById('cfgCard').style.display='none'; document.getElementById('authCard').style.display='block'; }
+function hideGate(){ document.getElementById('gate').style.display='none'; }
+function syncBar(state,msg){
+  const b=document.getElementById('syncbar'); if(!b)return;
+  if(!msg){ b.style.display='none'; return; }
+  b.style.display='block'; b.innerHTML='<span class="syncdot '+state+'"></span>'+esc(msg);
+  if(state==='on') setTimeout(()=>{ if(b.textContent.includes(msg)) b.style.display='none'; },2500);
+}
+async function doLogin(){
+  if(!SB&&!initSB())return;
+  const email=document.getElementById('g_email').value.trim(), pw=document.getElementById('g_pw').value;
+  gateMsg('登入中…');
+  const {data,error}=await SB.auth.signInWithPassword({email,password:pw});
+  if(error){ gateMsg('登入失败：'+error.message); return; }
+  USER=data.user; await afterLogin();
+}
+async function doSignup(){
+  if(!SB&&!initSB())return;
+  const email=document.getElementById('g_email').value.trim(), pw=document.getElementById('g_pw').value;
+  if(pw.length<6){ gateMsg('密码至少 6 个字'); return; }
+  gateMsg('注册中…');
+  const {data,error}=await SB.auth.signUp({email,password:pw});
+  if(error){ gateMsg('注册失败：'+error.message); return; }
+  if(!data.session){ gateMsg('注册成功，去 email 收确认信，确认后回来登入'); return; }
+  USER=data.user; await afterLogin();
+}
+/* 登出：先把没传完的推上去；推不上就要再按一次确认。登出后清掉这台电脑上的薪资资料 */
+let LOGGING_OUT=false;
+async function doLogout(){
+  await pushAll();
+  const n=pendingCount(), lt=TRASH_NO_DB?S.trash.length:0;
+  if((n||lt)&&delArm!=='logout'){ delArm='logout'; render();
+    toast(n?'还有 '+n+' 项没传上云端，再按一次会丢掉':'回收站 '+lt+' 项只存在这台电脑，登出会清掉。再按一次确认'); return; }
+  LOGGING_OUT=true;
+  // 只登出这台电脑（scope:'local'），不影响另一台。没网路时 signOut 会失败，所以登入凭证一律自己删
+  try{ if(SB){ const {error}=await SB.auth.signOut({scope:'local'}); if(error)throw error; } }catch(e){}
+  // 只删薪资系统自己那个 Supabase 项目的凭证。跟别的系统放在同一个网址时，不能动到别人的登入
+  try{ if(SB&&SB.auth.storageKey)localStorage.removeItem(SB.auth.storageKey); }catch(e){}
+  try{ localStorage.removeItem('sb-'+new URL(CFG.url).hostname.split('.')[0]+'-auth-token'); }catch(e){}
+  clearLocal(); location.reload();
+}
+/* 登入还有效吗？true＝有效；false＝失效要重新登入；null＝只是网路不通 */
+async function sessionOK(){
+  if(!SB.auth||!SB.auth.getSession)return true;
+  try{
+    const {data,error}=await SB.auth.getSession();
+    if(data&&data.session)return true;
+    if(error&&/fetch|network|retryable/i.test((error.name||'')+' '+(error.message||'')))return null;
+    return false;
+  }catch(e){ return null; }
+}
+/* 登入过期：盖上登入画面，本机还没传的资料留着，重新登入后会补推 */
+function sessionLost(){
+  if(!USER||LOGGING_OUT)return;
+  syncBar('off','登入已过期，请重新登入（还没传上去的资料会保留）');
+  showGate(); showAuth(); gateMsg('登入已过期，请重新登入');
+}
+async function afterLogin(){
+  hideGate();
+  const owner=localOwner();
+  if(owner&&owner!==USER.id) clearLocal();
+  localStorage.setItem(K_OWNER,USER.id);
+  await load(); loadSynced(); syncBar('busy','正在拉取云端资料…');
+  await pullAll(); render();
+}
+/* 云端分页拉，一页最多 1000 笔（Supabase 上限），拉到没有为止 */
+async function fetchAll(){
+  const out=[];
+  for(let from=0;;){
+    const {data,error}=await SB.from('payroll_rows').select('kind,row_id,data').eq('user_id',USER.id)
+      .order('kind').order('row_id').range(from,from+999);
+    if(error)throw error;
+    if(!data||!data.length)break;
+    out.push(...data); from+=data.length;
+  }
+  return out;
+}
+/* 拉云端：云端为准，但本机还没推上去的改动（新增／修改／删除）保留，拉完马上补推 */
+function pullAll(){ return queue(_pull); }
+async function _pull(){
+  if(!SB||!USER)return false;
+  const before=JSON.stringify([S.emp,S.hist,S.note,S.set]);
+  // 登入失效时 RLS 会回传「0 笔」而不是错误，不能当成云端是空的
+  const ok=await sessionOK();
+  if(ok===false){ sessionLost(); return false; }
+  if(ok===null){ syncBar('off','连不上网路，资料在本机，会自动重试'); retryLater(); return false; }
+  try{
+    const data=await fetchAll();
+    const g={emp:[],hist:[],note:[],trash:[]};
+    let st=null;
+    data.forEach(r=>{ if(r.kind==='set'){ if(r.row_id==='main')st=r.data; } else if(g[r.kind])g[r.kind].push(r.data); });
+    LISTS.forEach(k=>{
+      const cloud={}; g[k].forEach(x=>cloud[x.id]=JSON.stringify(x));
+      let out=g[k];
+      if(SYNCED_OK){
+        const localIds=new Set(S[k].map(x=>x.id));
+        const dirty=S[k].filter(x=>SYNCED[k][x.id]!==JSON.stringify(x));
+        const dirtyIds=new Set(dirty.map(x=>x.id));
+        const removed=new Set(Object.keys(SYNCED[k]).filter(id=>!localIds.has(id)));
+        out=g[k].filter(x=>!removed.has(x.id)&&!dirtyIds.has(x.id)).concat(dirty);
+      }
+      S[k]=out; SYNCED[k]=cloud;
+    });
+    const setDirty=SYNCED_OK&&SYNCED.set!==null&&JSON.stringify(S.set)!==SYNCED.set;
+    if(st&&!setDirty){ S.set={...DEF_SET,...st}; SYNCED.set=JSON.stringify(S.set); }
+    else SYNCED.set=st?JSON.stringify(st):null;
+    S.trash=S.trash.filter(t=>Date.now()-(+t.ts||0)<TRASH_DAYS*86400000);   // 回收站只留 30 天
+    SYNCED_OK=true; saveSynced();
+    for(const k of [...LISTS,'set']) await STORE.set(K[k],JSON.stringify(S[k]));
+    let ok=true;
+    for(const k of [...LISTS,'set']) ok=(await _push(k))&&ok;
+    if(ok) syncBar('on','已同步');
+  }catch(e){ syncBar('off','拉取失败，资料仍在本机：'+e.message); retryLater(); }
+  const changed=before!==JSON.stringify([S.emp,S.hist,S.note,S.set]);
+  if(changed)batchInvalidate();
+  return changed;
+}
+function pushKind(k){ return queue(()=>_push(k)); }
+function pushAll(){ return queue(async()=>{ for(const k of [...LISTS,'set']) await _push(k); }); }
+function retryLater(){ clearTimeout(RETRY); RETRY=setTimeout(()=>pullAll().then(ch=>{ if(ch)safeRender(); }),20000); }
+async function _push(k){
+  if(!SB||!USER||!SYNCED_OK)return true;
+  if(k==='trash'&&TRASH_NO_DB)return true;
+  try{
+    if(k==='set'){
+      const j=JSON.stringify(S.set); if(j===SYNCED.set)return true;
+      const {error}=await SB.from('payroll_rows').upsert({user_id:USER.id,kind:'set',row_id:'main',data:S.set,updated_at:new Date().toISOString()},{onConflict:'user_id,kind,row_id'});
+      if(error)throw error; SYNCED.set=j; saveSynced(); return true;
+    }
+    const cur={}; S[k].forEach(x=>cur[x.id]=JSON.stringify(x));
+    const up=S[k].filter(x=>SYNCED[k][x.id]!==cur[x.id])
+      .map(x=>({user_id:USER.id,kind:k,row_id:x.id,data:x,updated_at:new Date().toISOString()}));
+    const gone=Object.keys(SYNCED[k]).filter(id=>!(id in cur));
+    for(let i=0;i<up.length;i+=500){ const {error}=await SB.from('payroll_rows').upsert(up.slice(i,i+500),{onConflict:'user_id,kind,row_id'}); if(error)throw error; }
+    for(let i=0;i<gone.length;i+=200){ const {error}=await SB.from('payroll_rows').delete().eq('user_id',USER.id).eq('kind',k).in('row_id',gone.slice(i,i+200)); if(error)throw error; }
+    SYNCED[k]=cur; saveSynced();
+    if(up.length||gone.length) syncBar('on','已同步到云端');
+    return true;
+  }catch(e){
+    // 回收站要先在 Supabase 跑 supabase-upgrade-v3.sql；没跑之前只存在这台电脑，不影响其他资料同步
+    if(k==='trash'&&(e.code==='23514'||/check constraint/i.test(e.message||''))){ TRASH_NO_DB=true; toast('回收站暂时只存在这台电脑（Supabase 还没升级）'); return true; }
+    if(e.code==='42501'||/row-level security|JWT/i.test(e.message||'')){ sessionLost(); return false; }   // 登入失效
+    syncBar('off','还没传上云端，资料在本机，会自动重试：'+e.message); retryLater(); return false;
+  }
+}
+/* 重绘前先收好计算页的输入，免得同步完把正在填的东西清掉 */
+function safeRender(){ if(tab==='calc'&&S.emp.length&&mode!=='batch')collect(); render(); }
+
+const DEF_SET={
+  epfEmpLocal:11, epfErLow:13, epfErHigh:12, epfErThreshold:5000,
+  epfEmp60:0, epfEr60:4, epfForeignErFlat:5,
+  pcbThreshold:3000, company:'',
+  wrongGoodsRate:10, lateUnit:3, lateFraction:0.5, lateNoGroup:5
+};
+let S={emp:[],hist:[],note:[],trash:[],set:{...DEF_SET}};
+let tab='calc', mode='base', delArm=null, editId=null, editEmpId=null, FRM={}, dupPending=null, editNoteId=null, MERGE_MSG='';
+
+async function load(){for(const[k,key]of Object.entries(K)){try{const r=await STORE.get(key);if(r&&r.value){const v=JSON.parse(r.value);if(k==='set')S.set={...DEF_SET,...v};else S[k]=v;}}catch(e){}}
+  try{const r=await STORE.get(K_SNAP);if(r&&r.value)SNAPS=JSON.parse(r.value)||[];}catch(e){}
+  try{const r=await STORE.get(K_META);if(r&&r.value)META={lastBackup:0,...JSON.parse(r.value)};}catch(e){}}
+let SNAPS=[], META={lastBackup:0};
+async function save(k){
+  try{ await STORE.set(K[k],JSON.stringify(S[k])); }catch(e){ toast('存储失败，数据只在本次有效'); return; }
+  if(k==='emp'||k==='hist'||k==='note') snapshot();
+  if(k==='emp'||k==='hist') batchInvalidate();
+  pushKind(k);
+  if(k!=='trash'&&TRASH_CHG){ TRASH_CHG=false; await save('trash'); }   // 顺便存回收站
+}
+async function snapshot(){
+  const now=Date.now();
+  const last=SNAPS[0];
+  const payload=JSON.stringify({emp:S.emp,hist:S.hist,note:S.note,set:S.set});
+  if(last&&last.data===payload) return;                    // 内容没变就不存
+  if(last&&now-last.ts<60000){ SNAPS[0]={ts:now,data:payload}; }   // 一分钟内合并成一笔
+  else SNAPS.unshift({ts:now,data:payload});
+  SNAPS=SNAPS.slice(0,12);
+  try{ await STORE.set(K_SNAP,JSON.stringify(SNAPS)); }catch(e){}
+}
+async function markBackup(){ META.lastBackup=Date.now(); try{ await STORE.set(K_META,JSON.stringify(META)); }catch(e){} }
+function daysSinceBackup(){ return META.lastBackup?Math.floor((Date.now()-META.lastBackup)/86400000):null; }
+
+const r2=x=>Math.round((x+Number.EPSILON)*100)/100;
+const r10c=x=>Math.round(x*10)/10;
+const rInt=x=>Math.round(x);
+const ceilRM=x=>{const v=Math.ceil(x-1e-9);return v===0?0:v;};
+const money=x=>(x<0?'-':'')+'RM '+Math.abs(r2(x)).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const MON=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+function workDays(y,m){const d=new Date(y,m-1,1);let n=0;while(d.getMonth()===m-1){if(d.getDay()!==0)n++;d.setDate(d.getDate()+1);}return n;}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2000);}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=id=>{const e=document.getElementById(id);return e?(parseFloat(e.value)||0):0;};
+const val=id=>{const e=document.getElementById(id);return e?e.value:'';};
+
+
+/* PERKESO Act 4 官方缴费表（含 SKBBK / LINDUNG 24 Jam），2026年6月生效
+   每列：[薪金上限, 第一类雇主, 员工Keilatan, 员工SKBBK, 第二类雇主, 第二类员工SKBBK] */
+const SOCSO_TBL=[
+[30,0.40,0.10,0.20,0.30,0.20],[50,0.70,0.20,0.30,0.50,0.30],[70,1.10,0.30,0.50,0.80,0.50],
+[100,1.50,0.40,0.65,1.10,0.65],[140,2.10,0.60,0.90,1.50,0.90],[200,2.95,0.85,1.25,2.10,1.25],
+[300,4.35,1.25,1.85,3.10,1.85],[400,6.15,1.75,2.65,4.40,2.65],[500,7.85,2.25,3.35,5.60,3.35],
+[600,9.65,2.75,4.15,6.90,4.15],[700,11.35,3.25,4.85,8.10,4.85],[800,13.15,3.75,5.65,9.40,5.65],
+[900,14.85,4.25,6.35,10.60,6.35],[1000,16.65,4.75,7.15,11.90,7.15],[1100,18.35,5.25,7.85,13.10,7.85],
+[1200,20.15,5.75,8.65,14.40,8.65],[1300,21.85,6.25,9.35,15.60,9.35],[1400,23.65,6.75,10.15,16.90,10.15],
+[1500,25.35,7.25,10.85,18.10,10.85],[1600,27.15,7.75,11.65,19.40,11.65],[1700,28.85,8.25,12.35,20.60,12.35],
+[1800,30.65,8.75,13.15,21.90,13.15],[1900,32.35,9.25,13.85,23.10,13.85],[2000,34.15,9.75,14.65,24.40,14.65],
+[2100,35.85,10.25,15.35,25.60,15.35],[2200,37.65,10.75,16.15,26.90,16.15],[2300,39.35,11.25,16.85,28.10,16.85],
+[2400,41.15,11.75,17.65,29.40,17.65],[2500,42.85,12.25,18.35,30.60,18.35],[2600,44.65,12.75,19.15,31.90,19.15],
+[2700,46.35,13.25,19.85,33.10,19.85],[2800,48.15,13.75,20.65,34.40,20.65],[2900,49.85,14.25,21.35,35.60,21.35],
+[3000,51.65,14.75,22.15,36.90,22.15],[3100,53.35,15.25,22.85,38.10,22.85],[3200,55.15,15.75,23.65,39.40,23.65],
+[3300,56.85,16.25,24.35,40.60,24.35],[3400,58.65,16.75,25.15,41.90,25.15],[3500,60.35,17.25,25.85,43.10,25.85],
+[3600,62.15,17.75,26.65,44.40,26.65],[3700,63.85,18.25,27.35,45.60,27.35],[3800,65.65,18.75,28.15,46.90,28.15],
+[3900,67.35,19.25,28.85,48.10,28.85],[4000,69.15,19.75,29.65,49.40,29.65],[4100,70.85,20.25,30.35,50.60,30.35],
+[4200,72.65,20.75,31.15,51.90,31.15],[4300,74.35,21.25,31.85,53.10,31.85],[4400,76.15,21.75,32.65,54.40,32.65],
+[4500,77.85,22.25,33.35,55.60,33.35],[4600,79.65,22.75,34.15,56.90,34.15],[4700,81.35,23.25,34.85,58.10,34.85],
+[4800,83.15,23.75,35.65,59.40,35.65],[4900,84.85,24.25,36.35,60.60,36.35],[5000,86.65,24.75,37.15,61.90,37.15],
+[5100,88.35,25.25,37.85,63.10,37.85],[5200,90.15,25.75,38.65,64.40,38.65],[5300,91.85,26.25,39.35,65.60,39.35],
+[5400,93.65,26.75,40.15,66.90,40.15],[5500,95.35,27.25,40.85,68.10,40.85],[5600,97.15,27.75,41.65,69.40,41.65],
+[5700,98.85,28.25,42.35,70.60,42.35],[5800,100.65,28.75,43.15,71.90,43.15],[5900,102.35,29.25,43.85,73.10,43.85],
+[6000,104.15,29.75,44.65,74.40,44.65]];
+function socsoRow(w){ for(const r of SOCSO_TBL) if(w<=r[0]) return r; return SOCSO_TBL[SOCSO_TBL.length-1]; }
+/* EIS (Act 800)：级距中间值 × 0.2%，双方各付，上限 RM6,000 */
+function eisAmt(w){ let lo=0; for(const r of SOCSO_TBL){ if(w<=r[0]) return r2((lo+r[0])/2*0.002); lo=r[0]; } return r2(5950*0.002); }
+/* EPF 第三附表：RM10 以下不缴；≤RM5,000 每 RM20 一级；RM5,000–20,000 每 RM100 一级；
+   都取级距上限算百分比，最后进位到令吉。超过 RM20,000 直接按实际薪金 */
+function epfWage(w){
+  if(w<=10)return 0;
+  if(w>20000)return w;
+  return w>5000?Math.ceil(w/100-1e-9)*100:Math.ceil(w/20-1e-9)*20;
+}
+const pos=v=>Math.max(0,+v||0);                               // 不准负数的栏位一律当 0
+
+/* 入职／离职：哪个月算在职、当月有几个工作天不在职 */
+const ymd=(y,m,d)=>y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+const monthEnd=(y,m)=>new Date(y,m,0).getDate();
+function inMonth(e,y,m){
+  if(e.joinDate&&e.joinDate>ymd(y,m,monthEnd(y,m)))return false;
+  if(e.leaveDate)return e.leaveDate>=ymd(y,m,1);
+  return e.status!=='left';
+}
+function absentDays(e,y,m){
+  if(!e.joinDate&&!e.leaveDate)return 0;
+  let n=0; const d=new Date(y,m-1,1);
+  while(d.getMonth()===m-1){ const s=ymd(y,m,d.getDate());
+    if(d.getDay()!==0&&((e.joinDate&&s<e.joinDate)||(e.leaveDate&&s>e.leaveDate)))n++;
+    d.setDate(d.getDate()+1); }
+  return n;
+}
+const isLeft=e=>e.status==='left'||!!(e.leaveDate&&e.leaveDate<ymd(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate()));
+
+/* ===== 第一部分：底薪 ===== */
+function calcBase(e,i){
+  const st=S.set, base=pos(e.base);
+  const wd=Math.max(1,pos(i.workDays)||workDays(i.year,i.month));
+  const otHours=pos(i.otHours);
+  const otTotal=rInt(base/wd/8*1.5*otHours);
+  const absentCal=absentDays(e,i.year,i.month);               // 入职前／离职后的工作天（照日历数）
+  const absent=Math.min(wd,absentCal*wd/workDays(i.year,i.month));   // 手动改过工作天数时按比例换算
+  const absentDeduct=rInt(base/wd*absent);
+  const unpaidDays=Math.min(pos(i.unpaidDays),r2(wd-absent));
+  const unpaidDeduct=rInt(base/wd*(absent+unpaidDays))-absentDeduct;   // 两项一起取整，合计不会超过底薪
+  const statWage=r2(Math.max(0,base-absentDeduct-unpaidDeduct));   // 法定基数 = 底薪 − 未在职 − 无薪假
+  const cat=e.category||'local';
+  const ew=epfWage(statWage);
+  let epfEmp=0,epfEr=0;
+  if(cat==='local'){epfEmp=ceilRM(ew*st.epfEmpLocal/100);epfEr=ceilRM(ew*(statWage<=st.epfErThreshold?st.epfErLow:st.epfErHigh)/100);}
+  else if(cat==='local60'){epfEmp=ceilRM(ew*st.epfEmp60/100);epfEr=ceilRM(ew*st.epfEr60/100);}
+  else{epfEmp=e.epfOptIn?ceilRM(ew*st.epfEmpLocal/100):0;
+       epfEr=e.epfOptIn?ceilRM(ew*st.epfErLow/100):st.epfForeignErFlat;}
+  // SOCSO：查 Act 4 官方表
+  const row=socsoRow(statWage);
+  const skbbkOn = e.skbbk!==false;
+  let socsoEmp=0,socsoEr=0;
+  if(statWage>0){
+    if(cat==='local'){ socsoEr=row[1]; socsoEmp=r2(row[2]+(skbbkOn?row[3]:0)); }
+    else { socsoEr=row[4]; socsoEmp=skbbkOn?row[5]:0; }     // 60岁以上／外劳：第二类
+  }
+  // EIS：60岁以上及外劳豁免
+  let eisEmp=0,eisEr=0;
+  if(cat==='local'&&statWage>0){ eisEmp=eisAmt(statWage); eisEr=eisEmp; }
+  // 个别豁免
+  if(e.noEpf){epfEmp=0;epfEr=0;}
+  if(e.noSocso){socsoEmp=0;socsoEr=0;}
+  if(e.noEis){eisEmp=0;eisEr=0;}
+  const pcb=base>st.pcbThreshold?pos(i.pcb):0;
+  const advance=+i.advance||0;                                  // 负数 = 补发
+  let payComm=0, baseSales=0, baseRate=0, basePayComm=0, baseExtraComm=0;
+  if(e.commWithBase){
+    if(e.commType==='percent'){
+      baseSales=pos(i.baseSales); baseRate=(i.baseRate!=null&&i.baseRate!=='')?pos(i.baseRate):pos(e.commRate);
+      payComm=r10c(baseSales*baseRate/100);
+    } else { basePayComm=pos(i.basePayComm); payComm=r10c(basePayComm); }
+    baseExtraComm=pos(i.baseExtraComm);
+    payComm=r2(payComm+baseExtraComm);
+  }
+  const gross=r2(base-absentDeduct-unpaidDeduct+otTotal+payComm);
+  const net=r2(gross-epfEmp-socsoEmp-eisEmp-pcb-advance);
+  return {base,workDays:wd,skbbk:skbbkOn,payComm,baseSales,baseRate,basePayComm,baseExtraComm,otHours,otTotal,
+    absentDays:absentCal,absentDeduct,unpaidDays,unpaidDeduct,
+    statWage,epfEmp,epfEr,socsoEmp,socsoEr,eisEmp,eisEr,pcb,advance,gross,net};
+}
+
+/* ===== 第二部分：佣金 ===== */
+function calcComm(e,i){
+  const st=S.set, base=pos(e.base);
+  const wd=Math.max(1,pos(i.workDays)||workDays(i.year,i.month));
+  const dayRate=base/wd;
+
+  let commPersonal=0;
+  if(e.commType==='percent')commPersonal=r10c(pos(i.sales)*pos(e.commRate)/100);
+  else if(e.commType==='fixed')commPersonal=r10c(pos(e.commRate));
+
+  let commGroup = e.groupComm===false ? 0 : r10c(pos(i.commGroup));
+  const commGroupIn = commGroup;                              // 原始输入，编辑时要用这个，不是扣完的
+  const late=pos(i.lateCount);
+  const groupVoided = late>=st.lateNoGroup && commGroup>0;
+  if(late>=st.lateNoGroup) commGroup=0;                       // 迟到达标自动取消团体佣金
+
+  const wrongQty=pos(i.wrongQty);
+  const wrongGoods=r2(wrongQty*st.wrongGoodsRate);            // 每包 RM10
+  const lateUnits=Math.floor(late/st.lateUnit);               // 每 3 次 = 半天
+  const lateDeduct=rInt(lateUnits*dayRate*st.lateFraction);
+  const otherDeduct=+i.otherDeduct||0;                        // 负数 = 补发
+  const totalDeduct=r2(wrongGoods+lateDeduct+Math.max(0,otherDeduct));
+  let extraPay=otherDeduct<0?r2(-otherDeduct):0;
+
+  // 佣金本身取到 RM0.10；扣款照实扣到仙
+  let left=totalDeduct;
+  const gTake=Math.min(left,commGroup); commGroup=r2(commGroup-gTake); left=r2(left-gTake);
+  const pTake=Math.min(left,commPersonal); commPersonal=r2(commPersonal-pTake); left=r2(left-pTake);
+  const xTake=Math.min(left,extraPay); extraPay=r2(extraPay-xTake); left=r2(left-xTake);
+  const spill=r2(left);
+  const payout=r2(commPersonal+commGroup+extraPay);
+
+  return {base,workDays:wd,sales:pos(i.sales),commPersonal,commGroup,commGroupIn,groupVoided,
+    lateCount:late,lateUnits,lateDeduct,wrongQty,wrongGoods,otherDeduct,extraPay,totalDeduct,spill,payout};
+}
+
+/* ===== 视图 ===== */
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  document.getElementById('view').innerHTML=({calc:vCalc,emp:vEmp,hist:vHist,note:vNote,set:vSet})[tab]();
+  if(tab==='calc'&&S.emp.length){ if(mode==='batch')bRefresh(); else runCalc(); }
+}
+const SEG=()=>`<div class="seg">
+    <button class="${mode==='base'?'on':''}" onclick="setMode('base')">底薪</button>
+    <button class="${mode==='comm'?'on':''}" onclick="setMode('comm')">佣金</button>
+    <button class="${mode==='batch'?'on':''}" onclick="setMode('batch')">整月批量</button>
+  </div>`;
+function vCalc(){
+  if(!S.emp.length)return '<div class="card"><div class="empty">还没有员工资料。<br>先到「员工」加人，再回来计算。</div></div>';
+  if(mode==='batch')return backupCard()+SEG()+vBatch();
+  const now=new Date(), y=FRM.year||now.getFullYear(), m=FRM.month||now.getMonth()+1;
+  // 名单 = 这个月在职的人（含当月离职、当月入职）；编辑旧记录时一定带上那位员工
+  let act=S.emp.filter(x=>inMonth(x,y,m)).sort(nameSort);
+  if(!act.length) act=S.emp.slice().sort(nameSort);
+  if(mode==='base'){ const wb=act.filter(x=>!x.commOnly||x.commWithBase); if(wb.length) act=wb; }
+  const editing=editId&&S.hist.find(h=>h.id===editId);
+  if(editId&&!editing)editId=null;                              // 正在编辑的那笔被删了（或另一台删了）
+  if(editing&&!act.some(x=>x.id===editing.empId)){ const ee=S.emp.find(x=>x.id===editing.empId); if(ee) act=[ee,...act]; }
+  const eid=(FRM.eid&&act.some(x=>x.id===FRM.eid))?FRM.eid:act[0].id;
+  const e=empOf(eid)||act[0];
+  const wd=FRM.workDays||workDays(y,m);
+  const head=`
+  ${backupCard()}${SEG()}
+  <div class="card">
+    <div class="row">
+      <div class="f"><label>员工</label><select id="eid" onchange="fchg()">${act.map(x=>`<option value="${x.id}" ${x.id===eid?'selected':''}>${esc(x.name)}${isLeft(x)?'（已离职）':''}</option>`).join('')}</select></div>
+      <div class="f"><label>月份</label><select id="month" onchange="fchg(1)">${MON.map((n,idx)=>`<option value="${idx+1}" ${idx+1===m?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="f"><label>年份</label><input type="number" id="year" value="${y}" onchange="fchg(1)"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>工作天数（一至六）</label><input type="number" id="workDays" value="${wd}" oninput="runCalc()">
+        <div class="hint">${MON[m-1]}自动算出 ${workDays(y,m)} 天${wd!=workDays(y,m)?'（你改过）':''}</div></div>
+      <div class="f"><label>底薪 RM</label><input type="number" value="${e.base}" disabled></div>
+    </div>
+  </div>`;
+  return head + (mode==='base'?vBase(e):vComm(e)) + `<div id="slip"></div>
+  <div class="card">
+    <div class="f"><label>备注</label><input type="text" id="remark" value="${esc(FRM.remark??'')}" placeholder="选填"></div>
+    ${dupPending?`<div class="warnbox"><b>${esc(dupPending.rec.empName)}　${dupPending.rec.year}／${MON[dupPending.rec.month-1]}　${dupPending.rec.type==='base'?'底薪':'佣金'}已经有一笔了</b><br>原本那笔：${money(dupPending.dupAmt)}　这次算出：${money(dupPending.rec.type==='base'?dupPending.rec.net:dupPending.rec.payout)}</div>
+      <div class="row" style="margin-bottom:10px">
+        <div><button class="btn" style="width:100%" onclick="dupChoose('replace')">覆盖原本那笔</button></div>
+        <div><button class="btn alt sm" style="width:100%;padding:10px" onclick="dupChoose('add')">还是另存一笔</button></div>
+      </div>
+      <button class="btn alt sm" style="width:100%" onclick="dupChoose('cancel')">取消</button>`
+    :`<button class="btn" style="width:100%" onclick="saveRun()">${editId?'更新这笔记录':(mode==='base'?'存入历史（底薪）':'存入历史（佣金）')}</button>`}
+    ${editId?'<button class="btn alt sm" style="width:100%;margin-top:8px" onclick="editId=null;FRM={};render()">取消编辑</button>':''}
+  </div>`;
+}
+function vBase(e){
+  if(e.commOnly&&!e.commWithBase) return `<div class="card"><div class="empty">${esc(e.name)} 没有底薪，只拿佣金。<br>切到上面的「佣金」页计算。</div></div>`;
+  const showPCB=(+e.base||0)>S.set.pcbThreshold;
+  return `
+  <div class="card"><h3>加班 · 无薪假</h3>
+    <div class="row">
+      <div class="f"><label>加班时数</label><input type="number" step="0.5" id="otHours" value="${FRM.otHours??''}" oninput="runCalc()"></div>
+      <div class="f"><label>无薪假天数</label><input type="number" step="0.5" id="unpaidDays" value="${FRM.unpaidDays??''}" oninput="runCalc()"></div>
+    </div>
+    <div class="hint">加班 = 底薪 ÷ 工作天 ÷ 8 × 1.5，取到最接近令吉。</div>
+  </div>
+  ${e.commWithBase?`<div class="card"><h3>佣金（月头一起出）</h3>
+    ${e.commType==='percent'?`
+      <div class="row">
+        <div class="f"><label>销售额 RM</label><input type="number" step="0.01" id="baseSales" value="${FRM.baseSales??''}" oninput="runCalc()"></div>
+        <div class="f"><label>抽成 %</label><input type="number" step="0.01" id="baseRate" value="${FRM.baseRate??e.commRate}" oninput="runCalc()"></div>
+      </div>
+      <div class="hint">抽成 % 预设是员工资料里的 ${e.commRate}%，这个月不一样可以直接改，只影响这一笔。</div>`
+    :e.commType==='fixed'?`
+      <div class="f"><label>固定佣金 RM</label><input type="number" step="0.01" id="basePayComm" value="${FRM.basePayComm??e.commRate}" oninput="runCalc()"></div>`
+    :`<div class="f"><label>佣金 RM（直接填金额）</label><input type="number" step="0.01" id="basePayComm" value="${FRM.basePayComm??''}" oninput="runCalc()"></div>
+      <div class="hint">这位员工的佣金方式设定为「不领个人佣金」。要按销售额抽成的话，去员工资料改成「按销售额抽 %」。</div>`}
+    <div class="f"><label>其他佣金／加额 RM</label><input type="number" step="0.01" id="baseExtraComm" value="${FRM.baseExtraComm??''}" oninput="runCalc()"></div>
+    <div class="hint">佣金不进 EPF／SOCSO／EIS 基数。</div>
+  </div>`:''}
+  <div class="card"><h3>其他扣项</h3>
+    <div class="row">
+      <div class="f"><label>PCB RM${showPCB?'':'（底薪未过 RM'+S.set.pcbThreshold+'）'}</label><input type="number" id="pcb" value="${FRM.pcb??''}" oninput="runCalc()" ${showPCB?'':'disabled'}></div>
+      <div class="f"><label>预支／其他 RM</label><input type="number" id="advance" value="${FRM.advance??''}" oninput="runCalc()"></div>
+    </div>
+    <div class="hint">EPF／SOCSO／EIS 按「底薪 − 无薪假扣款」算，加班和佣金都不进基数。「预支／其他」填负数 = 补发给员工。</div>
+  </div>`;
+}
+function vComm(e){
+  return `
+  <div class="card"><h3>佣金</h3>
+    ${e.commType==='percent'?`<div class="f"><label>个人销售额 RM　→　抽 ${e.commRate}%</label><input type="number" id="sales" value="${FRM.sales??''}" oninput="runCalc()"></div>`:''}
+    ${e.commType==='fixed'?`<div class="hint" style="margin-bottom:10px">个人佣金：每月固定 ${money(e.commRate)}（在员工资料里改）</div>`:''}
+    ${e.commType==='none'?`<div class="hint" style="margin-bottom:10px">这位员工不领个人佣金。</div>`:''}
+    ${e.groupComm!==false?`<div class="f"><label>团体佣金 RM（手动输入）</label><input type="number" id="commGroup" value="${FRM.commGroup??''}" oninput="runCalc()"></div>`:`<div class="hint">这位员工没有团体佣金。</div>`}
+  </div>
+  <div class="card"><h3>扣佣金</h3>
+    <div class="row">
+      <div class="f"><label>包错货 · 包数</label><input type="number" id="wrongQty" value="${FRM.wrongQty??''}" oninput="runCalc()"></div>
+      <div class="f"><label>迟到次数</label><input type="number" id="lateCount" value="${FRM.lateCount??''}" oninput="runCalc()"></div>
+    </div>
+    <div class="f"><label>其他扣款 RM</label><input type="number" id="otherDeduct" value="${FRM.otherDeduct??''}" oninput="runCalc()"></div>
+    <div class="hint">包错货每包扣 RM${S.set.wrongGoodsRate}；迟到每 ${S.set.lateUnit} 次扣半天薪（半天 = 底薪 ÷ 工作天 ÷ 2）；迟到满 ${S.set.lateNoGroup} 次，团体佣金归零。只填数量，金额自动算。「其他扣款」填负数 = 补发。</div>
+    ${e.commOnly?`<div class="auto">这位员工没有底薪，算不出半天薪，所以迟到只会让团体佣金归零，不会扣钱。要罚钱请填「其他扣款」。</div>`:''}
+    <div id="autoNote"></div>
+  </div>`;
+}
+function setMode(m){collect();mode=m;editId=null;dupPending=null;render();}
+function fchg(reset){
+  collect();                                    // 先收好画面上的输入
+  dupPending=null;                              // 换了员工／月份，重复警告作废
+  FRM.eid=val('eid');FRM.month=+val('month');FRM.year=+val('year');
+  if(reset)FRM.workDays=null;                   // 再清工作天，让它照新月份重算
+  render();
+}
+function collect(){
+  ['otHours','unpaidDays','pcb','advance','basePayComm','baseSales','baseRate','baseExtraComm','sales','commGroup','wrongQty','lateCount','otherDeduct','remark'].forEach(k=>{const el=document.getElementById(k);if(el)FRM[k]=el.value;});
+  const w=document.getElementById('workDays'); FRM.workDays=w?(parseFloat(w.value)||null):FRM.workDays;
+}
+function curInput(){return{year:+val('year'),month:+val('month'),workDays:num('workDays'),
+  otHours:num('otHours'),unpaidDays:num('unpaidDays'),pcb:num('pcb'),advance:num('advance'),basePayComm:num('basePayComm'),baseSales:num('baseSales'),baseRate:val('baseRate'),baseExtraComm:num('baseExtraComm'),
+  sales:num('sales'),commGroup:num('commGroup'),wrongQty:num('wrongQty'),lateCount:num('lateCount'),otherDeduct:num('otherDeduct')};}
+
+function runCalc(){
+  const e=empOf(val('eid'));if(!e)return;
+  const i=curInput();
+  const L=(k,v,cls='')=>`<div class="ln ${cls}"><span class="k">${k}</span><span class="v">${money(v)}</span></div>`;
+  if(mode==='base'){
+    const c=calcBase(e,i);
+    document.getElementById('slip').innerHTML=`
+     <div class="slip">
+       <div class="hd"><span class="n">${esc(e.name)}　底薪</span><span class="p">${val('year')}／${MON[+val('month')-1]}　${c.workDays} 天</span></div>
+       <div class="bd">
+         ${L('底薪',c.base)}
+         ${c.absentDeduct?L('未在职 '+c.absentDays+' 天（入职前／离职后）',-c.absentDeduct,'sub'):''}
+         ${c.unpaidDeduct?L('无薪假 '+c.unpaidDays+' 天',-c.unpaidDeduct,'sub'):''}
+         ${c.otTotal?L('加班 '+c.otHours+' 小时',c.otTotal,'add'):''}
+         ${c.payComm?L('佣金'+(c.baseSales?'（销售 '+money(c.baseSales)+' × '+c.baseRate+'%）':''),c.payComm,'add'):''}
+         <div class="ln sec"><span class="k">法定扣除 · 基数 ${money(c.statWage)}${c.unpaidDeduct||c.absentDeduct?'（已扣无薪假／未在职）':''}</span><span class="v"></span></div>
+         ${L('EPF 员工',-c.epfEmp,'sub')}
+         ${L('SOCSO 员工'+(c.skbbk?' + SKBBK':''),-c.socsoEmp,'sub')}
+         ${L('EIS 员工',-c.eisEmp,'sub')}
+         ${c.pcb?L('PCB',-c.pcb,'sub'):''}
+         ${c.advance>0?L('预支／其他',-c.advance,'sub'):''}
+         ${c.advance<0?L('补发',-c.advance,'add'):''}
+       </div>
+       <div class="net"><span class="k">底薪实收</span><span class="v">${money(c.net)}</span></div>
+       <div class="er">雇主：EPF ${money(c.epfEr)}　SOCSO ${money(c.socsoEr)}　EIS ${money(c.eisEr)}</div>
+     </div>`;
+  }else{
+    const c=calcComm(e,i);
+    const an=document.getElementById('autoNote');
+    if(an){
+      const bits=[];
+      if(c.lateUnits)bits.push(`迟到 ${c.lateCount} 次 → 扣 ${c.lateUnits} 个半天 = ${money(c.lateDeduct)}`);
+      if(c.groupVoided)bits.push(`迟到满 ${S.set.lateNoGroup} 次 → 团体佣金归零`);
+      an.innerHTML=bits.length?`<div class="auto">${bits.join('<br>')}</div>`:'';
+    }
+    document.getElementById('slip').innerHTML=`
+     <div class="slip">
+       <div class="hd"><span class="n">${esc(e.name)}　佣金</span><span class="p">${val('year')}／${MON[+val('month')-1]}</span></div>
+       <div class="bd">
+         ${(()=>{ // 列扣款前的金额，各行加起来 = 佣金实发
+           const P=e.commType==='percent'?r10c(c.sales*pos(e.commRate)/100):e.commType==='fixed'?r10c(pos(e.commRate)):0;
+           const G=c.groupVoided?0:c.commGroupIn, X=Math.max(0,-c.otherDeduct);
+           return (e.commType==='percent'?L('销售额 '+money(c.sales)+' × '+e.commRate+'%',P,'add'):'')
+             +(e.commType==='fixed'?L('个人佣金（固定）',P,'add'):'')
+             +(e.groupComm!==false?L('团体佣金'+(c.groupVoided?'（迟到归零）':''),G,'add'):'')
+             +(X?L('补发',X,'add'):''); })()}
+         <div class="ln sec"><span class="k">扣款</span><span class="v"></span></div>
+         ${c.wrongGoods?L('包错货 '+c.wrongQty+' 包 × RM'+S.set.wrongGoodsRate,-c.wrongGoods,'sub'):''}
+         ${c.lateDeduct?L('迟到 '+c.lateCount+' 次 · 扣 '+c.lateUnits+' 个半天',-c.lateDeduct,'sub'):''}
+         ${c.otherDeduct>0?L('其他扣款',-c.otherDeduct,'sub'):''}
+         ${c.spill?L('不够扣、没扣到的部分（结欠）',c.spill,'add'):''}
+       </div>
+       <div class="net gold"><span class="k">佣金实发</span><span class="v">${money(c.payout)}</span></div>
+       ${c.spill?`<div class="er">还欠 ${money(c.spill)}，佣金不够扣，要另外向员工收或从底薪扣。</div>`:''}
+     </div>`;
+  }
+}
+/* ---- 回收站：删掉或被改掉的旧版本，留 30 天可救回 ---- */
+let TRASH_CHG=false;
+/* 比内容不看栏位顺序（Supabase 拉回来的 jsonb 栏位顺序会变） */
+const canon=o=>Array.isArray(o)?'['+o.map(canon).join(',')+']'
+  :o&&typeof o==='object'?'{'+Object.keys(o).sort().map(k=>JSON.stringify(k)+':'+canon(o[k])).join(',')+'}'
+  :JSON.stringify(o===undefined?null:o);
+const sameRec=(a,b)=>canon({...a,ts:0})===canon({...b,ts:0});
+function toTrash(kind,item,action){
+  if(!item)return;
+  S.trash.unshift({id:uid(),kind,action,item:JSON.parse(JSON.stringify(item)),ts:Date.now()});
+  TRASH_CHG=true;
+}
+/* 用新版本换掉旧记录，旧的进回收站（内容没变就不放） */
+function replaceHist(id,rec){
+  const old=S.hist.find(h=>h.id===id); if(!old)return false;
+  rec={...rec,id};                                            // 保留原本的 id，回收站救回才换得回来
+  if(!sameRec(old,rec)) toTrash('hist',old,'edit');
+  S.hist=S.hist.map(h=>h.id===id?rec:h); return true;
+}
+/* 整份换掉（还原存档／备份）时，被删或被改的都进回收站 */
+function trashDiff(k,next){
+  const nx={}; next.forEach(x=>nx[x.id]=canon(x));
+  S[k].forEach(x=>{ if(nx[x.id]===undefined)toTrash(k,x,'delete'); else if(nx[x.id]!==canon(x))toTrash(k,x,'edit'); });
+}
+function trashLabel(t){
+  const x=t.item||{};
+  if(t.kind==='hist'){ const c=(x.type||'base')==='comm';
+    return `${x.empName||''}　${x.year}／${MON[(x.month||1)-1]}　${c?'佣金':'底薪'} ${money(c?x.payout:x.net)}`; }
+  if(t.kind==='emp') return '员工　'+(x.name||'');
+  if(t.kind==='note') return '备忘　'+String(x.text||'').slice(0,40);
+  return t.kind;
+}
+async function restoreTrash(id){
+  const t=S.trash.find(x=>x.id===id); if(!t||!S[t.kind])return;
+  const k=t.kind, it=t.item;
+  // 同一笔（同 id），或同一个人同一个月同一种类的记录，都算「现在那份」，换掉而不是多一笔
+  const cur=S[k].find(x=>x.id===it.id)||(k==='hist'?findDup(it.empId,it.year,it.month,it.type||'base',null):null);
+  if(cur){ toTrash(k,cur,'edit'); S[k]=S[k].map(x=>x.id===cur.id?it:x); }
+  else S[k].unshift(t.item);
+  S.trash=S.trash.filter(x=>x.id!==id); TRASH_CHG=true;
+  await save(k); toast('已救回：'+trashLabel(t)); render();
+}
+
+function findDup(empId,y,m,type,exceptId){
+  return S.hist.find(h=>h.empId===empId&&h.year==y&&h.month==m&&(h.type||'base')===type&&h.id!==exceptId);
+}
+async function saveRun(){
+  const e=empOf(val('eid'));if(!e)return;
+  const i=curInput();
+  const c=mode==='base'?calcBase(e,i):calcComm(e,i);
+  const rec={id:editId||uid(),type:mode,empId:e.id,empName:e.name,category:e.category,
+    year:+val('year'),month:+val('month'),remark:val('remark'),...c,ts:Date.now()};
+  if(editId){
+    if(replaceHist(editId,rec)) toast('记录已更新');
+    else { S.hist.unshift(rec); toast('原本那笔已经不在（被删或另一台改过），已另存一笔'); }
+    editId=null;dupPending=null;
+  }
+  else{
+    // 警告出现后又换了员工／月份／种类，原本的「覆盖」不算数，重新检查
+    if(dupPending&&!(dupPending.rec.empId===rec.empId&&dupPending.rec.year===rec.year&&dupPending.rec.month===rec.month&&dupPending.rec.type===rec.type))dupPending=null;
+    const dup=findDup(e.id,rec.year,rec.month,mode,null);
+    if(dup&&!dupPending){ collect(); dupPending={rec,dupId:dup.id,dupAmt:(mode==='base'?dup.net:dup.payout)}; render(); return; }   // 先收好输入，重绘后才不会变空白
+    if(dupPending&&dupPending.mode==='replace'){ replaceHist(dupPending.dupId,rec); toast('已覆盖原本那笔'); }
+    else { S.hist.unshift(rec); toast(mode==='base'?'底薪已存入历史':'佣金已存入历史'); }
+    dupPending=null;
+  }
+  await save('hist');checkMonthDone(rec.type,rec.year,rec.month);FRM={year:rec.year,month:rec.month,eid:e.id};render();
+}
+function dupChoose(kind){
+  if(!dupPending)return;
+  if(kind==='cancel'){dupPending=null;render();return;}
+  dupPending.mode=kind; saveRun();
+}
+
+/* ---- 整月批量 ---- */
+let BATCH={type:'base',y:0,m:0,wd:0,rows:{},key:'',dirty:false,stale:false};
+/* 历史或员工在别处改过（单人计算、删除、救回、云端同步）：批量页没填东西就直接重载；
+   填到一半就先不动，页面上提示「重新载入」 */
+function batchInvalidate(){ if(BATCH.dirty)BATCH.stale=true; else BATCH.key=''; }
+function bReload(){ BATCH.key='';BATCH.dirty=false;BATCH.stale=false;render(); }
+function batchPool(type,y,m){
+  const pool=S.emp.filter(x=>inMonth(x,y,m)).sort(nameSort);   // 当月在职（含当月入职／离职）
+  if(type==='base') return pool.filter(x=>!x.commOnly||x.commWithBase);
+  return pool.filter(x=>!x.commWithBase&&(x.commType!=='none'||x.groupComm!==false));
+}
+/* 换种类／月份时，从历史把已存的数字带进来；没存过的用空白 */
+function batchLoad(){
+  const now=new Date();
+  if(!BATCH.y){ BATCH.y=FRM.year||now.getFullYear(); BATCH.m=FRM.month||now.getMonth()+1; }
+  const key=BATCH.type+'|'+BATCH.y+'|'+BATCH.m;
+  if(BATCH.key===key)return;
+  BATCH.key=key; BATCH.rows={}; BATCH.wd=0; BATCH.dirty=false; BATCH.stale=false;
+  batchPool(BATCH.type,BATCH.y,BATCH.m).forEach(e=>{
+    const h=findDup(e.id,BATCH.y,BATCH.m,BATCH.type,null);
+    const r=h?{hid:h.id,hbase:h.base,...inputsOf(h)}:{};
+    if(!h&&e.commWithBase&&e.commType==='fixed')r.basePayComm=e.commRate;
+    if(h&&h.workDays&&!BATCH.wd)BATCH.wd=+h.workDays;
+    BATCH.rows[e.id]=r;
+  });
+  if(!BATCH.wd)BATCH.wd=workDays(BATCH.y,BATCH.m);
+}
+function bEmp(e){ const r=BATCH.rows[e.id]||{}; return r.hid&&r.hbase!=null?{...e,base:+r.hbase}:e; }
+function bCalc(e){
+  const r=BATCH.rows[e.id]||{};
+  const i={...r,year:BATCH.y,month:BATCH.m,workDays:BATCH.wd};
+  return BATCH.type==='base'?calcBase(bEmp(e),i):calcComm(bEmp(e),i);
+}
+function vBatch(){
+  batchLoad();
+  const t=BATCH.type, pool=batchPool(t,BATCH.y,BATCH.m);
+  const nSaved=pool.filter(e=>BATCH.rows[e.id]&&BATCH.rows[e.id].hid).length;
+  const inp=(e,k,lab,dis)=>{const v=(BATCH.rows[e.id]||{})[k];
+    return `<div><label>${lab}</label><input type="number" step="0.01" data-e="${e.id}" data-k="${k}" value="${v==null||v===0||v==='0'?'':esc(v)}" oninput="bIn(this)" ${dis?'disabled':''}></div>`;};
+  const rowsHtml=pool.map(e=>{
+    const be=bEmp(e), saved=BATCH.rows[e.id]&&BATCH.rows[e.id].hid;
+    let f='';
+    if(t==='base'){
+      f+=inp(e,'otHours','加班时数')+inp(e,'unpaidDays','无薪假天');
+      f+=inp(e,'pcb','PCB',(+be.base||0)<=S.set.pcbThreshold)+inp(e,'advance','预支');
+      if(e.commWithBase) f+=e.commType==='percent'?inp(e,'baseSales','销售额 ×'+e.commRate+'%'):inp(e,'basePayComm','佣金 RM');
+    }else{
+      if(e.commType==='percent') f+=inp(e,'sales','销售额 ×'+e.commRate+'%');
+      if(e.groupComm!==false) f+=inp(e,'commGroup','团体佣金');
+      f+=inp(e,'wrongQty','包错货')+inp(e,'lateCount','迟到次数')+inp(e,'otherDeduct','其他扣');
+    }
+    return `<div class="brow ${saved?'saved':''}">
+      <div class="top"><div><div class="nm">${esc(e.name)}</div>
+        <div class="hint" style="margin:0">${e.commOnly?'无底薪':'底薪 '+money(be.base)}${saved?'　<span class="tag">已存</span>':''}${isLeft(e)?'　<span class="tag q">已离职</span>':''}</div>
+        <div style="margin-top:3px">${empTags(e,t)}</div></div>
+        <div class="amt" id="bn_${e.id}"></div></div>
+      <div class="bin">${f}</div><div class="bx" id="bx_${e.id}"></div></div>`;
+  }).join('');
+  return `<div class="card">
+    <div class="seg" style="margin-bottom:10px">
+      <button class="${t==='base'?'on':''}" onclick="bSet('type','base')">底薪（月头）</button>
+      <button class="${t==='comm'?'on':''}" onclick="bSet('type','comm')">佣金（15 号）</button>
+    </div>
+    <div class="row">
+      <div class="f"><label>月份</label><select onchange="bSet('m',+this.value)">${MON.map((n,i)=>`<option value="${i+1}" ${i+1===BATCH.m?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="f"><label>年份</label><input type="number" value="${BATCH.y}" onchange="bSet('y',+this.value)"></div>
+      <div class="f"><label>工作天数</label><input type="number" id="b_wd" value="${BATCH.wd}" oninput="BATCH.wd=+this.value||workDays(BATCH.y,BATCH.m);BATCH.dirty=true;bRefresh()"></div>
+    </div>
+    <div class="hint" style="margin-top:0">只填有变动的格子，其他留空。${nSaved?`<b>${nSaved} 人这个月已经存过</b>，数字已带进来，改完一起更新。`:''}</div>
+  </div>
+  ${BATCH.stale?`<div class="warnbox">这个月的记录在别处改过（单人计算、删除、救回，或另一台电脑同步过来）。这页显示的是旧的。<br>
+    按「重新载入」看最新的（这页还没存的输入会清掉）；直接「全部存入历史」会用这页的数字盖过去，被盖的旧版本在回收站。
+    <button class="btn sm" style="width:100%;margin-top:8px" onclick="bReload()">重新载入</button></div>`:''}
+  <div class="totbar" id="btot"></div>
+  ${pool.length?rowsHtml:'<div class="card"><div class="empty">这个种类没有适用的在职员工。</div></div>'}
+  ${pool.length?`<div class="card">
+    <button class="btn" style="width:100%" onclick="bSave()">全部存入历史（${pool.length} 人）</button>
+    <div class="hint">已存过的人会更新原本那笔，不会重复；备注保留。存完可以到「历史」打印工资单。</div>
+  </div>`:''}`;
+}
+function bSet(k,v){ BATCH[k]=v; render(); }
+function bIn(el){ const id=el.dataset.e; (BATCH.rows[id]=BATCH.rows[id]||{})[el.dataset.k]=el.value; BATCH.dirty=true; bRefresh(); }
+function bRefresh(){
+  const t=BATCH.type; let tot=0,er=0,n=0;
+  batchPool(t,BATCH.y,BATCH.m).forEach(e=>{
+    const c=bCalc(e), pay=t==='base'?c.net:c.payout; tot+=pay; n++;
+    if(t==='base')er+=c.epfEr+c.socsoEr+c.eisEr;
+    const a=document.getElementById('bn_'+e.id); if(a)a.textContent=money(pay);
+    const x=document.getElementById('bx_'+e.id);
+    if(x){ const bits=[];
+      if(t==='comm'){ if(c.groupVoided)bits.push('迟到满 '+S.set.lateNoGroup+' 次，团体佣金归零');
+        if(c.lateDeduct)bits.push('迟到扣 '+money(c.lateDeduct));
+        if(c.spill)bits.push('不够扣，结欠 '+money(c.spill)); }
+      else{ if(c.absentDeduct)bits.push('未在职 '+c.absentDays+' 天 −'+money(c.absentDeduct));
+        if(c.otTotal)bits.push('加班 +'+money(c.otTotal)); if(c.unpaidDeduct)bits.push('无薪假 −'+money(c.unpaidDeduct)); }
+      x.textContent=bits.join('　·　'); x.style.color=t==='comm'?'':'var(--ink2)'; }
+  });
+  const b=document.getElementById('btot');
+  if(b)b.innerHTML=`<div><span>${MON[BATCH.m-1]} ${t==='base'?'底薪实收':'佣金实发'}合计 · ${n} 人</span><span>${money(tot)}</span></div>`+
+    (t==='base'?`<div><span>雇主 EPF+SOCSO+EIS</span><span>${money(er)}</span></div>`:'');
+}
+async function bSave(){
+  const t=BATCH.type; let add=0,upd=0;
+  batchPool(t,BATCH.y,BATCH.m).forEach(e=>{
+    const r=BATCH.rows[e.id]||{}, c=bCalc(e);
+    // 批量页载入之后，别处可能已经存了这个人这个月：更新那一笔，绝不另存一笔
+    let hid=r.hid&&S.hist.some(h=>h.id===r.hid)?r.hid:null;
+    if(!hid){ const d=findDup(e.id,BATCH.y,BATCH.m,t,null); if(d)hid=d.id; }
+    const old=hid?S.hist.find(h=>h.id===hid):null;
+    const rec={id:hid||uid(),type:t,empId:e.id,empName:e.name,category:e.category,
+      year:BATCH.y,month:BATCH.m,remark:r.remark??(old&&old.remark)??'',...c,ts:Date.now()};
+    if(old){ if(!sameRec(old,rec)){ replaceHist(hid,rec); upd++; } } else { S.hist.unshift(rec); add++; }
+  });
+  BATCH.dirty=false; BATCH.stale=false;
+  await save('hist'); BATCH.key='';
+  checkMonthDone(t,BATCH.y,BATCH.m);
+  toast(`已存：新增 ${add} 笔${upd?'，更新 '+upd+' 笔':''}`); render(); scrollTo(0,0);
+}
+
+/* ---- 工资单（打印／存成 PDF） ---- */
+const MON_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+let PRINT_TITLE='';
+/* 一个人一个月的工资单内容。打印（PDF）和 WhatsApp 文字共用 */
+function slipModel(empId,y,m){
+  const b=S.hist.find(h=>h.empId===empId&&h.year==y&&h.month==m&&(h.type||'base')==='base');
+  const c=S.hist.find(h=>h.empId===empId&&h.year==y&&h.month==m&&h.type==='comm');
+  if(!b&&!c)return null;
+  const secs=[];
+  if(b){
+    const adv=+b.advance||0, back=adv<0?-adv:0;
+    const ded=r2((+b.epfEmp||0)+(+b.socsoEmp||0)+(+b.eisEmp||0)+(+b.pcb||0)+Math.max(0,adv));
+    secs.push({title:['Earnings','收入'],rows:[
+      ['Basic Salary','底薪',b.base,1],
+      ['Not employed ('+(+b.absentDays||0)+' days)','未在职',-(+b.absentDeduct||0)],
+      ['Unpaid Leave ('+(+b.unpaidDays||0)+' days)','无薪假',-(+b.unpaidDeduct||0)],
+      ['Overtime ('+(+b.otHours||0)+' hrs)','加班',b.otTotal],
+      ['Commission','佣金',b.payComm],
+      ['Back Pay','补发',back]],
+      total:['Gross Pay','总收入',r2((+b.gross||0)+back)]});
+    secs.push({title:['Deductions','扣除'],rows:[
+      ['EPF (KWSP)','公积金',b.epfEmp],
+      ['SOCSO (PERKESO)'+(b.skbbk?' + SKBBK':''),'社险',b.socsoEmp],
+      ['EIS (SIP)','就业保险',b.eisEmp],
+      ['PCB / MTD','月扣税',b.pcb],
+      ['Advance / Others','预支／其他',Math.max(0,adv)]],
+      total:['Total Deductions','扣除合计',ded],net:['Net Pay','实收',b.net]});
+  }
+  if(c){
+    const legacy=c.extraPay==null;                               // v2 的记录：负数其他扣款直接算在 totalDeduct 里
+    const X=legacy?0:Math.max(0,-(+c.otherDeduct||0));           // 补发（其他扣款填负数）
+    const taken=r2((+c.totalDeduct||0)-(+c.spill||0));
+    const gross=r2((+c.payout||0)+taken-X);                       // 扣款前的个人＋团体佣金
+    const grp=c.groupVoided?0:Math.min(gross,+groupInOf(c)||0);
+    secs.push({title:['Commission','佣金'],rows:[
+      ['Personal Commission'+(+c.sales?' (Sales '+r2(c.sales).toLocaleString('en-MY',{minimumFractionDigits:2})+')':''),'个人佣金',r2(gross-grp)],
+      ['Group Commission','团体佣金',grp],
+      ['Back Pay','补发',X],
+      ['Wrong Packing ('+(+c.wrongQty||0)+')','包错货',-(+c.wrongGoods||0)],
+      ['Late ('+(+c.lateCount||0)+' times)','迟到',-(+c.lateDeduct||0)],
+      ['Other Deductions','其他扣款',legacy?-(+c.otherDeduct||0):-Math.max(0,+c.otherDeduct||0)],
+      ['Not covered (outstanding)','不够扣，结欠',+c.spill||0]],
+      net:['Commission Paid','佣金实发',c.payout]});
+  }
+  return {name:(b||c).empName,y,m,b,c,secs,
+    total:b&&c?['Total for '+MON_EN[m-1],'本月合计',r2((+b.net||0)+(+c.payout||0))]:null};
+}
+const fmtRM=v=>(+v<0?'-':'')+Math.abs(r2(+v||0)).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+function payslipHTML(empId,y,m){
+  const M=slipModel(empId,y,m); if(!M)return '';
+  const L=([en,zh,v,force])=>(force||+v)?`<tr><td>${esc(en)}<span class="zh">${zh}</span></td><td class="n">${fmtRM(v)}</td></tr>`:'';
+  const h=M.secs.map(s=>`<table><tr><th>${s.title[0]} ${s.title[1]}</th><th style="text-align:right">RM</th></tr>
+      ${s.rows.map(L).join('')}
+      ${s.total?`<tr class="t"><td>${s.total[0]}<span class="zh">${s.total[1]}</span></td><td class="n">${fmtRM(s.total[2])}</td></tr>`:''}
+      ${s.net?`<tr class="pnet"><td>${s.net[0]}<span class="zh">${s.net[1]}</span></td><td class="n">${fmtRM(s.net[2])}</td></tr>`:''}</table>`).join('')
+    +(M.total?`<table><tr class="pnet"><td>${M.total[0]}<span class="zh">${M.total[1]}</span></td><td class="n">${fmtRM(M.total[2])}</td></tr></table>`:'');
+  const b=M.b;
+  return `<div class="ps">
+    <div class="ph"><div><div class="co">${esc(S.set.company||'')}</div><div class="ti">PAYSLIP 工资单</div></div>
+      <div class="pd">${MON_EN[m-1]} ${y}${b?'<br>Working days: '+b.workDays:''}</div></div>
+    <div class="who">${esc(M.name)}</div>
+    ${h}
+    ${b?`<div class="ft">Employer contribution 雇主缴纳 — EPF ${fmtRM(b.epfEr)} · SOCSO ${fmtRM(b.socsoEr)} · EIS ${fmtRM(b.eisEr)}</div>`:''}
+    <div class="ft">This is a computer-generated payslip. 本工资单由电脑生成。</div>
+  </div>`;
+}
+/* WhatsApp：文字版工资单，打开 WhatsApp 让你自己按发送 */
+function payslipText(empId,y,m){
+  const M=slipModel(empId,y,m); if(!M)return '';
+  const out=[`*PAYSLIP 工资单 · ${MON_EN[m-1]} ${y}*`];
+  if(S.set.company)out.push(S.set.company);
+  out.push(M.name,'');
+  M.secs.forEach(s=>{
+    out.push(`*${s.title[0]} ${s.title[1]}*`);
+    s.rows.forEach(([en,zh,v,force])=>{ if(force||+v)out.push(`${en} ${zh}: RM ${fmtRM(v)}`); });
+    if(s.total)out.push(`${s.total[0]} ${s.total[1]}: RM ${fmtRM(s.total[2])}`);
+    if(s.net)out.push(`*${s.net[0]} ${s.net[1]}: RM ${fmtRM(s.net[2])}*`);
+    out.push('');
+  });
+  if(M.total)out.push(`*${M.total[0]} ${M.total[1]}: RM ${fmtRM(M.total[2])}*`);
+  return out.join('\n').trim();
+}
+function waPhone(p){ let d=String(p||'').replace(/\D/g,''); if(!d)return ''; if(d[0]==='0')d='6'+d; return d; }
+function sendWA(empId,y,m){
+  const e=S.emp.find(x=>x.id===empId);
+  const ph=waPhone(e&&e.phone);
+  if(!ph){toast('先到「员工」→ 修改，填这位员工的手机号');return;}
+  const txt=payslipText(empId,y,m); if(!txt){toast('这个月没有记录');return;}
+  window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(txt),'_blank','noopener');
+}
+
+/* 按员工查：选了员工 + 年份，列出那一年每个月 */
+function yearRows(empId,y){
+  const rs=[]; for(let m=1;m<=12;m++){
+    const b=S.hist.find(h=>h.empId===empId&&h.year==y&&h.month==m&&(h.type||'base')==='base');
+    const c=S.hist.find(h=>h.empId===empId&&h.year==y&&h.month==m&&h.type==='comm');
+    if(b||c)rs.push({m,net:b?+b.net||0:0,comm:c?+c.payout||0:0,gross:b?r2((+b.gross||0)+Math.max(0,-(+b.advance||0))):0,   // 总收入含补发，跟工资单一致
+      epf:b?+b.epfEmp||0:0,socso:b?+b.socsoEmp||0:0,eis:b?+b.eisEmp||0:0,pcb:b?+b.pcb||0:0});
+  }
+  const T={}; ['net','comm','gross','epf','socso','eis','pcb'].forEach(k=>T[k]=r2(rs.reduce((a,r)=>a+r[k],0)));
+  return {rs,T};
+}
+function yearCard(){
+  const fe=FRM.fe??'all', fy=FRM.fy??'all';
+  if(fe==='all')return '';
+  if(fy==='all')return `<div class="hint" style="margin:-4px 0 12px">再选一个年份，可以看这位员工的年度汇总。</div>`;
+  const {rs,T}=yearRows(fe,+fy); if(!rs.length)return '';
+  const nm=(S.emp.find(x=>x.id===fe)||{}).name||(S.hist.find(h=>h.empId===fe)||{}).empName||'';
+  return `<div class="card"><h3>${esc(nm)} · ${fy} 年度汇总</h3>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:var(--mono)">
+      <tr style="color:var(--ink2);text-align:right"><td style="text-align:left">月</td><td>底薪实收</td><td>佣金</td><td>EPF</td><td>SOCSO</td><td>EIS</td><td>PCB</td></tr>
+      ${rs.map(r=>`<tr style="text-align:right;border-top:1px solid var(--line)"><td style="text-align:left">${r.m}</td><td>${fmtRM(r.net)}</td><td>${fmtRM(r.comm)}</td><td>${fmtRM(r.epf)}</td><td>${fmtRM(r.socso)}</td><td>${fmtRM(r.eis)}</td><td>${fmtRM(r.pcb)}</td></tr>`).join('')}
+      <tr style="text-align:right;border-top:2px solid var(--ink);font-weight:700"><td style="text-align:left">合计</td><td>${fmtRM(T.net)}</td><td>${fmtRM(T.comm)}</td><td>${fmtRM(T.epf)}</td><td>${fmtRM(T.socso)}</td><td>${fmtRM(T.eis)}</td><td>${fmtRM(T.pcb)}</td></tr>
+    </table></div>
+    <button class="btn alt sm" style="width:100%;margin-top:10px" onclick="printYear('${fe}',${+fy})">打印年度汇总（存成 PDF）</button>
+  </div>`;
+}
+function printYear(empId,y){
+  const {rs,T}=yearRows(empId,y); if(!rs.length){toast('这一年没有记录');return;}
+  const nm=(S.emp.find(x=>x.id===empId)||{}).name||(S.hist.find(h=>h.empId===empId)||{}).empName||'';
+  const td=v=>`<td class="n">${fmtRM(v)}</td>`;
+  document.getElementById('printArea').innerHTML=`<div class="ps">
+    <div class="ph"><div><div class="co">${esc(S.set.company||'')}</div><div class="ti">YEARLY SUMMARY 年度汇总</div></div><div class="pd">${y}</div></div>
+    <div class="who">${esc(nm)}</div>
+    <table><tr><th>Month 月</th><th style="text-align:right">Gross 总收入</th><th style="text-align:right">Net 实收</th><th style="text-align:right">Commission 佣金</th><th style="text-align:right">EPF</th><th style="text-align:right">SOCSO</th><th style="text-align:right">EIS</th><th style="text-align:right">PCB</th></tr>
+      ${rs.map(r=>`<tr><td>${MON_EN[r.m-1]}</td>${td(r.gross)}${td(r.net)}${td(r.comm)}${td(r.epf)}${td(r.socso)}${td(r.eis)}${td(r.pcb)}</tr>`).join('')}
+      <tr class="t"><td>Total 合计</td>${td(T.gross)}${td(T.net)}${td(T.comm)}${td(T.epf)}${td(T.socso)}${td(T.eis)}${td(T.pcb)}</tr></table>
+    <div class="ft">EPF / SOCSO / EIS shown are employee contributions. 以上 EPF／SOCSO／EIS 为员工缴纳部分。</div></div>`;
+  document.body.classList.add('printing');
+  PRINT_TITLE=PRINT_TITLE||document.title; document.title='年度汇总_'+y+'_'+nm;
+  setTimeout(()=>window.print(),60);
+}
+
+/* 发完薪提醒备份：一个月的底薪或佣金全部存好时，跳一次 */
+let BACKUP_PROMPT=null;
+function checkMonthDone(type,y,m){
+  const pool=batchPool(type,y,m); if(!pool.length)return;
+  const done=new Set(S.hist.filter(h=>h.year==y&&h.month==m&&(h.type||'base')===type).map(h=>h.empId));
+  if(!pool.every(x=>done.has(x.id)))return;
+  const key=type+'|'+y+'|'+m;
+  if((META.prompted||[]).includes(key))return;
+  BACKUP_PROMPT={type,y,m,key};
+}
+function backupCard(){
+  if(!BACKUP_PROMPT)return '';
+  const {type,y,m}=BACKUP_PROMPT;
+  return `<div class="card" style="border-color:var(--jade);background:var(--jade-soft)">
+    <div style="color:var(--jade);font-weight:600;margin-bottom:8px">✓ ${y}／${MON[m-1]}的${type==='base'?'底薪':'佣金'}全部存好了，顺手备份一下</div>
+    <div class="row">
+      <div><button class="btn sm" style="width:100%" onclick="backup();doneBackupPrompt()">下载完整备份</button></div>
+      <div><button class="btn alt sm" style="width:100%" onclick="expMonth(${y},${m},'${type}')">导出本月 Excel</button></div>
+    </div>
+    <button class="btn alt sm" style="width:100%;margin-top:8px" onclick="doneBackupPrompt()">以后再说</button>
+  </div>`;
+}
+async function doneBackupPrompt(){
+  if(!BACKUP_PROMPT)return;
+  META.prompted=[...(META.prompted||[]),BACKUP_PROMPT.key].slice(-48);
+  try{ await STORE.set(K_META,JSON.stringify(META)); }catch(e){}
+  BACKUP_PROMPT=null; render();
+}
+function expMonth(y,m,type){
+  const keep={fy:FRM.fy,fm:FRM.fm,ft:FRM.ft,fe:FRM.fe};
+  Object.assign(FRM,{fy:String(y),fm:String(m),ft:type,fe:'all'});
+  try{ expXLSX(); } finally { Object.assign(FRM,keep); }
+}
+function printSlips(empIds,y,m){
+  const html=empIds.map(id=>payslipHTML(id,y,m)).join('');
+  if(!html){toast('这个月没有记录');return;}
+  document.getElementById('printArea').innerHTML=html;
+  document.body.classList.add('printing');
+  PRINT_TITLE=PRINT_TITLE||document.title;
+  const one=empIds.length===1?'_'+((S.hist.find(h=>h.empId===empIds[0])||{}).empName||''):'';
+  document.title='工资单_'+y+'年'+String(m).padStart(2,'0')+'月'+one;
+  setTimeout(()=>window.print(),60);
+}
+function printMonth(){
+  const y=+FRM.fy, m=+FRM.fm;
+  const ids=[...new Set(S.hist.filter(h=>h.year==y&&h.month==m).sort(byName).map(h=>h.empId))];
+  printSlips(ids,y,m);
+}
+
+/* ---- 员工 ---- */
+function vEmp(){
+  const e=editEmpId?S.emp.find(x=>x.id===editEmpId):null;
+  const ct=e?e.commType:'none';
+  return `
+  <div class="card">
+    <h3>${e?'修改 '+esc(e.name):'加入员工'}</h3>
+    <div class="f"><label>姓名</label><input id="n_name" value="${e?esc(e.name):''}"></div>
+    <label style="display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--ink);padding:8px 0"><input type="checkbox" id="n_co" ${e&&e.commOnly?'checked':''} onchange="coToggle()"> 无底薪，只拿佣金</label>
+    <div class="row">
+      <div class="f" id="baseWrap" style="display:${e&&e.commOnly?'none':'block'}"><label>底薪 RM</label><input type="number" id="n_base" value="${e?e.base:''}"></div>
+      <div class="f"><label>类别</label><select id="n_cat">
+        <option value="local" ${e&&e.category==='local'?'selected':''}>本地 · 60岁以下</option>
+        <option value="local60" ${e&&e.category==='local60'?'selected':''}>本地 · 60岁及以上</option>
+        <option value="foreign" ${e&&e.category==='foreign'?'selected':''}>外劳</option></select></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>婚姻状况</label><select id="n_mar"><option value="single" ${e&&e.marital==='single'?'selected':''}>单身</option><option value="married" ${e&&e.marital==='married'?'selected':''}>已婚</option></select></div>
+      <div class="f"><label>孩子人数</label><input type="number" id="n_kids" value="${e?e.kids||0:0}"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>入职日期（选填）</label><input type="date" id="n_join" value="${e&&e.joinDate||''}"></div>
+      <div class="f"><label>离职日期（选填）</label><input type="date" id="n_leave" value="${e&&e.leaveDate||''}"></div>
+    </div>
+    <div class="hint" style="margin-top:-4px;margin-bottom:10px">当月入职或离职的人，底薪自动按在职的工作天算（÷ 当月工作天）。填了离职日期，过了那天就算已离职，离职当月仍可计算。</div>
+    <div class="row">
+      <div class="f"><label>状态</label><select id="n_status">
+        <option value="active" ${!e||e.status!=='left'?'selected':''}>在职</option>
+        <option value="left" ${e&&e.status==='left'?'selected':''}>已离职</option></select></div>
+      <div class="f"><label>手机（WhatsApp 发工资单用）</label><input type="tel" id="n_phone" value="${e?esc(e.phone||''):''}" placeholder="012-345 6789"></div>
+    </div>
+    <hr class="d">
+    <label style="font-weight:600;color:var(--ink)">个人佣金设定</label>
+    <div class="f" style="margin-top:6px"><select id="n_ct" onchange="ctLabel()">
+      <option value="none" ${ct==='none'?'selected':''}>不领个人佣金</option>
+      <option value="percent" ${ct==='percent'?'selected':''}>按销售额抽 %</option>
+      <option value="fixed" ${ct==='fixed'?'selected':''}>每月固定金额</option></select></div>
+    <div class="f" id="crWrap" style="display:${ct==='none'?'none':'block'}">
+      <label id="crLab">${ct==='percent'?'抽成 %（填 3 就是销售额的 3%）':'固定佣金 RM'}</label>
+      <input type="number" step="0.01" id="n_cr" value="${e?e.commRate||0:''}">
+    </div>
+    <label style="display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--ink);padding:8px 0"><input type="checkbox" id="n_grp" ${!e||e.groupComm!==false?'checked':''}> 有团体佣金</label>
+    <label style="display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--ink);padding:8px 0"><input type="checkbox" id="n_cwb" ${e&&e.commWithBase?'checked':''}> 佣金跟底薪一起出（月头），不等 15 号</label>
+    <div class="hint">团体佣金每个月金额不一样，在「佣金」那页手动填。没勾的人，那一栏不会出现。</div>
+    <hr class="d">
+    <label style="font-weight:600;color:var(--ink)">这位员工有哪些法定扣除</label>
+    <div class="chk">
+      <label><input type="checkbox" id="n_hasEpf" ${!e||!e.noEpf?'checked':''}> <b>EPF</b> 公积金</label>
+      <label><input type="checkbox" id="n_hasSocso" ${!e||!e.noSocso?'checked':''}> <b>SOCSO</b> 社险</label>
+      <label><input type="checkbox" id="n_hasEis" ${!e||!e.noEis?'checked':''}> <b>EIS</b> 就业保险</label>
+      <label><input type="checkbox" id="n_skbbk" ${!e||e.skbbk!==false?'checked':''}> <b>SKBBK</b> LINDUNG 24 Jam</label>
+      <label><input type="checkbox" id="n_epf" ${e&&e.epfOptIn?'checked':''}> 外劳自愿参加 EPF</label>
+    </div>
+    <div class="hint">不勾就完全不扣，雇主那份也不算。EIS 60岁以上和外劳本来就豁免。</div>
+    <button class="btn" style="width:100%" onclick="addEmp()">${e?'保存修改':'加入'}</button>
+    ${e?'<button class="btn alt sm" style="width:100%;margin-top:8px" onclick="editEmpId=null;render()">取消</button>':''}
+  </div>
+  <div class="card">
+    <h3>在职 · ${activeEmp().length} 人</h3>
+    ${activeEmp().length?activeEmp().map(empRow).join(''):'<div class="empty">还没有在职员工。</div>'}
+  </div>
+  ${leftEmp().length?`<div class="card" style="opacity:.72">
+    <h3>已离职 · ${leftEmp().length} 人</h3>
+    ${leftEmp().map(empRow).join('')}
+    <div class="hint">已离职的人只会在离职当月（含）以前出现在计算页和批量页，历史记录全部保留、可以编辑。有历史记录的员工不能删除。</div>
+  </div>`:''}`;
+}
+const nameSort=(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base',numeric:true});
+const activeEmp=()=>S.emp.filter(x=>!isLeft(x)).sort(nameSort);
+const leftEmp=()=>S.emp.filter(x=>isLeft(x)).sort(nameSort);
+/* 员工的固定设定：类别、法定扣除、佣金方式（员工页和批量页共用） */
+function empTags(x,t){
+  const q=(on,a,b)=>on?`<span class="tag">${a}</span>`:`<span class="tag q">${b}</span>`;
+  let s=`<span class="tag">${x.category==='local'?'本地&lt;60':x.category==='local60'?'本地60+':'外劳'}</span>`;
+  s+=q(!x.noEpf,'EPF','无EPF')+q(!x.noSocso,'SOCSO'+(x.skbbk!==false?'+SKBBK':''),'无SOCSO')+q(!x.noEis&&x.category==='local','EIS','无EIS');
+  if(t!=='base'||x.commWithBase){
+    s+=`<span class="tag g">${x.commType==='percent'?'佣金 '+x.commRate+'%':x.commType==='fixed'?'固定佣金 RM'+x.commRate:'无个人佣金'}</span>`;
+    if(t!=='base'&&x.groupComm!==false)s+='<span class="tag g">团体佣金</span>';
+  }
+  return s;
+}
+function empRow(x){
+  const nRec=S.hist.filter(h=>h.empId===x.id).length;
+  return `<div class="emp">
+        <div>
+          <div class="nm">${esc(x.name)}${isLeft(x)?' <span class="tag q">已离职</span>':''}</div>
+          <div class="mt">
+            ${empTags(x,'all')}
+            <br>${x.commOnly?'<b>无底薪 · 只拿佣金</b>':money(x.base)}　${x.marital==='married'?'已婚':'单身'}・${x.kids||0} 孩${x.joinDate?'　入职 '+esc(x.joinDate):''}${x.leaveDate?'　离职 '+esc(x.leaveDate):''}${x.phone?'　☎ '+esc(x.phone):''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn alt sm" onclick="editEmpId='${x.id}';render();window.scrollTo(0,0)">修改</button>
+          ${nRec?`<span class="hint" style="margin:0;text-align:center">${nRec} 笔记录</span>`:`<button class="btn warn sm" onclick="delEmp('${x.id}')">${delArm==='e'+x.id?'确定？':'删除'}</button>`}
+        </div>
+      </div>`;
+}
+function coToggle(){
+  const on=document.getElementById('n_co').checked;
+  document.getElementById('baseWrap').style.display=on?'none':'block';
+  if(on)document.getElementById('n_base').value=0;
+}
+function ctLabel(){const v=val('n_ct'),w=document.getElementById('crWrap'),l=document.getElementById('crLab');
+  w.style.display=v==='none'?'none':'block';
+  l.textContent=v==='percent'?'抽成 %（填 3 就是销售额的 3%）':'固定佣金 RM';}
+async function addEmp(){
+  const name=val('n_name').trim();if(!name){toast('请填姓名');return;}
+  const co=document.getElementById('n_co').checked;
+  const rec={name,commOnly:co,base:co?0:num('n_base'),category:val('n_cat'),marital:val('n_mar'),kids:num('n_kids'),
+    commType:val('n_ct'),commRate:num('n_cr'),epfOptIn:document.getElementById('n_epf').checked,
+    groupComm:document.getElementById('n_grp').checked,
+    commWithBase:document.getElementById('n_cwb').checked,
+    skbbk:document.getElementById('n_skbbk').checked, status:val('n_status')||'active',
+    noEpf:!document.getElementById('n_hasEpf').checked,
+    noSocso:!document.getElementById('n_hasSocso').checked,
+    noEis:!document.getElementById('n_hasEis').checked,
+    joinDate:val('n_join'), leaveDate:val('n_leave'), phone:val('n_phone').trim()};
+  if(rec.joinDate&&rec.leaveDate&&rec.leaveDate<rec.joinDate){toast('离职日期不能早过入职日期');return;}
+  if(rec.base<0||rec.commRate<0||rec.kids<0){toast('底薪、佣金、孩子人数不能是负数');return;}
+  if(editEmpId){
+    const old=S.emp.find(x=>x.id===editEmpId), nw={...old,...rec};
+    if(old&&JSON.stringify(old)!==JSON.stringify(nw))toTrash('emp',old,'edit');
+    S.emp=S.emp.map(x=>x.id===editEmpId?nw:x);editEmpId=null;toast('已更新 '+name);
+  }
+  else{S.emp.push({id:uid(),...rec});toast('已加入 '+name);}
+  await save('emp');render();
+}
+async function delEmp(id){
+  const n=S.hist.filter(h=>h.empId===id).length;
+  if(n){toast('有 '+n+' 笔历史记录，不能删除。不再上班请填离职日期或改成已离职');return;}
+  if(delArm!=='e'+id){delArm='e'+id;render();setTimeout(()=>{if(delArm==='e'+id){delArm=null;render();}},3500);return;}
+  toTrash('emp',S.emp.find(x=>x.id===id),'delete');
+  S.emp=S.emp.filter(x=>x.id!==id);delArm=null;await save('emp');toast('已删除（30 天内可在设定 → 回收站救回）');render();
+}
+
+/* ---- 历史 ---- */
+function vHist(){
+  const years=[...new Set(S.hist.map(h=>h.year))].sort((a,b)=>b-a);
+  const fy=FRM.fy??'all',fm=FRM.fm??'all',ft=FRM.ft??'all',fe=FRM.fe??'all';
+  const emps=[...new Map(S.hist.map(h=>[h.empId,(S.emp.find(x=>x.id===h.empId)||{}).name||h.empName])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  const list=histList().slice().sort((a,b)=>(b.year-a.year)||(b.month-a.month)||byName(a,b));
+  const sum=k=>list.reduce((a,h)=>a+(+h[k]||0),0);
+  return `
+  <div class="card">
+    <div class="row">
+      <div class="f"><label>年份</label><select onchange="FRM.fy=this.value;render()"><option value="all">全部</option>${years.map(y=>`<option value="${y}" ${fy==y?'selected':''}>${y}</option>`).join('')}</select></div>
+      <div class="f"><label>月份</label><select onchange="FRM.fm=this.value;render()"><option value="all">全部</option>${MON.map((n,i)=>`<option value="${i+1}" ${fm==i+1?'selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="f"><label>种类</label><select onchange="FRM.ft=this.value;render()"><option value="all" ${ft==='all'?'selected':''}>全部</option><option value="base" ${ft==='base'?'selected':''}>底薪</option><option value="comm" ${ft==='comm'?'selected':''}>佣金</option></select></div>
+    </div>
+    <div class="f"><label>员工</label><select onchange="FRM.fe=this.value;render()"><option value="all">全部员工</option>${emps.map(([id,nm])=>`<option value="${id}" ${fe===id?'selected':''}>${esc(nm)}</option>`).join('')}</select></div>
+    <div class="row">
+      <div><button class="btn alt sm" style="width:100%" onclick="expCSV()">导出 CSV</button></div>
+      <div><button class="btn alt sm" style="width:100%" onclick="expXLSX()">导出 Excel</button></div>
+    </div>
+    ${fy!=='all'&&fm!=='all'?`<button class="btn" style="width:100%;margin-top:8px" onclick="printMonth()">打印 ${fy}／${MON[fm-1]} 全部工资单（存成 PDF）</button>`:''}
+    <div class="hint">档名：${esc(expName().base)}<br>${(()=>{const r=rows();return r.n?(r.n+' 笔 · '+r.head.length+' 栏（空白的项目已自动拿掉）'):'目前没有记录';})()}</div>
+  </div>
+  ${yearCard()}
+  ${dupCard()}
+  ${missingCard()}
+  ${list.length?`<div class="totbar">
+    <div><span>笔数</span><span>${list.length}</span></div>
+    <div><span>底薪实收合计</span><span>${money(sum('net'))}</span></div>
+    <div><span>佣金实发合计</span><span>${money(sum('payout'))}</span></div>
+    <div><span>EPF 员工／雇主</span><span>${money(sum('epfEmp'))} ／ ${money(sum('epfEr'))}</span></div>
+    <div><span>SOCSO 员工／雇主</span><span>${money(sum('socsoEmp'))} ／ ${money(sum('socsoEr'))}</span></div>
+    <div><span>EIS 员工／雇主</span><span>${money(sum('eisEmp'))} ／ ${money(sum('eisEr'))}</span></div>
+    <div><span>PCB</span><span>${money(sum('pcb'))}</span></div>
+  </div>`:''}
+  ${list.length?list.map(h=>h.type==='comm'?`
+    <div class="hrow comm">
+      <div class="top"><div><strong>${esc(h.empName)}</strong> <span class="tag g">佣金</span>
+        <div class="sub">${h.year}／${MON[h.month-1]}　个人 ${money(h.commPersonal)}　团体 ${money(h.commGroup)}${h.totalDeduct?'　扣 '+money(h.totalDeduct):''}</div></div>
+        <div class="amt">${money(h.payout)}</div></div>
+      ${h.remark?`<div class="sub">备注：${esc(h.remark)}</div>`:''}
+      <div class="acts"><button class="btn alt sm" onclick="editRec('${h.id}')">编辑</button>
+      <button class="btn alt sm" onclick="printSlips(['${h.empId}'],${h.year},${h.month})">工资单</button>
+      <button class="btn alt sm" onclick="sendWA('${h.empId}',${h.year},${h.month})">WhatsApp</button>
+      <button class="btn warn sm" onclick="delRec('${h.id}')">${delArm==='h'+h.id?'确定？':'删除'}</button></div>
+    </div>`:`
+    <div class="hrow base">
+      <div class="top"><div><strong>${esc(h.empName)}</strong> <span class="tag">底薪</span>
+        <div class="sub">${h.year}／${MON[h.month-1]}　底薪 ${money(h.base)}${h.otTotal?'　加班 '+money(h.otTotal):''}</div></div>
+        <div class="amt">${money(h.net)}</div></div>
+      ${h.remark?`<div class="sub">备注：${esc(h.remark)}</div>`:''}
+      <div class="acts"><button class="btn alt sm" onclick="editRec('${h.id}')">编辑</button>
+      <button class="btn alt sm" onclick="printSlips(['${h.empId}'],${h.year},${h.month})">工资单</button>
+      <button class="btn alt sm" onclick="sendWA('${h.empId}',${h.year},${h.month})">WhatsApp</button>
+      <button class="btn warn sm" onclick="delRec('${h.id}')">${delArm==='h'+h.id?'确定？':'删除'}</button></div>
+    </div>`).join(''):'<div class="card"><div class="empty">这个范围内没有记录。</div></div>'}`;
+}
+function dupCard(){
+  const seen={}, dups={};
+  S.hist.forEach(h=>{const k=h.empId+'|'+h.year+'|'+h.month+'|'+(h.type||'base');
+    if(seen[k])dups[k]=(dups[k]||1)+1; else seen[k]=1;});
+  const keys=Object.keys(dups); if(!keys.length)return '';
+  return `<div class="card" style="border-color:var(--rust);background:var(--rust-soft)">
+    <h3 style="color:var(--rust)">⚠ 有重复记录 · ${keys.length} 组</h3>
+    <div style="font-size:14px;line-height:1.9">${keys.map(k=>{const [id,y,m,t]=k.split('|');
+      const nm=(S.emp.find(x=>x.id===id)||{}).name||(S.hist.find(h=>h.empId===id)||{}).empName||id;
+      return esc(nm)+'　'+y+'／'+MON[+m-1]+'　'+(t==='comm'?'佣金':'底薪')+'　'+dups[k]+' 笔';}).join('<br>')}</div>
+    <div class="hint">同一个人、同一个月、同一种类存了不止一笔。下面找出来，多余的删掉。</div>
+  </div>`;
+}
+function missingCard(){
+  const fy=FRM.fy??'all', fm=FRM.fm??'all', ft=FRM.ft??'all';
+  if(fy==='all'||fm==='all'||ft==='all') return `<div class="hint" style="margin:-4px 0 12px">选定「年份 + 月份 + 种类」后，这里会列出还没算的员工。</div>`;
+  const done=new Set(S.hist.filter(h=>h.year==+fy&&h.month==+fm&&(h.type||'base')===ft).map(h=>h.empId));
+  const pool=batchPool(ft,+fy,+fm);
+  const miss=pool.filter(x=>!done.has(x.id));
+  if(!miss.length) return `<div class="card" style="border-color:var(--jade);background:var(--jade-soft)"><div style="color:var(--jade);font-weight:600">✓ ${MON[+fm-1]}的${ft==='base'?'底薪':'佣金'}全部算好了（${pool.length} 人）</div></div>`;
+  return `<div class="card" style="border-color:var(--rust)">
+    <h3 style="color:var(--rust)">还没算 · ${miss.length} 人</h3>
+    <div style="font-size:14px;line-height:1.9">${miss.map(x=>esc(x.name)).join('<br>')}</div>
+    <div class="hint">${MON[+fm-1]}的${ft==='base'?'底薪':'佣金'}里，这些人还没有记录。到「计算」页算好后按「存入历史」。</div>
+  </div>`;
+}
+function histList(){
+  const fy=FRM.fy??'all',fm=FRM.fm??'all',ft=FRM.ft??'all',fe=FRM.fe??'all';
+  return S.hist.filter(h=>(fy==='all'||h.year==+fy)&&(fm==='all'||h.month==+fm)&&(ft==='all'||(h.type||'base')===ft)&&(fe==='all'||h.empId===fe));
+}
+/* 编辑旧记录时用当时的底薪，不用现在的（调过薪也不影响旧月份） */
+function empOf(id){
+  const e=S.emp.find(x=>x.id===id); if(!e)return null;
+  const h=editId&&S.hist.find(x=>x.id===editId);
+  return (h&&h.empId===id&&h.base!=null)?{...e,base:+h.base}:e;
+}
+/* 团体佣金的原始输入。旧记录只存了扣完的数，按「先扣团体、再扣个人」倒推 */
+function groupInOf(h){
+  if(h.commGroupIn!=null)return h.commGroupIn;
+  const D=+h.totalDeduct||0;
+  if(!D||h.groupVoided)return h.commGroup;
+  if(+h.commGroup>0)return r10c(+h.commGroup+D);
+  const e=S.emp.find(x=>x.id===h.empId)||{};
+  const P=e.commType==='percent'?r10c((+h.sales||0)*(+e.commRate||0)/100):e.commType==='fixed'?r10c(+e.commRate||0):0;
+  return Math.max(0,r10c((D-(+h.spill||0))-(P-(+h.commPersonal||0))));
+}
+/* 从一笔历史记录还原当初的输入（编辑和批量页共用） */
+function inputsOf(h){
+  // 旧记录没有分开存「其他佣金／加额」，从总数倒推回来，金额不变
+  const legacy=h.baseExtraComm==null;
+  const extra=legacy?(h.baseSales?r2((+h.payComm||0)-r10c(h.baseSales*(+h.baseRate||0)/100)):0):h.baseExtraComm;
+  return {workDays:h.workDays,otHours:h.otHours,unpaidDays:h.unpaidDays,pcb:h.pcb,advance:h.advance,
+    basePayComm:legacy?h.payComm:h.basePayComm,baseExtraComm:extra||'',baseSales:h.baseSales,baseRate:h.baseRate,
+    sales:h.sales,commGroup:groupInOf(h),wrongQty:h.wrongQty,lateCount:h.lateCount,otherDeduct:h.otherDeduct,remark:h.remark};
+}
+function editRec(id){
+  const h=S.hist.find(x=>x.id===id);if(!h)return;
+  if(!S.emp.some(x=>x.id===h.empId)){toast('这位员工已被删除，不能编辑，只能删掉重算');return;}
+  editId=id;tab='calc';mode=h.type||'base';dupPending=null;
+  FRM={eid:h.empId,year:h.year,month:h.month,...inputsOf(h)};
+  render();scrollTo(0,0);
+}
+async function delRec(id){
+  if(delArm!=='h'+id){delArm='h'+id;render();setTimeout(()=>{if(delArm==='h'+id){delArm=null;render();}},3500);return;}
+  toTrash('hist',S.hist.find(x=>x.id===id),'delete');
+  S.hist=S.hist.filter(x=>x.id!==id);delArm=null;await save('hist');toast('已删除（30 天内可在设定 → 回收站救回）');render();
+}
+const COLS=[['序号','_no'],['员工','empName'],['实收金额','_pay'],['种类','type'],['年','year'],['月','month'],
+ ['底薪','base'],['工作天','workDays'],
+ ['加班时数','otHours'],['加班','otTotal'],['未在职天','absentDays'],['未在职扣除','absentDeduct'],['无薪假天','unpaidDays'],['无薪假扣除','unpaidDeduct'],
+ ['法定薪金(扣无薪假/未在职后)','_stat'],
+ ['EPF员工','epfEmp'],['EPF雇主','epfEr'],['EPF总数','_epfTot'],
+ ['SOCSO员工','socsoEmp'],['SOCSO雇主','socsoEr'],['SOCSO总数','_socsoTot'],
+ ['EIS员工','eisEmp'],['EIS雇主','eisEr'],['EIS总数','_eisTot'],['PCB','pcb'],['预支','advance'],
+ ['月头销售额','baseSales'],['月头抽成%','baseRate'],['月头佣金','payComm'],['底薪实收','net'],
+ ['销售额','sales'],['个人佣金','commPersonal'],['团体佣金','commGroup'],['包错货数','wrongQty'],['包错货扣','wrongGoods'],
+ ['迟到次数','lateCount'],['迟到扣','lateDeduct'],['其他扣款','otherDeduct'],['补发','extraPay'],['扣款合计','totalDeduct'],
+ ['结欠','spill'],['佣金实发','payout'],['备注','remark']];
+const payOf=h=>(h.type||'base')==='comm'?(+h.payout||0):(+h.net||0);
+const CALC={
+  _stat:h=>(h.type||'base')!=='base'?'':(h.statWage!=null?r2(h.statWage):r2((+h.base||0)-(+h.unpaidDeduct||0))),
+  _epfTot:h=>(h.type||'base')!=='base'?'':r2((+h.epfEmp||0)+(+h.epfEr||0)),
+  _socsoTot:h=>(h.type||'base')!=='base'?'':r2((+h.socsoEmp||0)+(+h.socsoEr||0)),
+  _eisTot:h=>(h.type||'base')!=='base'?'':r2((+h.eisEmp||0)+(+h.eisEr||0))
+};
+const BASE_KEYS=new Set(['_stat','_epfTot','_socsoTot','_eisTot','base','workDays','otHours','otTotal','absentDays','absentDeduct','unpaidDays','unpaidDeduct','epfEmp','epfEr','socsoEmp','socsoEr','eisEmp','eisEr','pcb','advance','baseSales','baseRate','payComm','net']);
+const COMM_KEYS=new Set(['sales','commPersonal','commGroup','wrongQty','wrongGoods','lateCount','lateDeduct','otherDeduct','extraPay','totalDeduct','spill','payout']);
+const ALWAYS=new Set(['_no','empName','_pay','type','year','month']);
+function activeCols(list){
+  const ft=FRM.ft??'all';
+  let cols=COLS;
+  if(ft==='base') cols=cols.filter(([,k])=>!COMM_KEYS.has(k));
+  else if(ft==='comm') cols=cols.filter(([,k])=>!BASE_KEYS.has(k)||k==='base');
+  // 再拿掉整栏都空白／全是 0 的项目
+  return cols.filter(([,k])=>{
+    if(ALWAYS.has(k)) return true;
+    return list.some(h=>{const v=CALC[k]?CALC[k](h):h[k];
+      if(v===undefined||v===null||v==='') return false;
+      if(typeof v==='number') return v!==0;
+      return String(v).trim()!=='';});
+  });
+}
+const byName=(a,b)=>String(a.empName||'').localeCompare(String(b.empName||''),'en',{sensitivity:'base',numeric:true});
+function rows(){
+  const list=histList().slice().sort((a,b)=>byName(a,b)||(a.year-b.year)||(a.month-b.month));
+  const COLS=activeCols(list);
+  const body=list.map((h,idx)=>COLS.map(([,k])=>{
+    if(k==='_no')return idx+1;
+    if(k==='_pay')return r2(payOf(h));
+    if(k==='type')return (h.type||'base')==='comm'?'佣金':'底薪';
+    if(CALC[k])return CALC[k](h);
+    return h[k]??'';
+  }));
+  const tot=COLS.map(([,k])=>{
+    if(k==='_no')return '合计';
+    if(k==='_pay')return r2(list.reduce((a,h)=>a+payOf(h),0));
+    if(k==='empName'||k==='type'||k==='year'||k==='month'||k==='remark'||k==='baseRate')return '';
+    if(CALC[k])return r2(list.reduce((a,h)=>{const v=CALC[k](h);return a+(typeof v==='number'?v:0);},0))||'';
+    const v=r2(list.reduce((a,h)=>a+(typeof h[k]==='number'?h[k]:0),0));
+    return v||'';
+  });
+  return {head:COLS.map(c=>c[0]),body,tot,n:list.length};
+}
+function expName(){
+  const ft=FRM.ft??'all', fy=FRM.fy??'all', fm=FRM.fm??'all', fe=FRM.fe??'all';
+  const who=fe==='all'?'':(((S.emp.find(x=>x.id===fe)||S.hist.find(h=>h.empId===fe)||{}).name||(S.hist.find(h=>h.empId===fe)||{}).empName||'')+'_');
+  const kind = who+(ft==='comm'?'佣金记录':ft==='base'?'底薪记录':'薪资记录');
+  let period='';
+  if(fy!=='all'&&fm!=='all') period='_'+fy+'年'+String(fm).padStart(2,'0')+'月';
+  else if(fy!=='all') period='_'+fy+'年';
+  const today=new Date().toISOString().slice(0,10);
+  return {base:kind+period+'_'+today, sheet:ft==='comm'?'佣金记录':ft==='base'?'底薪记录':'薪资记录'};   // 工作表名最多 31 字，不放姓名
+}
+function expCSV(){const{head,body,tot,n}=rows();if(!n){toast('没有记录可导出');return;}
+  const csv=[head,...body,tot].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  dl(new Blob(['\ufeff'+csv],{type:'text/csv'}),expName().base+'.csv');}
+function expXLSX(){const{head,body,tot,n}=rows();if(!n){toast('没有记录可导出');return;}
+  if(typeof XLSX==='undefined'){toast('Excel 模块没载入，改用 CSV');expCSV();return;}
+  const ws=XLSX.utils.aoa_to_sheet([head,...body,tot]);
+  ws['!cols']=head.map((h,i)=>({wch:i===1?30:(i===0?6:14)}));
+  ws['!freeze']={xSplit:3,ySplit:1};
+  const wb=XLSX.utils.book_new();
+  const nm=expName();
+  XLSX.utils.book_append_sheet(wb,ws,nm.sheet);XLSX.writeFile(wb,nm.base+'.xlsx');}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+
+/* ---- 备忘 ---- */
+function noteYM(n){
+  if(n.year&&n.month)return {y:n.year,m:n.month};
+  const d=new Date(n.ts); return {y:d.getFullYear(),m:d.getMonth()+1};
+}
+function noteList(){
+  const fy=FRM.ny??'all', fm=FRM.nm??'all';
+  return S.note.filter(n=>{const {y,m}=noteYM(n);
+    return (fy==='all'||y==+fy)&&(fm==='all'||m==+fm);});
+}
+function vNote(){
+  const now=new Date();
+  const ny=FRM.noteY||now.getFullYear(), nm=FRM.noteM||now.getMonth()+1;
+  const years=[...new Set(S.note.map(n=>noteYM(n).y).concat(now.getFullYear()))].sort((a,b)=>b-a);
+  const fy=FRM.ny??'all', fm=FRM.nm??'all';
+  const list=noteList();
+  const ed = editNoteId?S.note.find(x=>x.id===editNoteId):null;
+  const edYM = ed?noteYM(ed):null;
+  return `<div class="card"><h3>${ed?'修改备忘':'新增备忘'}</h3>
+    <div class="row">
+      <div class="f"><label>属于哪个月</label><select id="n_month">${MON.map((x,i)=>`<option value="${i+1}" ${i+1===(edYM?edYM.m:nm)?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div class="f"><label>年份</label><input type="number" id="n_year" value="${edYM?edYM.y:ny}"></div>
+    </div>
+    <div class="f"><textarea id="n_txt" rows="3" placeholder="例：三月起阿明底薪调到 2800">${ed?esc(ed.text):''}</textarea></div>
+    <button class="btn" style="width:100%" onclick="addNote()">${ed?'保存修改':'记下'}</button>
+    ${ed?`<button class="btn alt sm" style="width:100%;margin-top:8px" onclick="editNoteId=null;render()">取消</button>`:''}</div>
+
+  <div class="card">
+    <div class="row">
+      <div class="f"><label>看哪一年</label><select onchange="FRM.ny=this.value;render()"><option value="all">全部</option>${years.map(y=>`<option value="${y}" ${fy==y?'selected':''}>${y}</option>`).join('')}</select></div>
+      <div class="f"><label>看哪个月</label><select onchange="FRM.nm=this.value;render()"><option value="all">全部</option>${MON.map((x,i)=>`<option value="${i+1}" ${fm==i+1?'selected':''}>${x}</option>`).join('')}</select></div>
+    </div>
+    <div class="row">
+      <div><button class="btn alt sm" style="width:100%" onclick="expNoteXLSX()">导出 Excel</button></div>
+      <div><button class="btn alt sm" style="width:100%" onclick="expNoteCSV()">导出 CSV</button></div>
+    </div>
+    <div class="hint">导出的是上面筛选后的备忘。选「全部 + 全部」就是全部一起导。</div>
+  </div>
+
+  ${list.length?list.map(n=>{const {y,m}=noteYM(n);return `<div class="note ${n.done?'done':''}">
+      <div>${esc(n.text)}</div>
+      <div class="d">${y}／${MON[m-1]}　·　写于 ${new Date(n.ts).toLocaleDateString('zh-Hans')}</div>
+      <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn alt sm" onclick="editNoteId='${n.id}';render();window.scrollTo(0,0)">编辑</button>
+        <button class="btn alt sm" onclick="toggleNote('${n.id}')">${n.done?'恢复':'完成'}</button>
+        <button class="btn warn sm" onclick="delNote('${n.id}')">${delArm==='n'+n.id?'确定？':'删除'}</button>
+      </div></div>`;}).join(''):'<div class="card"><div class="empty">这个范围内没有备忘。</div></div>'}`;
+}
+async function addNote(){
+  const t=val('n_txt').trim();if(!t){toast('先写点东西');return;}
+  const y=+val('n_year')||new Date().getFullYear(), m=+val('n_month')||new Date().getMonth()+1;
+  if(editNoteId){
+    const old=S.note.find(n=>n.id===editNoteId); if(old&&(old.text!==t||old.year!==y||old.month!==m))toTrash('note',old,'edit');
+    S.note=S.note.map(n=>n.id===editNoteId?{...n,text:t,year:y,month:m}:n);
+    editNoteId=null; toast('备忘已更新');
+  } else {
+    S.note.unshift({id:uid(),text:t,year:y,month:m,ts:Date.now(),done:false});
+    toast('已记下');
+  }
+  await save('note');render();
+}
+function noteRows(){
+  const list=noteList().slice().sort((a,b)=>{const A=noteYM(a),B=noteYM(b);return B.y-A.y||B.m-A.m||b.ts-a.ts;});
+  const head=['序号','年','月','备忘内容','状态','记录日期'];
+  const body=list.map((n,i)=>{const {y,m}=noteYM(n);
+    return [i+1,y,m,n.text,n.done?'已完成':'待办',new Date(n.ts).toLocaleDateString('zh-Hans')];});
+  return {head,body,n:list.length};
+}
+function expNoteCSV(){const {head,body,n}=noteRows();if(!n){toast('没有备忘可导出');return;}
+  const csv=[head,...body].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  dl(new Blob(['\ufeff'+csv],{type:'text/csv'}),'备忘录.csv');}
+function expNoteXLSX(){const {head,body,n}=noteRows();if(!n){toast('没有备忘可导出');return;}
+  if(typeof XLSX==='undefined'){toast('Excel 模块没载入，改用 CSV');expNoteCSV();return;}
+  const ws=XLSX.utils.aoa_to_sheet([head,...body]);
+  ws['!cols']=[{wch:6},{wch:8},{wch:6},{wch:60},{wch:10},{wch:14}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'备忘录');
+  XLSX.writeFile(wb,'备忘录.xlsx');}
+async function toggleNote(id){S.note=S.note.map(n=>n.id===id?{...n,done:!n.done}:n);await save('note');render();}
+async function delNote(id){if(delArm!=='n'+id){delArm='n'+id;render();setTimeout(()=>{if(delArm==='n'+id){delArm=null;render();}},3500);return;}toTrash('note',S.note.find(n=>n.id===id),'delete');S.note=S.note.filter(n=>n.id!==id);delArm=null;await save('note');render();}
+
+/* ---- 设定 ---- */
+function vSet(){
+  const s=S.set;
+  const f=(k,l,step='0.01')=>`<div class="f"><label>${l}</label><input type="number" step="${step}" id="s_${k}" value="${s[k]}"></div>`;
+  return `
+  <div class="card"><h3>公司</h3>
+    <div class="f"><label>公司名称（印在工资单上）</label><input id="s_company" value="${esc(s.company||'')}" placeholder="例：ABC TRADING SDN BHD"></div>
+  </div>
+  <div class="card"><h3>佣金扣款规则</h3>
+    <div class="row">${f('wrongGoodsRate','包错货 每包扣 RM','1')}${f('lateUnit','迟到每几次算一次','1')}</div>
+    <div class="row">${f('lateFraction','每次扣几天（0.5 = 半天）')}${f('lateNoGroup','迟到几次起取消团体佣金','1')}</div>
+    <div class="hint">现在：每包错货扣 RM${s.wrongGoodsRate}；每 ${s.lateUnit} 次迟到扣 ${s.lateFraction} 天；迟到满 ${s.lateNoGroup} 次团体佣金归零。</div>
+  </div>
+  <div class="warnbox">下面的法定百分比按马来西亚现行规定预设。请对照 EPF／PERKESO 官方表格确认。</div>
+  <div class="card"><h3>EPF</h3>
+    <div class="row">${f('epfEmpLocal','本地员工 %')}${f('epfErLow','雇主 %（≤门槛）')}</div>
+    <div class="row">${f('epfErHigh','雇主 %（>门槛）')}${f('epfErThreshold','门槛 RM','1')}</div>
+    <div class="row">${f('epfEmp60','60岁+ 员工 %')}${f('epfEr60','60岁+ 雇主 %')}</div>
+    ${f('epfForeignErFlat','外劳雇主 固定 RM（未参加 EPF 时）','1')}
+    <div class="hint">EPF 按第三附表：薪金进位到 RM20 级距，再算百分比，最后进位到令吉。</div>
+  </div>
+  <div class="card"><h3>SOCSO · EIS · PCB</h3>
+    <div class="hint" style="margin-bottom:10px">SOCSO 和 EIS 直接查 PERKESO 官方缴费表（Act 4 含 SKBBK ／ Act 800），不是乘百分比，所以没有可以调的比例。上限 RM6,000。<br><br>
+    · 本地 60 岁以下 → 第一类：雇主 + 员工（Keilatan + SKBBK）<br>
+    · 60 岁以上／外劳 → 第二类：雇主 + 员工只付 SKBBK<br>
+    · SKBBK 参不参加，在每个员工资料里勾<br>
+    · EIS 60 岁以上和外劳豁免</div>
+    ${f('pcbThreshold','PCB 提示门槛 RM','1')}
+    <div class="hint">PCB 一律手动输入。</div>
+  </div>
+  <div class="card">
+    <button class="btn" style="width:100%" onclick="saveSet()">保存设定</button>
+    <hr class="d">
+    ${(()=>{const d=daysSinceBackup();
+      if(d===null)return '<div class="warnbox">还没有做过备份。资料只存在这台机器里。</div>';
+      if(d>=7)return `<div class="warnbox">上次备份是 ${d} 天前，建议现在做一次。</div>`;
+      return `<div class="hint" style="margin-bottom:8px;color:var(--jade)">✓ 上次备份：${d===0?'今天':d+' 天前'}</div>`;})()}
+    <button class="btn" style="width:100%" onclick="shareBackup()">分享备份（WhatsApp／邮件）</button>
+    <button class="btn alt sm" style="width:100%;margin-top:8px" onclick="backup()">下载备份文件（JSON）</button>
+    <button class="btn alt sm" style="width:100%;margin-top:8px" onclick="copyBackup()">复制备份文字</button>
+    <div class="hint">按了如果没有「已复制」的提示，文字会自动填进下面的框并选好，直接按手机跳出来的「复制／Copy」就行。</div>
+    <hr class="d">
+    <div class="f"><label>还原：把备份文字贴进来</label><textarea id="imp" rows="3"></textarea></div>
+    <button class="btn" style="width:100%" onclick="mergeRestore()">合并进来（不覆盖，推荐）</button>
+    <button class="btn warn sm" style="width:100%;margin-top:8px" onclick="restore()">${delArm==='r'?'确定覆盖现有数据？':'整份覆盖'}</button>
+    <div class="hint">两台机器同步用「合并」：两边的记录都会留着，重复的自动跳过。只有要整台重来才用「覆盖」。</div>
+    ${MERGE_MSG?`<div class="warnbox" style="background:var(--jade-soft);border-color:var(--jade);color:var(--jade)">${MERGE_MSG}</div>`:''}
+    <div class="hint">员工 ${S.emp.length} 人・历史 ${S.hist.length} 笔・备忘 ${S.note.length} 条。</div>
+  </div>
+  <div class="card">
+    <h3>云端同步</h3>
+    ${USER?`<div class="hint" style="color:var(--jade);margin-top:0">✓ 已登入 ${esc(USER.email)}　资料存在你的 Supabase，手机电脑自动同步</div>
+      <button class="btn alt sm" style="width:100%;margin-top:10px" onclick="pullAll().then(render)">立即拉取云端最新</button>
+      <button class="btn alt sm" style="width:100%;margin-top:8px" onclick="pushAll().then(()=>toast(pendingCount()?'还有 '+pendingCount()+' 项没传上去':'全部已在云端'))">立即推送到云端</button>
+      <button class="btn warn sm" style="width:100%;margin-top:8px" onclick="doLogout()">${delArm==='logout'?'确定登出？（会丢掉没传上去的）':'登出'}</button>
+      <div class="hint">登出后这台电脑上的薪资资料会清掉，下次登入从云端拉回来。</div>`
+    :`<div class="warnbox" style="margin-top:0">目前是离线模式，资料只在这台机器。</div>
+      <button class="btn" style="width:100%" onclick="location.reload()">连接 Supabase</button>`}
+  </div>
+  <div class="card">
+    <h3>回收站 · ${S.trash.length} 项</h3>
+    <div class="hint" style="margin-top:0">删掉或改掉的旧版本留 ${TRASH_DAYS} 天，按「救回」就恢复（现在那份会换进回收站，不会丢）。${TRASH_NO_DB?'<br><b style="color:var(--rust)">Supabase 还没升级，回收站暂时只存在这台电脑。请在 Supabase 跑 supabase-upgrade-v3.sql。</b>':''}</div>
+    ${S.trash.length?S.trash.slice().sort((a,b)=>b.ts-a.ts).slice(0,60).map(x=>`<div class="emp"><div><div class="nm" style="font-weight:500;font-size:14px">${esc(trashLabel(x))}</div>
+        <div class="mt">${x.action==='delete'?'删除':'修改前'}　${new Date(x.ts).toLocaleString('zh-Hans')}</div></div>
+        <button class="btn alt sm" onclick="restoreTrash('${x.id}')">救回</button></div>`).join('')
+      :'<div class="empty">回收站是空的。</div>'}
+    ${S.trash.length>60?'<div class="hint">只列最近 60 项。</div>':''}
+  </div>
+  <div class="card">
+    <h3>自动存档 · ${SNAPS.length} 份</h3>
+    <div class="hint" style="margin-top:0">每次改动会自动留一份在这台电脑里，保留最近 12 份。还原时被盖掉的资料会先进回收站。</div>
+    ${SNAPS.length?SNAPS.map((sn,i)=>{const o=JSON.parse(sn.data);
+      return `<div class="emp"><div><div class="nm">${new Date(sn.ts).toLocaleString('zh-Hans')}</div>
+        <div class="mt">员工 ${o.emp.length}・历史 ${o.hist.length}・备忘 ${o.note.length}</div></div>
+        <button class="btn alt sm" onclick="restoreSnap(${i})">${delArm==='s'+i?'确定还原？':'还原'}</button></div>`;}).join('')
+      :'<div class="empty">还没有存档。</div>'}
+  </div>`;
+}
+async function saveSet(){
+  const need1=['lateUnit','lateNoGroup'], need0=['wrongGoodsRate','lateFraction','epfEmpLocal','epfErLow','epfErHigh','epfErThreshold','epfEmp60','epfEr60','epfForeignErFlat','pcbThreshold'];
+  const bad=need1.filter(k=>!(num('s_'+k)>=1)).concat(need0.filter(k=>num('s_'+k)<0));
+  if(bad.length){toast('有设定不对：迟到次数至少 1，其他不能是负数');return;}
+  Object.keys(DEF_SET).forEach(k=>{S.set[k]=k==='company'?val('s_company').trim():num('s_'+k);});
+  await save('set');toast('设定已保存');render();
+}
+function backup(){dl(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),'薪资系统备份.json');markBackup();}
+async function shareBackup(){
+  const txt=JSON.stringify(S);
+  const name='薪资备份_'+new Date().toISOString().slice(0,10)+'.json';
+  try{
+    const file=new File([txt],name,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:name}); markBackup(); render(); return;
+    }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  try{ await navigator.share({title:name,text:txt}); markBackup(); render(); return; }
+  catch(e){ if(e&&e.name==='AbortError') return; }
+  toast('这个浏览器不支持分享，改用下载或复制'); 
+}
+async function restoreSnap(i){
+  if(delArm!=='s'+i){delArm='s'+i;render();setTimeout(()=>{if(delArm==='s'+i){delArm=null;render();}},4000);return;}
+  const o=JSON.parse(SNAPS[i].data);
+  trashDiff('emp',o.emp||[]);trashDiff('hist',o.hist||[]);trashDiff('note',o.note||[]);   // 被盖掉的先进回收站
+  S.emp=o.emp||[];S.hist=o.hist||[];S.note=o.note||[];S.set={...DEF_SET,...(o.set||{})};
+  delArm=null; const ts=SNAPS[i].ts;
+  await save('emp');await save('hist');await save('note');await save('set');   // 一起推上云端
+  toast('已还原到 '+new Date(ts).toLocaleString('zh-Hans'));render();
+}
+async function copyBackup(){
+  const txt=JSON.stringify(S);
+  // 方法一：现代剪贴板 API
+  try{ await navigator.clipboard.writeText(txt); toast('备份文字已复制'); markBackup(); return; }catch(e){}
+  // 方法二：旧式 execCommand（iframe 里通常可用）
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=txt; ta.style.position='fixed'; ta.style.top='0'; ta.style.left='0';
+    ta.style.width='1px'; ta.style.height='1px'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0,txt.length);
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(ok){ toast('备份文字已复制'); markBackup(); return; }
+  }catch(e){}
+  // 方法三：填进框里，选好，让使用者自己按复制
+  const t=document.getElementById('imp');
+  if(t){ t.value=txt; t.focus(); t.select(); t.setSelectionRange(0,txt.length);
+    toast('已选好，按一下「复制／Copy」'); }
+}
+async function mergeRestore(){
+  const raw=val('imp').trim(); if(!raw){toast('先把备份文字贴进框里');return;}
+  let d; try{d=JSON.parse(raw);}catch(e){toast('这段文字不是有效的备份');return;}
+  if(!d||typeof d!=='object'||!('emp' in d||'hist' in d)){toast('这段文字不是这个 App 的备份');return;}
+  const r={emp:0,hist:0,note:0,skip:0};
+
+  // 员工：以 id 比对，没有就用姓名比对
+  const byId=new Set(S.emp.map(x=>x.id));
+  const byNm=new Set(S.emp.map(x=>String(x.name||'').trim().toUpperCase()));
+  (d.emp||[]).forEach(x=>{
+    if(byId.has(x.id)||byNm.has(String(x.name||'').trim().toUpperCase()))return;
+    S.emp.push(x); byId.add(x.id); byNm.add(String(x.name||'').trim().toUpperCase()); r.emp++;
+  });
+
+  // 历史：同 id 跳过；同员工+同年月+同种类也跳过（避免重复）
+  const hId=new Set(S.hist.map(h=>h.id));
+  const hKey=new Set(S.hist.map(h=>h.empId+'|'+h.year+'|'+h.month+'|'+(h.type||'base')));
+  (d.hist||[]).forEach(h=>{
+    const k=h.empId+'|'+h.year+'|'+h.month+'|'+(h.type||'base');
+    if(hId.has(h.id)||hKey.has(k)){r.skip++;return;}
+    S.hist.push(h); hId.add(h.id); hKey.add(k); r.hist++;
+  });
+  S.hist.sort((a,b)=>(b.year-a.year)||(b.month-a.month)||(b.ts||0)-(a.ts||0));
+
+  // 备忘：同 id 或同内容+同年月就跳过
+  const nId=new Set(S.note.map(n=>n.id));
+  const nKey=new Set(S.note.map(n=>{const y=noteYM(n);return n.text+'|'+y.y+'|'+y.m;}));
+  (d.note||[]).forEach(n=>{
+    const y=noteYM(n), k=n.text+'|'+y.y+'|'+y.m;
+    if(nId.has(n.id)||nKey.has(k))return;
+    S.note.push(n); nId.add(n.id); nKey.add(k); r.note++;
+  });
+
+  await save('emp'); await save('hist'); await save('note');
+  MERGE_MSG=`合并完成：新增员工 ${r.emp} 人、历史 ${r.hist} 笔、备忘 ${r.note} 条${r.skip?`，已有的 ${r.skip} 笔跳过`:''}。目前共 ${S.emp.length} 人、${S.hist.length} 笔记录。`;
+  toast('合并完成'); render();
+  setTimeout(()=>{MERGE_MSG='';},30000);
+}
+async function restore(){
+  const raw=val('imp').trim();if(!raw){toast('先把备份文字贴进框里');return;}
+  let d;try{d=JSON.parse(raw);}catch(e){toast('这段文字不是有效的备份');return;}
+  if(!d||typeof d!=='object'||!('emp' in d||'hist' in d)){toast('这段文字不是这个 App 的备份');return;}
+  if(delArm!=='r'){delArm='r';render();document.getElementById('imp').value=raw;setTimeout(()=>{if(delArm==='r'){delArm=null;render();}},4000);return;}
+  trashDiff('emp',d.emp||[]);trashDiff('hist',d.hist||[]);trashDiff('note',d.note||[]);   // 被盖掉的先进回收站
+  S.emp=d.emp||[];S.hist=d.hist||[];S.note=d.note||[];S.set={...DEF_SET,...(d.set||{})};
+  delArm=null;await save('emp');await save('hist');await save('note');await save('set');
+  toast('已还原：员工 '+S.emp.length+' 人，历史 '+S.hist.length+' 笔');render();
+}
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{if(tab==='calc'&&S.emp.length)collect();tab=b.dataset.t;delArm=null;render();});
+/* 一定要登入才看得到资料。没登入时不读本机快取、不画画面 */
+(async()=>{
+  if(!loadCfg()){ showGate(); return; }
+  if(!initSB()){ showGate(); return; }
+  const {data}=await SB.auth.getSession();
+  if(data&&data.session){ USER=data.session.user; await afterLogin(); }
+  else { showGate(); showAuth(); }
+})();
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&SB&&USER){ pullAll().then(ch=>{ if(ch)safeRender(); }); } });
+window.addEventListener('online',()=>{ if(SB&&USER) pullAll().then(ch=>{ if(ch)safeRender(); }); });
+window.addEventListener('afterprint',()=>{ document.body.classList.remove('printing'); document.getElementById('printArea').innerHTML=''; if(PRINT_TITLE){document.title=PRINT_TITLE;PRINT_TITLE='';} });
+</script>
+</body>
+</html>
