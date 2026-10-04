@@ -132,6 +132,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   原 HTML 不在 repo，含员工资料的 payroll-docs 也不要放进 repo）。计算在前端，结果连 inputs 存 `ops.pay_record`（staff+年+月+base/comm 唯一；
   改了就退回草稿）；`ops.pay_profile` 每人薪资资料、`ops.pay_setting` 参数。`ops.pay_att` 从打卡 / 请假带入：迟到次数 = 上班迟到 + 午休迟回天数，
   无薪假天数；缺勤（没打卡没请假）只显示、不自动扣（使用者决定）。加班时数先手填，等加班模块。不搬旧资料。测试 `portal/supabase/tests/pay_test.sql`。
+  **正式环境分段套用**：`ops_payroll`（表）/ `_fn1` / `_fn2` / `_ready`。Supabase MCP 会把含 `delete` 的 migration 挡下（status cancelled），
+  所以 `20261005_ops_payroll_delete.sql`（拿掉财务部的薪资权限 + HR 删单笔记录 `ops_pay_delete`）**还没套**；套好后把 `payroll/History.tsx` 的 `CAN_DELETE` 改 true。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），

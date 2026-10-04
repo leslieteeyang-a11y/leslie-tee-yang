@@ -12,6 +12,8 @@ const COLS: [string, string][] = [["底薪", "base"], ["工作天", "workDays"],
   ["销售额", "sales"], ["个人佣金", "commPersonal"], ["团体佣金", "commGroup"], ["包错货数", "wrongQty"], ["包错货扣", "wrongGoods"],
   ["迟到次数", "lateCount"], ["迟到扣", "lateDeduct"], ["其他扣款", "otherDeduct"], ["补发", "extraPay"], ["结欠", "spill"], ["佣金实发", "payout"]];
 
+const CAN_DELETE = false;
+
 export function History({ profiles, canEdit, company }: { profiles: Profile[]; canEdit: boolean; company: string }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -76,7 +78,8 @@ export function History({ profiles, canEdit, company }: { profiles: Profile[]; c
                   <td><span className={"ap " + (r.status === "published" ? "approved" : "pending")}>{r.status === "published" ? "已发布" : "草稿"}</span></td>
                   <td className="nowrap">
                     <a href="#" onClick={(e) => { e.preventDefault(); const s = slipOf(r); if (s) setSlip({ s, phone: phoneOf(r.staff_id) }); }}>工资单</a>
-                    {canEdit && <>{" · "}<a href="#" className="danger" onClick={(e) => { e.preventDefault(); remove(r); }}>删除</a></>}
+                    {/* 删除：等 20261005_ops_payroll_delete.sql 套到正式环境再打开 */}
+                    {canEdit && CAN_DELETE && <>{" · "}<a href="#" className="danger" onClick={(e) => { e.preventDefault(); remove(r); }}>删除</a></>}
                   </td>
                 </tr>
               ))}

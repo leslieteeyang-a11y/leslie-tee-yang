@@ -9,7 +9,7 @@
 --   * 权限（使用者决定）：只有 HR 与管理层（薪资模块「可编辑」以上）；财务部拿掉。员工只看自己已发布的工资单。
 -- 旧系统资料不搬（使用者决定重新开始）。
 
-delete from ops.dept_module where module = 'payroll' and department not in ('hr', 'mgmt');
+-- 拿掉财务部看薪资的权限、HR 删单笔记录：在 20261005_ops_payroll_delete.sql（还没套到正式环境）。
 update ops.module set ready = true, description = '每月底薪 / 佣金计算（EPF、SOCSO、EIS）、工资单、自动带入迟到与无薪假'
 where key = 'payroll';
 
@@ -277,20 +277,6 @@ begin
   return n;
 end $$;
 
-create or replace function public.ops_pay_delete(p_id bigint) returns void
-language plpgsql security definer set search_path = '' as $$
-declare
-  me ops.staff;
-  r ops.pay_record;
-begin
-  me := ops.require_level('payroll', 'edit');
-  select * into r from ops.pay_record where id = p_id for update;
-  if r.id is null or not exists (select 1 from ops.staff s where s.id = r.staff_id and ops.sees_branch(me, s.branch)) then
-    raise exception '找不到这笔记录。' using errcode = 'P0002';
-  end if;
-  perform ops.log(me.id, 'pay_delete', 'pay_record', r.id, to_jsonb(r));
-  delete from ops.pay_record where id = r.id;
-end $$;
 
 -- 发布 / 收回：p_ids 为空 = 当月全部
 create or replace function public.ops_pay_publish(p_year int, p_month int, p_publish boolean, p_ids bigint[] default null)
@@ -346,7 +332,7 @@ declare
 begin
   foreach f in array array[
     'ops_pay_meta()', 'ops_pay_profile_save(jsonb)', 'ops_pay_setting_save(jsonb)', 'ops_pay_month(int,int)',
-    'ops_pay_save(jsonb)', 'ops_pay_delete(bigint)', 'ops_pay_publish(int,int,boolean,bigint[])',
+    'ops_pay_save(jsonb)', 'ops_pay_publish(int,int,boolean,bigint[])',
     'ops_pay_history(jsonb)', 'ops_pay_my()'
   ] loop
     execute format('revoke all on function public.%s from public, anon', f);
