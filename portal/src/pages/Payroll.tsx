@@ -9,9 +9,10 @@ import "../payroll.css";
 import { pay, PayMeta, settingsOf } from "../pay-api";
 import Month from "../payroll/Month";
 import Profiles from "../payroll/Profiles";
+import Manual from "../payroll/Manual";
 import { History, Settings } from "../payroll/History";
 
-type Tab = "month" | "staff" | "history" | "settings";
+type Tab = "month" | "manual" | "staff" | "history" | "settings";
 
 export default function Payroll({ sub }: { me: Me; sub?: string }) {
   const [meta, setMeta] = useState<PayMeta | null>(null);
@@ -20,13 +21,14 @@ export default function Payroll({ sub }: { me: Me; sub?: string }) {
   useEffect(load, [load]);
   if (!meta) return error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>;
   const canEdit = meta.level !== "view";
-  const tabs: [Tab, string][] = [["month", "每月计算"], ["staff", "员工薪资资料"], ["history", "历史"], ["settings", "设定"]];
+  const tabs: [Tab, string][] = [["month", "每月计算"], ...(canEdit ? [["manual", "手动计算"]] as [Tab, string][] : []), ["staff", "员工薪资资料"], ["history", "历史"], ["settings", "设定"]];
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "month";
   return (
     <>
       <div className="page-head"><h1>薪资</h1></div>
       <div className="filters"><Tabs value={tab} options={tabs} onChange={(k) => go(`/payroll/${k}`)} /></div>
       {tab === "month" && <Month canEdit={canEdit} set={settingsOf(meta)} company={meta.setting.company} />}
+      {tab === "manual" && canEdit && <Manual set={settingsOf(meta)} company={meta.setting.company} />}
       {tab === "staff" && <Profiles rows={meta.profiles} canEdit={canEdit} onChanged={load} />}
       {tab === "history" && <History profiles={meta.profiles} canEdit={canEdit} company={meta.setting.company} />}
       {tab === "settings" && <Settings company={meta.setting.company} params={meta.setting.params} canEdit={canEdit} onSaved={load} />}

@@ -5,7 +5,7 @@ import { DEF_SET, PaySettings, r2 } from "./calc";
 import { displayName, MON, money, pay, PayRecord, Profile, slipFromRecords, Slip } from "../pay-api";
 import { PrintSlips, sendWhatsApp, SlipView } from "./Slip";
 
-const COLS: [string, string][] = [["底薪", "base"], ["工作天", "workDays"], ["加班时数", "otHours"], ["加班", "otTotal"],
+export const COLS: [string, string][] = [["底薪", "base"], ["工作天", "workDays"], ["加班时数", "otHours"], ["加班", "otTotal"],
   ["未在职天", "absentDays"], ["未在职扣除", "absentDeduct"], ["无薪假天", "unpaidDays"], ["无薪假扣除", "unpaidDeduct"],
   ["法定薪金", "statWage"], ["EPF员工", "epfEmp"], ["EPF雇主", "epfEr"], ["SOCSO员工", "socsoEmp"], ["SOCSO雇主", "socsoEr"],
   ["EIS员工", "eisEmp"], ["EIS雇主", "eisEr"], ["PCB", "pcb"], ["预支", "advance"], ["月头佣金", "payComm"], ["底薪实收", "net"],

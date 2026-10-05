@@ -41,6 +41,23 @@ export const DICT_PAY: Record<string, string> = {
   "WhatsApp 发给员工": "Send via WhatsApp",
   "列印 / 存成 PDF": "Print / save as PDF",
   "这位员工没有手机号。请到「员工薪资资料」填手机号。": "This staff member has no phone number. Add it under \"Staff pay details\".",
+  // 手动计算
+  "手动计算": "Manual payroll",
+  "这页的资料只存在这台电脑的浏览器，不会进系统。换电脑或清浏览器前，先按下面的「下载备份」。":
+    "This page is saved only in this computer's browser, not in the system. Press \"Download backup\" below before switching computers or clearing the browser.",
+  "浏览器存不了资料（可能是无痕模式）。关掉这页前请先下载备份。": "The browser can't save data (private mode?). Download a backup before closing this page.",
+  "＋ 加员工": "＋ Add staff",
+  "还没有员工。按「＋ 加员工」输入名字和底薪。": "No staff yet. Press \"＋ Add staff\" and enter a name and salary.",
+  "这一页没有适用的员工（只拿佣金的人在「佣金」页）。": "No staff on this page (commission-only staff are on the Commission page).",
+  "改资料": "Edit details",
+  "下载备份": "Download backup",
+  "载入备份": "Load backup",
+  "数字一改就自动存在这台电脑。计算规则和「每月计算」一样（EPF、SOCSO、EIS、加班、迟到、包错货），但迟到、无薪假要自己填。":
+    "Numbers are saved on this computer as you type. Same rules as \"Monthly payroll\" (EPF, SOCSO, EIS, OT, lates, wrong goods), but enter lates and unpaid leave yourself.",
+  "加员工（手动计算）": "Add staff (manual payroll)",
+  "名字（印在工资单上）": "Name (printed on payslip)",
+  "从名单拿掉": "Remove from list",
+  "这个档案不是手动薪资的备份档。": "This file is not a manual payroll backup.",
   // 员工薪资资料
   "找员工": "Find staff",
   "没有员工。": "No staff.",
@@ -162,5 +179,6 @@ export const PATTERNS_PAY: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^找不到员工 (.+)。$/, (m) => `Staff ${m[1]} not found.`],
   [/^离职日期不能早过到职日（(.+)）。$/, (m) => `Leaving date can't be before the join date (${m[1]}).`],
   [/^资料格式不对（(.+)）。$/, (m) => `Data format is wrong (${m[1]}).`],
+  [/^改资料：(.+)$/, (m) => `Edit details: ${m[1]}`],
   [/^Employer contribution 雇主缴纳 — (.+)$/, (m) => `Employer contribution — ${m[1]}`],
 ];

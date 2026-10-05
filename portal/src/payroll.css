@@ -43,3 +43,4 @@ tr.total td { font-weight: 600; }
 }
 /* 英文模式：工资单只留英文 */
 html[lang="en"] .ps .zh { display: none; }
+.pay-save .file-btn, .file-btn { flex: 0 0 auto; width: auto; white-space: nowrap; flex-direction: row; display: inline-flex; align-items: center; cursor: pointer; padding: 8px 14px; border: 1px solid var(--line, #d0d7e2); border-radius: 8px; color: var(--blue, #1d4ed8); font-weight: 600; }
