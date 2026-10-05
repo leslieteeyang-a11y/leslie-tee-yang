@@ -134,6 +134,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   无薪假天数；缺勤（没打卡没请假）只显示、不自动扣（使用者决定）。加班时数先手填，等加班模块。不搬旧资料。测试 `portal/supabase/tests/pay_test.sql`。
   **正式环境分段套用**：`ops_payroll`（表）/ `_fn1` / `_fn2` / `_ready`。Supabase MCP 会把含 `delete` 的 migration 挡下（status cancelled），
   所以 `20261005_ops_payroll_delete.sql`（拿掉财务部的薪资权限 + HR 删单笔记录 `ops_pay_delete`）**还没套**；套好后把 `payroll/History.tsx` 的 `CAN_DELETE` 改 true。
+  **手动计算**分页（`payroll/Manual.tsx`，2026-10-05 发薪前一天加）：员工没开账号 / 没打卡时 HR 用；名单与数字只存在浏览器 localStorage
+  `hw-pay-manual`（不进资料库，有下载 / 载入备份 JSON），计算同样用 calc.ts，迟到与无薪假手填。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
