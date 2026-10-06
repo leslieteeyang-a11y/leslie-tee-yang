@@ -159,7 +159,7 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 水工 / 承包商（编号 `A:HOMEWORKSSB:300-xxxx`）；顾客资料地址当时 0 笔。使用者随后同意**从 DO 读送货地址**（「如果有修改，就手动修改」）：
 `quote_push.py` 读 DO 表头 DeliverAddr1～4 + DeliverPostCode（不用 CONCAT_WS，旧 SQL Server 没有；不用发票地址），migration `delivery_do_address`：
 地址顺序 **手动改过的（只改那张 DO，`address_override`，同步不盖）> DO 的 Deliver Address > 顾客资料**（承包商每张 DO 可能是不同工地，所以单据优先），
-坐标改存 `bi.geo_cache`（按地址），视图 `bi.delivery_doc_full`。
+坐标改存 `bi.geo_cache`（按地址），视图 `bi.delivery_doc_full`。**2026-10-06 已全部上线**：SERVER 更新到 p 版（quotes-do-2026-10-06c，update_from_zip 显示 All files updated）、网页 dpl_BTypgWHPda4by57r7LhEAzacfNwy（Delivery.tsx / Loyalty.tsx 与仓库一致）、排程「HomeWorks Quotes」已登记（报价单 167 张、未转单 82；DO 980 张、有送货地址 718）。还没做：分行电脑跑 update_from_zip + setup_quotes；排单页设定 HQ 出发点与司机。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
