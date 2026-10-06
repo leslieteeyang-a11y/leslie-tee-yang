@@ -280,7 +280,6 @@ const loyalty: Record<string, string> = {
   '未找': 'Not yet',
   '查询并加入': 'Look up & add',
   '没有地址': 'No address',
-  '没有地址,请填上(会存进顾客资料)': 'No address; fill it in (saved to the customer record)',
   '浏览器不让复制,请用「WhatsApp 传给司机」。': 'The browser blocked copying; use "WhatsApp to driver".',
   '清单已复制,可以贴到任何地方。': 'List copied; paste it anywhere.',
   '清空': 'Clear',
@@ -306,6 +305,10 @@ const loyalty: Record<string, string> = {
   '{q}:找不到(刚开的单约 15 分钟后才查得到)': '{q}: not found (new DOs appear within about 15 minutes)',
   '{q}:这张 DO 已取消': '{q}: this DO is cancelled',
   '没有地址,请在下面那格补上再按一次「排最短路线」:{l}': 'No address — fill it in below, then press "Plan shortest route" again: {l}',
+  '没有地址,请填上': 'No address, please fill in',
+  '地址来自 AutoCount 的 DO': 'Address from the AutoCount DO',
+  '已手动修改(只改这张 DO)': 'Edited by hand (this DO only)',
+  '地址来自顾客资料': 'Address from customer record',
 };
 
 export default loyalty;

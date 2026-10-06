@@ -156,7 +156,10 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 **一键排单**：整串贴 DO 单号（空白 / 换行 / 逗号分开，只打数字尾码也可）→ `bi_delivery_lookup_many(text[])`（每个单号一笔、找不到 found=false）→
 自动找坐标、排顺序，列出找不到 / 已取消 / 没地址的单；另有**独立页 `/delivery.html`**（`src/delivery/main.tsx`，顾客资料页右上也有按钮），
 按顾客名字开 `loyalty.html#m=<编号>`。实测 HQ 的 DO 单号格式 `DO-017707`，近 60 天 979 张，只有约 200 张客户名称带电话，其余多是有账号的
-水工 / 承包商（编号 `A:HOMEWORKSSB:300-xxxx`）；顾客资料地址当时 0 笔。
+水工 / 承包商（编号 `A:HOMEWORKSSB:300-xxxx`）；顾客资料地址当时 0 笔。使用者随后同意**从 DO 读送货地址**（「如果有修改，就手动修改」）：
+`quote_push.py` 读 DO 表头 DeliverAddr1～4 + DeliverPostCode（不用 CONCAT_WS，旧 SQL Server 没有；不用发票地址），migration `delivery_do_address`：
+地址顺序 **手动改过的（只改那张 DO，`address_override`，同步不盖）> DO 的 Deliver Address > 顾客资料**（承包商每张 DO 可能是不同工地，所以单据优先），
+坐标改存 `bi.geo_cache`（按地址），视图 `bi.delivery_doc_full`。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

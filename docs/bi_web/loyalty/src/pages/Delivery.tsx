@@ -5,18 +5,22 @@ import { fmtNum } from '../lib/format';
 // 送货排单(2026-10-06):输入 DO 单号(或电话)→ 顾客资料与送货地址 → 今天要送的单排成最短顺序 → 一键 WhatsApp 整张清单给司机。
 // 使用者选的:单据 = Delivery Order;地址只用顾客资料;免费排路线 —— 用 OpenStreetMap(Nominatim)找坐标,坐标存回顾客资料
 // 下次不用再找;顺序用直线距离算(最近邻 + 2-opt),不是实际车程。司机不用登入,收到 WhatsApp 清单,每站按连结开 Waze。
-// RPC:bi_delivery_lookup / bi_delivery_docs / bi_customer_set_address / bi_customer_set_geo / bi_delivery_settings /
+// 2026-10-06 使用者同意从 DO 读送货地址:顺序 = 店员在这里改过的(只改这张 DO)> DO 上的 Deliver Address > 顾客资料地址;
+// 坐标按地址存在 bi.geo_cache(bi_delivery_geo_set),同一地址不用再找。
+// RPC:bi_delivery_lookup(_many) / bi_delivery_docs / bi_delivery_doc_set_address / bi_delivery_geo_set / bi_customer_set_address / bi_delivery_settings /
 // bi_delivery_set_depot / bi_delivery_driver_save / bi_delivery_run_save / bi_delivery_runs(migration delivery_planner)。
 
 type T = (zh: string, vars?: Record<string, string | number>) => string;
 type Hit = {
   doc_no: string | null; company: string | null; doc_date: string | null; debtor_name: string | null; sales_agent: string | null;
   amount: number | null; items: string | null; cancelled: boolean; member_id: string | null;
-  name: string | null; address: string | null; lat: number | null; lng: number | null; geo_query: string | null; note: string | null;
+  name: string | null; address: string | null; lat: number | null; lng: number | null; geo_query?: string | null; note: string | null;
+  address_source?: 'manual' | 'do' | 'profile' | null;
 };
 export type Stop = {
   key: string; doc_no: string | null; member_id: string | null; name: string; phone: string; address: string;
   lat: number | null; lng: number | null; items: string | null; note: string | null; geo: 'ok' | 'none' | 'todo';
+  company?: string | null; source?: 'manual' | 'do' | 'profile' | null;
 };
 type Driver = { id: number; name: string; phone: string; store: string | null };
 type Depot = { address: string; lat: number; lng: number };
@@ -173,7 +177,7 @@ function toStop(h: Hit): Stop {
     name: (h.name ?? h.debtor_name ?? '').replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, ' ').replace(/[()（）]/g, ' ')
       .replace(/\s+/g, ' ').trim().replace(/^CASH$/i, ''),
     phone: phoneOf(h.member_id), address: h.address ?? '', lat: h.lat, lng: h.lng, items: h.items, note: h.note,
-    geo: h.lat != null && h.lng != null ? 'ok' : 'todo',
+    geo: h.lat != null && h.lng != null ? 'ok' : 'todo', company: h.company, source: h.address_source ?? null,
   };
 }
 
@@ -252,17 +256,23 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
     setStops((cur) => cur.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   }
 
+  /** 改地址:有 DO 就只改这张 DO(同步不会盖掉);顾客资料还没有地址的(或没有 DO),也存进顾客资料 */
   async function saveAddress(s: Stop, address: string) {
-    if (!s.member_id) { update(s.key, { address, lat: null, lng: null, geo: 'todo' }); return; }
-    const r = await supabase.rpc('bi_customer_set_address', { p_member: s.member_id, p_address: address });
-    if (r.error) { setMsg(r.error.message); return; }
-    update(s.key, { address, lat: null, lng: null, geo: 'todo' });
+    if (s.doc_no && s.company) {
+      const r = await supabase.rpc('bi_delivery_doc_set_address', { p_company: s.company, p_doc_no: s.doc_no, p_address: address });
+      if (r.error) { setMsg(r.error.message); return; }
+    }
+    if (s.member_id && (!s.doc_no || s.source === 'profile' || !s.source)) {
+      const r = await supabase.rpc('bi_customer_set_address', { p_member: s.member_id, p_address: address });
+      if (r.error) { setMsg(r.error.message); return; }
+    }
+    update(s.key, { address, lat: null, lng: null, geo: 'todo', source: s.doc_no ? 'manual' : 'profile' });
   }
 
   async function saveCoords(s: Stop, text: string) {
     const c = parseCoords(text);
     if (!c) { setMsg(t('看不懂坐标。请贴 Google Maps 的连结,或像 1.5321, 103.6612 这样的数字。')); return; }
-    if (s.member_id) await supabase.rpc('bi_customer_set_geo', { p_member: s.member_id, p_lat: c.lat, p_lng: c.lng, p_query: s.address });
+    if (s.address) await supabase.rpc('bi_delivery_geo_set', { p_address: s.address, p_lat: c.lat, p_lng: c.lng });
     update(s.key, { ...c, geo: 'ok' });
   }
 
@@ -300,7 +310,7 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
       const c = await geocode(s.address);
       if (c) {
         cur[i] = { ...s, ...c, geo: 'ok' };
-        if (s.member_id) await supabase.rpc('bi_customer_set_geo', { p_member: s.member_id, p_lat: c.lat, p_lng: c.lng, p_query: s.address });
+        await supabase.rpc('bi_delivery_geo_set', { p_address: s.address, p_lat: c.lat, p_lng: c.lng });
       } else {
         cur[i] = { ...s, geo: 'none' };
       }
@@ -497,8 +507,13 @@ function StopRow({ s, i, n, t, onMove, onRemove, onAddress, onCoords, onOpen }: 
         {s.items && <div className="muted" style={{ fontSize: 12 }}>{s.items}</div>}
       </td>
       <td style={{ minWidth: 220 }}>
-        <textarea rows={2} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={t('没有地址,请填上(会存进顾客资料)')}
+        <textarea rows={2} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={t('没有地址,请填上')}
                   style={{ width: '100%', font: 'inherit' }} />
+        {s.source && addr === s.address && (
+          <div className="muted" style={{ fontSize: 11 }}>
+            {s.source === 'do' ? t('地址来自 AutoCount 的 DO') : s.source === 'manual' ? t('已手动修改(只改这张 DO)') : t('地址来自顾客资料')}
+          </div>
+        )}
         {addr !== s.address && <button className="btn" onClick={() => onAddress(addr)}>{t('储存地址')}</button>}
       </td>
       <td style={{ fontSize: 12, minWidth: 140 }}>

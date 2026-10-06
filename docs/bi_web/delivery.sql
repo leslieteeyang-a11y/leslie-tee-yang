@@ -310,3 +310,9 @@ end $$;
 -- public.bi_delivery_lookup_many(p_queries text[])：最多 100 个单号；每个单号回一笔（完全相同优先，否则最新一张尾码相同的），
 -- 找不到的回 found = false；顾客编号与 bi_delivery_lookup 相同规则；依 bi_company() 限分行。完整内容见 Supabase migration。
 -- ── migration delivery_docs_by_date：bi_delivery_docs(p_date) 列某天没取消的 DO 与顾客地址 ──
+
+-- ── 2026-10-06 migration delivery_do_address：从 DO 读送货地址 ──
+-- bi.delivery_doc 加 address（quote_push.py 从 DO 表头 DeliverAddr1～4 + DeliverPostCode 组成，只读）与 address_override / override_by / override_at
+-- （排单页手动改，同步不会盖掉）；bi.geo_cache(addr = bi.addr_key(地址)) 存坐标；视图 bi.delivery_doc_full 算出实际地址
+-- （manual > do > 顾客资料）与 address_source；bi_delivery_lookup / _lookup_many / bi_delivery_docs 改读这个视图；
+-- 新 RPC bi_delivery_doc_set_address(company, doc_no, address)、bi_delivery_geo_set(address, lat, lng)。

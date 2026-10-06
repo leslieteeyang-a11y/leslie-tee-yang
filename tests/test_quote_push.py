@@ -66,7 +66,8 @@ def test_quotes_task_is_daily_with_its_own_description():
 # ── 送货单 DO（2026-10-06 送货排单） ─────────────────────────────────────────
 from quote_push import build_do_docs, build_do_sql  # noqa: E402
 
-DO = {"DOCKEY", "DOCNO", "DOCDATE", "DEBTORCODE", "DEBTORNAME", "SALESAGENT", "TOTAL", "CANCELLED"}
+DO = {"DOCKEY", "DOCNO", "DOCDATE", "DEBTORCODE", "DEBTORNAME", "SALESAGENT", "TOTAL", "CANCELLED",
+      "DELIVERADDR1", "DELIVERADDR2", "DELIVERADDR3", "DELIVERADDR4", "DELIVERPOSTCODE", "INVADDR1"}
 DODTL = {"DOCKEY", "DTLKEY", "ITEMCODE", "DESCRIPTION", "QTY", "SUBTOTAL"}
 
 
@@ -76,15 +77,25 @@ def test_do_sql_keeps_cancelled_documents_but_flags_them():
     assert "CASE WHEN h.Cancelled = 'T' THEN 1 ELSE 0 END AS Cancelled" in sql
     assert "h.Cancelled = 'F'" not in sql                   # 取消的也要推，BI 才知道这张不用送
     assert "h.Total AS HdrAmount" in sql and "ORDER BY h.DocDate, h.DocNo, d.DtlKey" in sql
+    assert "ISNULL(', ' + NULLIF(LTRIM(RTRIM(h.DeliverAddr1)), ''), '')" in sql and "h.DeliverPostCode" in sql
+    assert "CONCAT_WS" not in sql                           # SQL Server 2017 才有，旧版 AutoCount 会报错
+    assert "InvAddr" not in sql                             # 不用发票地址（承包商的发票地址是办公室，不是工地）
+
+
+def test_do_sql_without_deliver_address_columns():
+    sql = build_do_sql({"DOCKEY", "DOCNO", "DOCDATE", "DEBTORCODE"}, DODTL)
+    assert "NULL AS DeliverAddress" in sql
 
 
 def test_do_docs_mark_cancelled():
     rows = [
-        ("DO-1", date(2026, 10, 6), "300-C001", "MENG 0123456789", "EMILY", 500, "BASIN", 1, 500, 0),
-        ("DO-2", date(2026, 10, 6), "300-C001", "LIM 0129998888", None, None, "TAP", 2, 80, 1),
+        ("DO-1", date(2026, 10, 6), "300-C001", "MENG 0123456789", "EMILY", 500, "BASIN", 1, 500, 0, "12, Jalan  A,  81300"),
+        ("DO-1", date(2026, 10, 6), "300-C001", "MENG 0123456789", "EMILY", 500, "TAP", 1, 0, 0, "12, Jalan  A,  81300"),
+        ("DO-2", date(2026, 10, 6), "300-C001", "LIM 0129998888", None, None, "TAP", 2, 80, 1, ""),
     ]
     d1, d2 = build_do_docs(rows)
-    assert d1["doc_no"] == "DO-1" and d1["cancelled"] is False and d1["items"] == "BASIN x1" and "transferred" not in d1
+    assert d1["address"] == "12, Jalan A, 81300" and d2["address"] is None
+    assert d1["doc_no"] == "DO-1" and d1["cancelled"] is False and d1["items"] == "BASIN x1; TAP x1" and "transferred" not in d1
     assert d2["cancelled"] is True and d2["amount"] == 80
 
 

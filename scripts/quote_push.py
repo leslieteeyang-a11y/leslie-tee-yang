@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config          # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "quotes-do-2026-10-06"
+VERSION = "quotes-do-2026-10-06b"
 DAYS = 120
 DO_DAYS = 60
 TARGETS = ("SODTL", "DODTL", "IVDTL", "CSDTL")
@@ -107,9 +107,15 @@ def build_do_sql(do: set[str], dodtl: set[str]) -> str:
     desc = "d.Description" if "DESCRIPTION" in dodtl else "d.ItemCode"
     sub = "d.SubTotal" if "SUBTOTAL" in dodtl else "0"
     order = "d.Seq" if "SEQ" in dodtl else ("d.DtlKey" if "DTLKEY" in dodtl else "h.DocKey")
+    # 送货地址：DO 表头的 Deliver Address（DeliverAddr1～4 + 邮编）；没有这些栏位就不抓（不用发票地址，承包商的发票地址是办公室）
+    parts = [f"h.{c}" for c, u in (("DeliverAddr1", "DELIVERADDR1"), ("DeliverAddr2", "DELIVERADDR2"), ("DeliverAddr3", "DELIVERADDR3"),
+                                   ("DeliverAddr4", "DELIVERADDR4"), ("DeliverPostCode", "DELIVERPOSTCODE")) if u in do]
+    # 不用 CONCAT_WS（SQL Server 2017 才有，AutoCount 常配旧版 SQL Express）：每段前面加「, 」再用 STUFF 拿掉第一个
+    address = ("NULLIF(STUFF(" + " + ".join(f"ISNULL(', ' + NULLIF(LTRIM(RTRIM({c})), ''), '')" for c in parts) + ", 1, 2, ''), '')"
+               if parts else "NULL")
     return f"""
 SELECT h.DocNo, h.DocDate, h.DebtorCode, {name} AS DebtorName, {agent} AS SalesAgent, {hdr_amount} AS HdrAmount,
-       {desc} AS Description, d.Qty, {sub} AS SubTotal, {cancelled} AS Cancelled
+       {desc} AS Description, d.Qty, {sub} AS SubTotal, {cancelled} AS Cancelled, {address} AS DeliverAddress
 FROM [DO] h LEFT JOIN [DODTL] d ON d.DocKey = h.DocKey
 WHERE h.DocDate >= ?
 ORDER BY h.DocDate, h.DocNo, {order}
@@ -117,10 +123,19 @@ ORDER BY h.DocDate, h.DocNo, {order}
 
 
 def build_do_docs(rows) -> list[dict]:
-    """DO 明细列 → 每张 DO 一笔（纯函数）。借用报价单的合并逻辑，第 10 栏当「已取消」。"""
+    """DO 明细列 → 每张 DO 一笔（纯函数）。借用报价单的合并逻辑，第 10 栏当「已取消」，第 11 栏是送货地址（表头，每行都一样）。"""
+    addr: dict[str, str] = {}
+    base = []
+    for r in rows:
+        r = list(r)
+        a = r[10] if len(r) > 10 else None
+        if a and str(a).strip() and r[0] not in addr:
+            addr[r[0]] = " ".join(str(a).split())
+        base.append(r[:10])
     out = []
-    for d in build_docs(rows):
+    for d in build_docs(base):
         d["cancelled"] = d.pop("transferred")
+        d["address"] = addr.get(d["doc_no"])
         out.append(d)
     return out
 
@@ -131,7 +146,8 @@ def run_do(cfg: dict, conn, dry: bool = False) -> dict:
     if dry:
         print(sql)
     docs = build_do_docs(fetch(conn, sql, (since,))[1])
-    print(f"送货单 DO {since} 起 {len(docs)} 张（取消的 {sum(1 for d in docs if d['cancelled'])} 张）")
+    print(f"送货单 DO {since} 起 {len(docs)} 张（取消的 {sum(1 for d in docs if d['cancelled'])} 张，"
+          f"有送货地址的 {sum(1 for d in docs if d.get('address'))} 张）")
     if dry:
         for d in docs[:5]:
             print(" ", d)
