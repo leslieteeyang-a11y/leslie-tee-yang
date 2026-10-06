@@ -8,6 +8,8 @@ import { tr, type Lang } from '../lib/i18n';
 // 员工补的资料存 bi.customer_profile(RPC public.bi_customer*,migration customer_profiles)。
 // 2026-09-30 第二版(migration customer_crm):跟进提醒、一键 WhatsApp(话术范本)、买了 A 没买 B、同意收促销
 // (汇出与活动只收明确同意的)、顾客分级、促销活动成效、每月顾客报告。档名沿用 Loyalty.tsx / loyalty.html。
+// 2026-10-05 第三版(migration customer_crm_v3_*):手机快速登记、顾客扫 QR 自己登记(店员确认)、报价没成交提醒、
+// 装修进度 5 段 + 推荐类别、修改纪录、合并重复顾客。
 
 type Consent = 'yes' | 'no' | null;
 type Customer = {
@@ -16,6 +18,7 @@ type Customer = {
   birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
   customer_type: string | null; note: string | null; consent: Consent; next_contact: string | null;
   last_contact_at: string | null; profile_created_at: string | null; profile_updated_at: string | null;
+  reno_stage?: string | null; reno_stage_at?: string | null; quote_open?: number; quote_amount?: number; quote_due?: string | null;
 };
 type Item = { item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number };
 type Doc = {
@@ -26,14 +29,26 @@ type Profile = {
   name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
   customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
   next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
+  reno_stage?: string | null; reno_stage_at?: string | null;
 };
-type Detail = { member_id: string; profile: Profile | null; docs: Doc[] };
+type Quote = {
+  company: string; doc_no: string; doc_date: string; sales_agent: string | null; amount: number; transferred: boolean;
+  items: string | null; bought_after: boolean;
+};
+type Detail = { member_id: string; profile: Profile | null; docs: Doc[]; aliases?: string[]; quotes?: Quote[] };
+type Signup = {
+  id: number; member_id: string; main_id: string; name: string | null; birth_month: number | null; birth_day: number | null;
+  area: string | null; consent: boolean; store: string | null; created_at: string;
+  current: { name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent } | null;
+};
+type LogRow = { at: string; by: string | null; action: string; changes: Record<string, unknown>; member_id: string };
 type Missing = {
   company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string;
   debtor_name: string | null; sales_agent: string | null; amount: number;
 };
 export type Settings = {
   vip_min_12m: number; regular_min_docs: number; lapsed_days: number; lead_follow_days: number; birthday_days: number;
+  quote_follow_days: number; quote_max_days: number; stage_follow_days: number; stage_reco: Record<string, string[]>;
   updated_at?: string | null; updated_by?: string | null;
 };
 type Template = { id: number; title: string; body: string; sort: number };
@@ -51,7 +66,23 @@ type T = (zh: string, vars?: Record<string, string | number>) => string;
 const n = (v: unknown) => Number(v ?? 0);
 const STORE: Record<string, string> = { HOMEWORKSSB: 'HQ', HOMEWORKSSOUTHERN: 'JB' };
 export const TYPES = ['屋主', '设计师', '承包商', '水工', '公司', '其他'];
-export const DEFAULT_SETTINGS: Settings = { vip_min_12m: 10000, regular_min_docs: 2, lapsed_days: 365, lead_follow_days: 7, birthday_days: 7 };
+export const DEFAULT_SETTINGS: Settings = {
+  vip_min_12m: 10000, regular_min_docs: 2, lapsed_days: 365, lead_follow_days: 7, birthday_days: 7,
+  quote_follow_days: 7, quote_max_days: 60, stage_follow_days: 30,
+  stage_reco: { plan: ['SANITARY', 'KITCHEN'], rough: ['VALVE', 'FITTING'], tile: ['SANITARY', 'BUILDING'],
+    install: ['LOCK', 'KITCHEN', 'ELECTRIC', 'GARDEN'], done: ['LOCK', 'GARDEN'] },
+};
+/** 装修进度 5 段(使用者 2026-10-05 选的),键存数据库、名称显示用 */
+export const STAGES: [string, string][] = [
+  ['plan', '规划中'], ['rough', '动工 / 水电'], ['tile', '泥水 / 贴砖'], ['install', '安装'], ['done', '完工'],
+];
+export const STAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES);
+
+/** 这个装修阶段推荐的类别里,顾客还没买过的(给店员开口推荐) */
+export function stageNext(stage: string | null | undefined, bought: string[], s: Settings): string[] {
+  if (!stage) return [];
+  return (s.stage_reco?.[stage] ?? []).filter((c) => !bought.includes(c));
+}
 
 /** 60123456789 → 012-345 6789;6591234567 → +65 9123 4567;A:公司:代号 → 代号 (HQ) */
 export function fmtMember(id: string): string {
@@ -126,7 +157,7 @@ export function tierOf(c: Pick<Customer, 'last_date' | 'spent_12m' | 'doc_count_
   return 'normal';
 }
 
-export type Reason = { kind: 'due' | 'birthday' | 'lead'; days: number };
+export type Reason = { kind: 'due' | 'birthday' | 'lead' | 'quote' | 'stage'; days: number };
 export type FollowUp = { c: Customer; reasons: Reason[] };
 
 /** 跟进提醒:约好的联络日到了、生日快到(这段期间还没联络过)、潜在客建档后 N 天都没联络 */
@@ -145,9 +176,19 @@ export function followUps(list: Customer[], s: Settings, today: Date = new Date(
         && daysSince(c.profile_created_at, today) >= s.lead_follow_days) {
       reasons.push({ kind: 'lead', days: daysSince(c.profile_created_at, today) });
     }
+    // 报价单开出 N 天还没成交(没转单、之后也没买),从该跟进的那天起还没联络过
+    if (c.quote_due && (!c.last_contact_at || localISO(new Date(c.last_contact_at)) < c.quote_due)) {
+      reasons.push({ kind: 'quote', days: daysSince(c.quote_due, today) + s.quote_follow_days });
+    }
+    // 装修进度太久没更新(完工的不追)
+    if (c.reno_stage && c.reno_stage !== 'done' && c.reno_stage_at && daysSince(c.reno_stage_at, today) >= s.stage_follow_days
+        && !(contacted < s.stage_follow_days)) {
+      reasons.push({ kind: 'stage', days: daysSince(c.reno_stage_at, today) });
+    }
     if (reasons.length) out.push({ c, reasons });
   }
-  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => (r.kind === 'due' ? 0 : r.kind === 'birthday' ? 100 + r.days : 1000)));
+  const order = { due: 0, quote: 50, birthday: 100, stage: 500, lead: 1000 };
+  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => order[r.kind] + (r.kind === 'birthday' ? r.days : 0)));
   return out.sort((a, b) => rank(a) - rank(b));
 }
 
@@ -168,10 +209,11 @@ function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
 
 type Filters = {
   q: string; store: string; recency: string; minSpent: string; category: string; notCategory: string; ctype: string;
-  area: string; bmonth: string; tier: string; consent: string;
+  area: string; bmonth: string; tier: string; consent: string; stage: string;
 };
 const EMPTY: Filters = {
   q: '', store: '', recency: '', minSpent: '', category: '', notCategory: '', ctype: '', area: '', bmonth: '', tier: '', consent: '',
+  stage: '',
 };
 
 export function applyFilters(list: Customer[], f: Filters, s: Settings = DEFAULT_SETTINGS): Customer[] {
@@ -200,6 +242,7 @@ export function applyFilters(list: Customer[], f: Filters, s: Settings = DEFAULT
     if (f.consent === 'yes' && c.consent !== 'yes') return false;
     if (f.consent === 'no' && c.consent !== 'no') return false;
     if (f.consent === 'unknown' && c.consent) return false;
+    if (f.stage === 'quote' ? !n(c.quote_open) : f.stage === 'any' ? !c.reno_stage : f.stage && c.reno_stage !== f.stage) return false;
     return true;
   });
 }
@@ -258,7 +301,10 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
   }
   async function loadSettings() {
     const [s, w] = await Promise.all([supabase.rpc('bi_customer_settings'), supabase.rpc('bi_wa_templates')]);
-    if (s.data) setSettings({ ...DEFAULT_SETTINGS, ...(s.data as Settings) });
+    if (s.data) {
+      const d = s.data as Partial<Settings>;
+      setSettings({ ...DEFAULT_SETTINGS, ...d, stage_reco: d.stage_reco ?? DEFAULT_SETTINGS.stage_reco });
+    }
     setTemplates((w.data ?? []) as Template[]);
   }
   useEffect(() => { load(); loadSettings(); }, []);
@@ -328,9 +374,13 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
       </div>
 
       {sel && (
-        <CustomerPanel key={sel} id={sel} t={t} settings={settings} templates={templates}
-                       onClose={() => setSel(null)} onSaved={load} />
+        <CustomerPanel key={sel} id={sel} t={t} settings={settings} templates={templates} canManage={canManage}
+                       categories={list.find((c) => c.member_id === sel)?.categories ?? []}
+                       onClose={() => setSel(null)} onSaved={load} onOpen={open} />
       )}
+
+      <QuickRegister t={t} onSaved={load} onOpen={open} />
+      <Signups t={t} onDone={load} onOpen={open} />
 
       <FollowUpList items={follow} t={t} settings={settings} templates={templates} onOpen={open} onTouched={load} />
 
@@ -385,6 +435,12 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
             <option value="no">{t('不同意')}</option>
             <option value="unknown">{t('未确认')}</option>
           </select>
+          <select value={f.stage} onChange={set('stage')}>
+            <option value="">{t('装修阶段:不限')}</option>
+            {STAGES.map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
+            <option value="any">{t('有填装修阶段')}</option>
+            <option value="quote">{t('有报价没成交')}</option>
+          </select>
           <select value={f.bmonth} onChange={set('bmonth')}>
             <option value="">{t('生日月份')}</option>
             {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{t('{m} 月', { m: i + 1 })}</option>)}
@@ -429,8 +485,11 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
                 <tr key={c.member_id} className="lp-click" onClick={() => open(c.member_id)}>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtMember(c.member_id)} <ConsentTag consent={c.consent} t={t} /></td>
                   <td>{cleanName(c.name)}</td>
-                  <td><TierTag tier={tierOf(c, settings)} t={t} /></td>
-                  <td>{c.customer_type ? t(c.customer_type) : ''}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <TierTag tier={tierOf(c, settings)} t={t} />
+                    {n(c.quote_open) > 0 && <span className="lp-tag lp-quote">{t('报价 {n}', { n: n(c.quote_open) })}</span>}
+                  </td>
+                  <td>{c.customer_type ? t(c.customer_type) : ''}{c.reno_stage ? ` · ${t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage)}` : ''}</td>
                   <td>{c.area}</td>
                   <td>{c.stores}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(c.last_date)}</td>
@@ -464,6 +523,8 @@ function FollowUpList({ items, t, settings, templates, onOpen, onTouched }: {
   const label = (r: Reason) => {
     if (r.kind === 'due') return r.days > 0 ? t('约好联络日已过 {d} 天', { d: r.days }) : t('今天约好联络');
     if (r.kind === 'birthday') return r.days === 0 ? t('今天生日 🎂') : t('{d} 天后生日 🎂', { d: r.days });
+    if (r.kind === 'quote') return t('报价 {d} 天还没成交', { d: r.days });
+    if (r.kind === 'stage') return t('装修进度 {d} 天没更新', { d: r.days });
     return t('潜在客,建档 {d} 天还没联络', { d: r.days });
   };
   const touch = (id: string) => { supabase.rpc('bi_customer_touch', { p_member: id }).then(() => onTouched()); };
@@ -471,8 +532,8 @@ function FollowUpList({ items, t, settings, templates, onOpen, onTouched }: {
     <div className="card card-block">
       <h2>{t('跟进提醒({n} 位)', { n: fmtNum(items.length) })}</h2>
       <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-        {t('{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了。按 WhatsApp 或「已联络」后就会从这里消失。', {
-          b: settings.birthday_days, l: settings.lead_follow_days })}
+        {t('{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了、报价开出 {q} 天还没成交、装修进度 {s} 天没更新。按 WhatsApp 或「已联络」后就会从这里消失。', {
+          b: settings.birthday_days, l: settings.lead_follow_days, q: settings.quote_follow_days, s: settings.stage_follow_days })}
       </p>
       {items.length === 0 && <div className="muted">{t('目前没有要跟进的顾客 👍')}</div>}
       {items.length > 0 && (
@@ -488,7 +549,19 @@ function FollowUpList({ items, t, settings, templates, onOpen, onTouched }: {
                     {fmtMember(c.member_id)} <ConsentTag consent={c.consent} t={t} />
                   </td>
                   <td className="lp-click" onClick={() => onOpen(c.member_id)}>{cleanName(c.name)}</td>
-                  <td>{reasons.map((r) => <div key={r.kind}>{label(r)}</div>)}</td>
+                  <td>
+                    {reasons.map((r) => <div key={r.kind}>{label(r)}</div>)}
+                    {reasons.some((r) => r.kind === 'quote') && (
+                      <div className="muted" style={{ fontSize: 12 }}>{t('未成交报价 RM {a}', { a: fmtNum(c.quote_amount, 2) })}</div>
+                    )}
+                    {c.reno_stage && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {t('装修:{s}', { s: t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage) })}
+                        {stageNext(c.reno_stage, c.categories, settings).length > 0
+                          && ` · ${t('可推荐 {c}', { c: stageNext(c.reno_stage, c.categories, settings).join(' / ') })}`}
+                      </div>
+                    )}
+                  </td>
                   <td className="muted" style={{ fontSize: 12, maxWidth: 260 }}>{c.note}</td>
                   <td>
                     <WaButtons id={c.member_id} name={cleanName(c.name)} templates={templates} t={t} onTouched={onTouched} />
@@ -559,8 +632,9 @@ function NewCampaign({ t, members, total, onCreated }: { t: T; members: string[]
   );
 }
 
-function CustomerPanel({ id, t, settings, templates, onClose, onSaved }: {
-  id: string; t: T; settings: Settings; templates: Template[]; onClose: () => void; onSaved: () => void;
+function CustomerPanel({ id, t, settings, templates, canManage, categories, onClose, onSaved, onOpen }: {
+  id: string; t: T; settings: Settings; templates: Template[]; canManage: boolean; categories: string[];
+  onClose: () => void; onSaved: () => void; onOpen: (id: string) => void;
 }) {
   const [d, setD] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -597,6 +671,14 @@ function CustomerPanel({ id, t, settings, templates, onClose, onSaved }: {
     setBusy(false);
     if (r.error) { setMsg(r.error.message); return; }
     setMsg(t('已储存。'));
+    await load();
+    onSaved();
+  }
+
+  async function setStage(stage: string) {
+    const r = await supabase.rpc('bi_customer_set_stage', { p_member: d?.member_id ?? id, p_stage: stage || null });
+    if (r.error) { setMsg(r.error.message); return; }
+    setMsg(t('装修阶段已更新。'));
     await load();
     onSaved();
   }
@@ -694,6 +776,38 @@ function CustomerPanel({ id, t, settings, templates, onClose, onSaved }: {
           </div>
           {msg && <div className="notice" style={{ marginTop: 8 }}>{msg}</div>}
 
+          <StageBox t={t} stage={p?.reno_stage ?? ''} since={p?.reno_stage_at ?? null} settings={settings}
+                    categories={categories} onChange={setStage} />
+
+          {(d.quotes ?? []).length > 0 && (
+            <>
+              <h3>{t('报价单({n} 张)', { n: fmtNum((d.quotes ?? []).length) })}</h3>
+              <div className="table-scroll">
+                <table className="data">
+                  <thead>
+                    <tr><th>{t('日期')}</th><th>{t('门市')}</th><th>{t('单号')}</th><th>{t('业务员')}</th><th>{t('内容')}</th>
+                      <th className="num">{t('金额')}</th><th>{t('状态')}</th></tr>
+                  </thead>
+                  <tbody>
+                    {(d.quotes ?? []).map((q) => (
+                      <tr key={`${q.company}|${q.doc_no}`}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(q.doc_date)}</td>
+                        <td>{STORE[q.company] ?? q.company}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{q.doc_no}</td>
+                        <td>{q.sales_agent}</td>
+                        <td className="muted" style={{ fontSize: 12 }}>{q.items}</td>
+                        <td className="num">{fmtNum(q.amount, 2)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {q.transferred ? t('已转单') : q.bought_after ? t('之后有买') : <b>{t('未成交')}</b>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
           <h3>{t('购买历史({n} 张单)', { n: fmtNum(docs.length) })}</h3>
           <div className="table-scroll">
             <table className="data">
@@ -740,8 +854,268 @@ function CustomerPanel({ id, t, settings, templates, onClose, onSaved }: {
               </tbody>
             </table>
           </div>
+          <MergeBox t={t} id={key} aliases={d.aliases ?? []} canManage={canManage}
+                    onDone={(main) => { onSaved(); if (main !== key) onOpen(main); else load(); }} />
+          <ChangeLog t={t} id={key} />
         </>
       )}
+    </div>
+  );
+}
+
+const FIELD_LABEL: Record<string, string> = {
+  name: '名字', birth_month: '生日月', birth_day: '生日日', area: '地区', address: '地址', customer_type: '类型',
+  note: '备注', consent: '同意收促销', next_contact: '下次联络', last_contact_at: '联络', reno_stage: '装修阶段',
+};
+
+function fmtVal(k: string, v: unknown, t: T): string {
+  if (v == null || v === '') return '–';
+  if (k === 'consent') return v === 'yes' ? t('同意') : v === 'no' ? t('不同意') : String(v);
+  if (k === 'reno_stage') return t(STAGE_LABEL[String(v)] ?? String(v));
+  if (k === 'last_contact_at') return new Date(String(v)).toLocaleString('en-MY');
+  if (k === 'customer_type') return t(String(v));
+  return String(v);
+}
+
+function StageBox({ t, stage, since, settings, categories, onChange }: {
+  t: T; stage: string; since: string | null; settings: Settings; categories: string[]; onChange: (s: string) => void;
+}) {
+  const reco = settings.stage_reco?.[stage] ?? [];
+  return (
+    <div className="lp-box">
+      <div className="lp-row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <b>{t('装修进度')}</b>
+        <div className="seg lp-stages">
+          {STAGES.map(([k, v]) => (
+            <button key={k} className={stage === k ? 'active' : ''} onClick={() => onChange(stage === k ? '' : k)}>{t(v)}</button>
+          ))}
+        </div>
+        {since && <span className="muted" style={{ fontSize: 12 }}>{t('{d} 更新', { d: new Date(since).toLocaleDateString('en-MY') })}</span>}
+      </div>
+      {stage && reco.length > 0 && (
+        <div style={{ fontSize: 13 }}>
+          {t('这个阶段可以推荐:')}{' '}
+          {reco.map((c) => (
+            <span key={c} className={'lp-tag ' + (categories.includes(c) ? 'lp-tier-normal' : 'lp-tier-lead')} style={{ marginRight: 4 }}>
+              {c}{categories.includes(c) ? ` ✓ ${t('买过')}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MergeBox({ t, id, aliases, canManage, onDone }: {
+  t: T; id: string; aliases: string[]; canManage: boolean; onDone: (main: string) => void;
+}) {
+  const [other, setOther] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!canManage && !aliases.length) return null;
+
+  async function merge() {
+    if (other.replace(/\D/g, '').length < 8 && !other.startsWith('A:')) { setMsg(t('请输入完整手机号')); return; }
+    if (!window.confirm(t('把 {o} 的购买纪录与资料合并到 {m}?之后两个号码都会显示成同一位顾客(可以再取消合并)。', {
+      o: other, m: fmtMember(id) }))) return;
+    const r = await supabase.rpc('bi_customer_merge', { p_keep: id, p_drop: other });
+    if (r.error) { setMsg(r.error.message); return; }
+    setOther('');
+    setMsg(t('已合并。'));
+    onDone(id);
+  }
+
+  async function unmerge(a: string) {
+    if (!window.confirm(t('取消合并 {a}?它的购买纪录会回到自己的号码(已合并过来的资料留在这里)。', { a: fmtMember(a) }))) return;
+    const r = await supabase.rpc('bi_customer_unmerge', { p_alias: a });
+    if (r.error) { setMsg(r.error.message); return; }
+    setMsg(t('已取消合并。'));
+    onDone(id);
+  }
+
+  return (
+    <div className="lp-box">
+      <b>{t('合并重复顾客')}</b>
+      {aliases.length > 0 && (
+        <div style={{ fontSize: 13 }}>
+          {t('已合并进来的号码:')}{' '}
+          {aliases.map((a) => (
+            <span key={a} style={{ marginRight: 8 }}>
+              {fmtMember(a)}{canManage && <button className="btn" style={{ marginLeft: 4 }} onClick={() => unmerge(a)}>{t('取消合并')}</button>}
+            </span>
+          ))}
+        </div>
+      )}
+      {canManage && (
+        <div className="lp-row">
+          <input placeholder={t('同一个人的另一个电话')} value={other} onChange={(e) => setOther(e.target.value)} style={{ maxWidth: 220 }} />
+          <button className="btn" onClick={merge}>{t('合并进来')}</button>
+        </div>
+      )}
+      {msg && <div className="muted" style={{ fontSize: 13 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function ChangeLog({ t, id }: { t: T; id: string }) {
+  const [rows, setRows] = useState<LogRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  async function load() {
+    const r = await supabase.rpc('bi_customer_log', { p_member: id });
+    setErr(r.error ? r.error.message : null);
+    setRows((r.data ?? []) as LogRow[]);
+  }
+  const act: Record<string, string> = { insert: '建档', update: '修改', delete: '删除', merge: '合并', unmerge: '取消合并' };
+  return (
+    <details onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }} style={{ marginTop: 8 }}>
+      <summary className="muted" style={{ fontSize: 13 }}>{t('修改纪录')}</summary>
+      {err && <div className="notice">{t('查询失败:')}{err}</div>}
+      {rows && rows.length === 0 && <div className="muted" style={{ fontSize: 13 }}>{t('还没有纪录')}</div>}
+      {rows && rows.length > 0 && (
+        <div className="table-scroll">
+          <table className="data">
+            <thead><tr><th>{t('时间')}</th><th>{t('谁')}</th><th>{t('动作')}</th><th>{t('内容')}</th></tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{new Date(r.at).toLocaleString('en-MY')}</td>
+                  <td>{r.by}</td>
+                  <td>{t(act[r.action] ?? r.action)}{r.member_id !== id ? ` (${fmtMember(r.member_id)})` : ''}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {Object.entries(r.changes).map(([k, v]) => {
+                      if (k === 'merged' || k === 'unmerged') return <div key={k}>{fmtMember(String(v))}</div>;
+                      const [o, nv] = Array.isArray(v) ? v : [null, v];
+                      return <div key={k}>{t(FIELD_LABEL[k] ?? k)}: {fmtVal(k, o, t)} → {fmtVal(k, nv, t)}</div>;
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </details>
+  );
+}
+
+/** 手机版快速登记:电话 + 名字 + 生日 + 同意 + 装修阶段,只写有填的栏位(bi_customer_quick) */
+function QuickRegister({ t, onSaved, onOpen }: { t: T; onSaved: () => void; onOpen: (id: string) => void }) {
+  const blank = { phone: '', name: '', bm: '', bd: '', consent: '', stage: '', area: '' };
+  const [f, setF] = useState(blank);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; id?: string } | null>(null);
+  const upd = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+
+  async function save() {
+    if (f.phone.replace(/\D/g, '').length < 8) { setMsg({ text: t('请输入完整手机号') }); return; }
+    if (!!f.bm !== !!f.bd) { setMsg({ text: t('生日要月、日都填,或都不填') }); return; }
+    setBusy(true);
+    const r = await supabase.rpc('bi_customer_quick', {
+      p_member: f.phone, p_name: f.name, p_birth_month: f.bm ? n(f.bm) : null, p_birth_day: f.bd ? n(f.bd) : null,
+      p_consent: f.consent || null, p_reno_stage: f.stage || null, p_area: f.area,
+    });
+    setBusy(false);
+    if (r.error) { setMsg({ text: r.error.message }); return; }
+    const id = (r.data as { member_id: string }).member_id;
+    setMsg({ text: t('已登记 {p}。', { p: fmtMember(id) }), id });
+    setF(blank);
+    onSaved();
+  }
+
+  return (
+    <details className="card card-block lp-quick">
+      <summary><h2 style={{ display: 'inline' }}>{t('快速登记')}</h2>
+        <span className="muted" style={{ fontSize: 13 }}> {t('柜台 / 手机用,30 秒填完;只会补上有填的栏位')}</span></summary>
+      <div className="lp-quick-grid">
+        <label>{t('手机号码')}<input type="tel" inputMode="tel" value={f.phone} onChange={upd('phone')} placeholder="012-345 6789" /></label>
+        <label>{t('名字')}<input value={f.name} onChange={upd('name')} /></label>
+        <label>{t('生日(月 / 日)')}
+          <span className="lp-row">
+            <select value={f.bm} onChange={upd('bm')}>
+              <option value="">{t('月')}</option>
+              {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+            </select>
+            <select value={f.bd} onChange={upd('bd')}>
+              <option value="">{t('日')}</option>
+              {Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
+            </select>
+          </span>
+        </label>
+        <label>{t('同意收促销讯息')}
+          <select value={f.consent} onChange={upd('consent')}>
+            <option value="">{t('未确认')}</option>
+            <option value="yes">{t('同意')}</option>
+            <option value="no">{t('不同意')}</option>
+          </select>
+        </label>
+        <label>{t('装修进度')}
+          <select value={f.stage} onChange={upd('stage')}>
+            <option value="">{t('不知道 / 不填')}</option>
+            {STAGES.map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
+          </select>
+        </label>
+        <label>{t('地区')}<input value={f.area} onChange={upd('area')} /></label>
+      </div>
+      <div className="lp-row" style={{ marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn primary" disabled={busy} onClick={save}>{t('储存')}</button>
+        {msg && <span className="muted" style={{ fontSize: 13 }}>{msg.text}</span>}
+        {msg?.id && <button className="btn" onClick={() => onOpen(msg.id!)}>{t('打开这位顾客')}</button>}
+      </div>
+    </details>
+  );
+}
+
+/** 顾客自己扫 QR 登记的资料:店员核对是本人后才写进顾客资料 */
+function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id: string) => void }) {
+  const [rows, setRows] = useState<Signup[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  async function load() {
+    const r = await supabase.rpc('bi_customer_signups');
+    setErr(r.error ? r.error.message : null);
+    setRows((r.data ?? []) as Signup[]);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function handle(x: Signup, accept: boolean) {
+    const r = await supabase.rpc('bi_customer_signup_handle', { p_id: x.id, p_accept: accept });
+    if (r.error) { setErr(r.error.message); return; }
+    await load();
+    if (accept) onDone();
+  }
+
+  if (err) return <div className="notice">{t('查询失败:')}{err}</div>;
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="card card-block lp-panel">
+      <h2>{t('顾客自己登记,待确认({n} 位)', { n: rows.length })}</h2>
+      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+        {t('顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,同意收促销以顾客勾的为准。')}
+      </p>
+      <div className="table-scroll">
+        <table className="data">
+          <thead>
+            <tr><th>{t('时间')}</th><th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('生日')}</th><th>{t('地区')}</th>
+              <th>{t('同意收促销')}</th><th>{t('门市')}</th><th /></tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.id}>
+                <td style={{ whiteSpace: 'nowrap' }}>{new Date(x.created_at).toLocaleString('en-MY')}</td>
+                <td style={{ whiteSpace: 'nowrap' }} className="lp-click" onClick={() => onOpen(x.main_id)}>{fmtMember(x.member_id)}</td>
+                <td>{x.name}{x.current?.name && x.current.name !== x.name
+                  ? <div className="muted" style={{ fontSize: 12 }}>{t('现有:{n}', { n: x.current.name })}</div> : null}</td>
+                <td>{x.birth_month ? `${x.birth_month}/${x.birth_day}` : ''}</td>
+                <td>{x.area}</td>
+                <td>{x.consent ? t('同意') : t('不同意')}</td>
+                <td>{x.store}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn primary" onClick={() => handle(x, true)}>{t('确认')}</button>
+                  <button className="btn" onClick={() => handle(x, false)}>{t('不是本人 / 删掉')}</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -932,6 +1306,8 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
   const [s, setS] = useState({
     vip: String(settings.vip_min_12m), docs: String(settings.regular_min_docs), lapsed: String(settings.lapsed_days),
     lead: String(settings.lead_follow_days), bday: String(settings.birthday_days),
+    quote: String(settings.quote_follow_days), qmax: String(settings.quote_max_days), stage: String(settings.stage_follow_days),
+    reco: Object.fromEntries(STAGES.map(([k]) => [k, (settings.stage_reco?.[k] ?? []).join(', ')])) as Record<string, string>,
   });
   const [msg, setMsg] = useState<string | null>(null);
   const [edit, setEdit] = useState<Template | null>(null);
@@ -939,6 +1315,8 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
     setS({
       vip: String(settings.vip_min_12m), docs: String(settings.regular_min_docs), lapsed: String(settings.lapsed_days),
       lead: String(settings.lead_follow_days), bday: String(settings.birthday_days),
+      quote: String(settings.quote_follow_days), qmax: String(settings.quote_max_days), stage: String(settings.stage_follow_days),
+      reco: Object.fromEntries(STAGES.map(([k]) => [k, (settings.stage_reco?.[k] ?? []).join(', ')])) as Record<string, string>,
     });
   }, [settings]);
 
@@ -946,6 +1324,9 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
     const r = await supabase.rpc('bi_customer_set_settings', {
       p_vip_min_12m: n(s.vip), p_regular_min_docs: n(s.docs), p_lapsed_days: n(s.lapsed),
       p_lead_follow_days: n(s.lead), p_birthday_days: n(s.bday),
+      p_quote_follow_days: n(s.quote), p_quote_max_days: n(s.qmax), p_stage_follow_days: n(s.stage),
+      p_stage_reco: Object.fromEntries(Object.entries(s.reco).map(([k, v]) => [k,
+        v.split(/[,，\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean)])),
     });
     setMsg(r.error ? r.error.message : t('已储存。'));
     if (!r.error) onChanged();
@@ -965,7 +1346,8 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
     if (!r.error) onChanged();
   }
 
-  const upd = (k: keyof typeof s) => (e: { target: { value: string } }) => setS({ ...s, [k]: e.target.value });
+  const upd = (k: Exclude<keyof typeof s, 'reco'>) => (e: { target: { value: string } }) => setS({ ...s, [k]: e.target.value });
+  const origin = typeof location !== 'undefined' ? location.origin : 'https://homeworks-bi.vercel.app';
 
   return (
     <details className="card card-block">
@@ -984,6 +1366,21 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
           <input value={s.lead} onChange={upd('lead')} inputMode="numeric" disabled={!isOwner} />
           <label>{t('生日:提前几天提醒')}</label>
           <input value={s.bday} onChange={upd('bday')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('报价:开出几天还没成交就提醒')}</label>
+          <input value={s.quote} onChange={upd('quote')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('报价:超过几天就不再追')}</label>
+          <input value={s.qmax} onChange={upd('qmax')} inputMode="numeric" disabled={!isOwner} />
+          <label>{t('装修进度:几天没更新就提醒')}</label>
+          <input value={s.stage} onChange={upd('stage')} inputMode="numeric" disabled={!isOwner} />
+          <h3 style={{ marginTop: 12 }}>{t('各装修阶段推荐的类别')}</h3>
+          <div className="muted" style={{ fontSize: 12 }}>{t('填 AutoCount 的 Item Group,用逗号分开,例:SANITARY, KITCHEN')}</div>
+          {STAGES.map(([k, v]) => (
+            <Fragment key={k}>
+              <label>{t(v)}</label>
+              <input value={s.reco[k] ?? ''} disabled={!isOwner}
+                     onChange={(e) => setS({ ...s, reco: { ...s.reco, [k]: e.target.value } })} />
+            </Fragment>
+          ))}
           {isOwner ? <button className="btn primary" onClick={saveSettings}>{t('储存')}</button>
             : <div className="muted" style={{ fontSize: 12 }}>{t('只有老板可以改')}</div>}
         </div>
@@ -1015,6 +1412,17 @@ function SettingsPanel({ t, isOwner, settings, templates, onChanged }: {
               </div>
             </div>
           )}
+        </div>
+        <div className="lp-form">
+          <h3>{t('顾客自己登记的 QR')}</h3>
+          <div className="muted" style={{ fontSize: 12 }}>
+            {t('把下面网址做成 QR 贴在柜台;顾客填完会出现在「顾客自己登记,待确认」,店员确认后才生效。')}
+          </div>
+          {['HQ', 'JB'].map((st) => (
+            <div key={st} style={{ fontSize: 13 }}>
+              <b>{st}</b>: <a href={`${origin}/join.html?s=${st}`} target="_blank" rel="noreferrer">{`${origin}/join.html?s=${st}`}</a>
+            </div>
+          ))}
         </div>
       </div>
     </details>

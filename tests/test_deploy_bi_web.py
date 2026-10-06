@@ -110,39 +110,50 @@ LIVE_AFTER_LOYALTY = {
 }
 
 
-def test_repo_overlay_replaces_the_loyalty_page_and_keeps_everything_else():
+# 2026-10-01 使用者从自己电脑的原始码重新部署 dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3：没有顾客资料页，另外改了 4 个档
+LIVE_NOW = {
+    **LIVE,
+    "src/App.tsx": "ed03a907e9321445271ffa25212ce4a6a853a6e7",
+    "src/lib/supabase.ts": "aea7b969c880d9afa04a98db6c799bd950072241",
+    "src/i18n/core.ts": "71cfc562a51a3fa3cdeb9b876d185318a061ffa9",
+    "src/pages/EcomReport.tsx": "af6ac3a8a2165d4d6b274a4796db9361eb12e22e",
+}
+LOYALTY_FILES = ["join.html", "loyalty.html", "src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx",
+                 "src/loyalty/loyalty.css", "src/loyalty/main.tsx", "src/pages/Loyalty.tsx"]
+
+
+def test_repo_overlay_adds_the_customer_pages_back_and_keeps_everything_else():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
     assert "overlay.json" not in overlay                   # 说明档本身不上传
-    plan = d.plan_files(LIVE_AFTER_LOYALTY, overlay, replaces)
-    assert plan["added"] == []
-    # 第二版只改页面、字典、样式；入口与设定档原样
-    assert sorted(plan["same"]) == ["loyalty.html", "src/i18n/index.ts", "src/loyalty/main.tsx", "vite.config.ts"]
-    assert sorted(plan["replaced"]) == ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
+    plan = d.plan_files(LIVE_NOW, overlay, replaces)
+    assert sorted(plan["added"]) == LOYALTY_FILES          # 顾客资料页与登记页整组加回去
+    assert sorted(plan["replaced"]) == ["src/i18n/index.ts", "vite.config.ts"]
+    assert plan["same"] == []
     sent = {f["file"]: f for f in plan["files"]}
-    assert set(sent) == set(LIVE_AFTER_LOYALTY)            # 线上每个档都还在，没有漏掉任何一页
-    for path, sha in LIVE_AFTER_LOYALTY.items():
+    assert set(sent) == set(LIVE_NOW) | set(LOYALTY_FILES)  # 线上每个档都还在，没有漏掉任何一页
+    for path, sha in LIVE_NOW.items():
         if path not in overlay:
             assert sent[path] == {"file": path, "sha": sha}  # 没改的档原样引用线上那一版
-    assert set(plan["upload"]) == set(plan["replaced"])
+    assert set(plan["upload"]) == set(plan["replaced"]) | set(plan["added"])
 
 
-def test_overlay_refuses_the_old_pre_loyalty_site():
-    """改版的底是积分页上线后那一版；线上若回到更早的版本（例如被 rollback），不能硬盖。"""
+def test_overlay_refuses_a_site_it_was_not_based_on():
+    """改版的底是 10/01 那一版；线上若是别的版本（例如 9/29 的顾客资料第一版），不能硬盖。"""
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    with pytest.raises(d.DeployError, match="线上已经没有"):
-        d.plan_files(LIVE, overlay, replaces)
+    with pytest.raises(d.DeployError, match="被改过|同名但内容不同"):
+        d.plan_files(LIVE_AFTER_LOYALTY, overlay, replaces)
 
 
 def test_rerun_after_deploy_is_a_no_op():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    after = {**LIVE_AFTER_LOYALTY, **{p: d.sha1(b) for p, b in overlay.items()}}
+    after = {**LIVE_NOW, **{p: d.sha1(b) for p, b in overlay.items()}}
     plan = d.plan_files(after, overlay, replaces)
     assert plan["upload"] == {} and sorted(plan["same"]) == sorted(overlay)
 
 
 def test_stops_when_someone_changed_a_replaced_file_online():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = {**LIVE_AFTER_LOYALTY, "vite.config.ts": "f" * 40}
+    changed = {**LIVE_NOW, "vite.config.ts": "f" * 40}
     with pytest.raises(d.DeployError, match="vite.config.ts.*被改过"):
         d.plan_files(changed, overlay, replaces)
 
@@ -192,7 +203,7 @@ class FakeVercel:
 
     def live_files(self, deployment_id):
         if deployment_id == "dpl_old":
-            return dict(LIVE_AFTER_LOYALTY)
+            return dict(LIVE_NOW)
         return {f["file"]: f["sha"] for f in self.created}
 
     def upload(self, data):
@@ -222,10 +233,10 @@ def run(monkeypatch, check_only=False, final_state="READY"):
 def test_deploy_uploads_only_changed_files_and_prints_new_page(monkeypatch, capsys):
     fake = run(monkeypatch)
     overlay, _ = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_AFTER_LOYALTY.get(p)]  # 跟线上一样的不重传
-    assert sorted(changed) == ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
+    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_NOW.get(p)]  # 跟线上一样的不重传
+    assert len(changed) == 10
     assert sorted(fake.uploaded) == sorted(d.sha1(overlay[p]) for p in changed)
-    assert len(fake.created) == len(LIVE_AFTER_LOYALTY)
+    assert len(fake.created) == len(LIVE_NOW) + len(LOYALTY_FILES)
     out = capsys.readouterr().out
     assert "https://homeworks-bi.vercel.app/" in out and "完成" in out
 

@@ -1,4 +1,8 @@
--- ⚠️ 草稿：2026-10-05 尚未套用到 Supabase（套用时被取消，等使用者确认）。套用后删掉这一行。
+-- 套用状态（2026-10-06）：Supabase 的连接器遇到含 DROP / DELETE 的变更要使用者按确认，提示 60 秒就过期，所以分批套用：
+--   已套用：customer_crm_v3_tables（表、栏位）、_key（customer_key 认别名）、_doc_view（customer_doc / customer_quote 视图）、
+--           _rpcs（signup / signups / signup_handle / quick / set_stage / log / bi_customer）、_grant_test（探针函数，下一批删掉）
+--   待使用者确认：customer_crm_v3_replace_functions = bi_quote_upsert、修改纪录触发器、merge / unmerge、bi_customers 新版、
+--           bi_customer_set_settings 新版（内容与本档对应段落相同，另删掉探针函数 bi.customer_v3_probe）
 -- 顾客资料第三版（migration `customer_crm_v3`，2026-10-05）：使用者选的 6 项
 -- 手机版快速登记（bi_customer_quick）、顾客自己扫 QR 登记（店员确认后才生效）、报价没成交提醒（Quotation，7 天）、
 -- 装修进度 5 段 + 各段推荐类别、顾客资料修改纪录（触发器）、合并重复顾客（别名表）。

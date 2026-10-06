@@ -33,3 +33,24 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .lp-box { border: 1px dashed var(--muted); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
 .lp-tpl { border-top: 1px solid rgba(219, 232, 250, 0.12); padding-top: 6px; }
 .lp-sel td { background: rgba(219, 232, 250, 0.08); }
+/* 2026-10-05:快速登记、报价标记、装修阶段、手机版面 */
+.lp-quote { color: #d98c3a; margin-left: 4px; }
+.lp-quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; margin-top: 10px; }
+.lp-quick-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.lp-quick-grid input, .lp-quick-grid select { width: 100%; font-size: 16px; }
+.lp-quick-grid .lp-row select { flex: 1; }
+.lp-stages button { font-size: 13px; }
+@media (max-width: 640px) {
+  .shell { padding-left: 10px; padding-right: 10px; }
+  .topbar { flex-wrap: wrap; gap: 6px; }
+  .topbar h1 { font-size: 20px; }
+  .grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters { flex-wrap: wrap; }
+  .filters input, .filters select { flex: 1 1 140px; min-width: 0; font-size: 16px; }
+  .lp-form { max-width: none; }
+  .lp-form input, .lp-form select, .lp-form textarea { font-size: 16px; }
+  .lp-wa a.btn, .btn { padding: 8px 10px; }
+  .lp-head { flex-direction: column; }
+  table.data { font-size: 13px; }
+  .lp-quick-grid { grid-template-columns: 1fr; }
+}

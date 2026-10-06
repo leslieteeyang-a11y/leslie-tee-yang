@@ -1,13 +1,8 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增。2026-09-30：顾客资料第二版（跟进、WhatsApp、分级、同意、活动、月报），底是顾客资料第一版上线的那一版。",
-  "based_on_deployment": "dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增。2026-10-06：线上 10/01 由使用者电脑的原始码重新部署（dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3），那份原始码没有顾客资料页，所以这版以它为底、把顾客资料页（第三版）与顾客登记页 join.html 整组加回去。",
+  "based_on_deployment": "dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3",
   "replaces": {
-    "vite.config.ts": "f26c927acac1ecaecac60ad79f178d3ac8c6fbad",
-    "src/i18n/index.ts": "9b524edced23630b0f48e85a76cb860486df870d",
-    "loyalty.html": "997523778355146e1492fdc53dafb7dd799c6ac6",
-    "src/i18n/loyalty.ts": "b138f825a1f51055cd79429fe146113d11b6965b",
-    "src/loyalty/loyalty.css": "0d6de45406441b6fbb901d0f5f529c015d77c257",
-    "src/loyalty/main.tsx": "23b4ff9588119f1d1f0d4162c4b8b1e1a3f0a6e4",
-    "src/pages/Loyalty.tsx": "e909207e57bb60661e28691e12e6b7602bcbc361"
+    "vite.config.ts": "0c897d6f972ea1895b2f1af316e9ea51de65cd0e",
+    "src/i18n/index.ts": "6f28962c7d01c5760239cd3f935d885f70db3ec7"
   }
 }

@@ -21,7 +21,9 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 
 2026-09-29 使用者不要积分，同一个网址 / 档名改成「顾客资料」（记录顾客、筛选、汇出促销名单），数据库见 `customer_profiles.sql`，
 已上线 dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz。2026-09-30 第二版（跟进提醒、一键 WhatsApp、买了 A 没买 B、同意收促销、分级、促销活动成效、
-每月顾客报告）数据库见 `customer_crm.sql`，`loyalty/overlay.json` 以第一版上线版为底。以下是积分时期的纪录：
+每月顾客报告）数据库见 `customer_crm.sql`。2026-10-05 第三版（快速登记、顾客扫 QR 登记 `/join.html`、报价没成交提醒、装修进度、修改纪录、
+合并重复顾客）数据库见 `customer_crm_v3.sql`。线上 10/01 被使用者电脑的原始码重新部署后顾客页消失，`loyalty/overlay.json` 改以
+dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3 为底，把顾客页与 join 页整组加回去（只换 `vite.config.ts`、`src/i18n/index.ts`）。以下是积分时期的纪录：
 
 独立页 `homeworks-bi.vercel.app/loyalty.html`（柜台只开这页，登入与主看板共用）。**2026-09-29 已由 deploy_bi_web.bat 上线（dpl_9rYXNrwx6dfW6VKT3UZgoCLQfMPV）**。以下为当时背景：Vercel 连接的帐号
 这天起对 homeworks-bi 建 preview / production 都回 403（没有部署权限），要在 Vercel 团队设定把该帐号角色调回

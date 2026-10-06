@@ -22,14 +22,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TASK_NAME = "HomeWorks Monthly Report"
 BRANCH_TASK = "HomeWorks Branch Actual"
+QUOTES_TASK = "HomeWorks Quotes"
 
 
-def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: bool = False) -> str:
-    """产生工作排程器的任务定义（纯函数，方便测试）。daily=True 时每天跑（分行当月进度用）。"""
+def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: bool = False, desc: str | None = None) -> str:
+    """产生工作排程器的任务定义（纯函数，方便测试）。daily=True 时每天跑（分行当月进度、报价单用）。"""
     hh, mm = time_hhmm.split(":")
     start = f"{date.today().isoformat()}T{int(hh):02d}:{int(mm):02d}:00"
     if daily:
-        desc = "HomeWorks：每天自动从分行 AutoCount 抓上个月与本月至今的实际销售额推进 BI"
+        desc = desc or "HomeWorks：每天自动从分行 AutoCount 抓上个月与本月至今的实际销售额推进 BI"
         schedule = "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>"
     else:
         desc = f"HomeWorks：每月 {day} 号自动从 AutoCount 抓上个月数据并产生 Excel 月报"
@@ -98,11 +99,14 @@ def main():
     ap.add_argument("--status", action="store_true", help="显示排程状态")
     ap.add_argument("--remove", action="store_true", help="取消排程")
     ap.add_argument("--branch", action="store_true", help="分行电脑用：登记「分行实际销售额」推送，而不是总部月报")
+    ap.add_argument("--quotes", action="store_true", help="SERVER 用：登记每天推报价单进 BI（顾客资料页的报价没成交提醒）")
     a = ap.parse_args()
     global TASK_NAME
-    bat = "run_branch.bat" if a.branch else "run_monthly.bat"
+    bat = "run_quotes.bat" if a.quotes else "run_branch.bat" if a.branch else "run_monthly.bat"
     if a.branch:
         TASK_NAME = BRANCH_TASK
+    if a.quotes:
+        TASK_NAME = QUOTES_TASK
 
     if sys.platform != "win32":
         sys.exit("这个脚本要在办公室那台 Windows（SERVER）上执行，它登记的是 Windows 工作排程器。")
@@ -125,7 +129,8 @@ def main():
     if not (ROOT / "autocount.json").exists():
         sys.exit("还没连接 AutoCount（找不到 autocount.json）。请先双击 setup_autocount.bat。")
 
-    xml = task_xml(ROOT / bat, a.day, a.time, ROOT, daily=a.branch)   # 分行每天跑，本月进度才会更新
+    xml = task_xml(ROOT / bat, a.day, a.time, ROOT, daily=a.branch or a.quotes,   # 分行、报价单每天跑
+                   desc="HomeWorks：每天自动从 AutoCount 抓近 120 天的报价单推进 BI（顾客资料的报价没成交提醒）" if a.quotes else None)
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-16") as f:
         f.write(xml)
         tmp = f.name
@@ -133,6 +138,10 @@ def main():
         schtasks("/Create", "/TN", TASK_NAME, "/XML", tmp, "/F")
     finally:
         Path(tmp).unlink(missing_ok=True)
+    if a.quotes:
+        print(f"已登记排程「{TASK_NAME}」：每天 {a.time} 自动抓报价单并推进 BI。纪录在 {ROOT / 'logs'}（quotes_*.log）。")
+        print("  电脑那天没开也没关系，下次开机会补跑。")
+        return
     if a.branch:
         print(f"已登记排程「{TASK_NAME}」：每天 {a.time} 自动抓上个月 + 本月至今的分行实际销售额并推进 BI。")
     else:

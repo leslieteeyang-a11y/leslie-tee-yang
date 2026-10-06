@@ -124,6 +124,18 @@ owner / manager / sales 可看可改，**汇出 CSV 只给 owner / manager**（�
 `bi.customer_settings`，owner 可改）、促销活动（`bi.customer_campaign(_member)`，成效 = 名单上的人发送后 30 / 60 天的消费）、每月顾客报告
 （`bi_customer_monthly` 新客 / 回头客 / 流失、`bi_customer_agents` 各业务员）。`bi_customer_save` 改成 10 个参数（旧 8 参数版已删，
 第二版网页上线前线上页的「储存」会失败）。overlay 以 dpl_FUEcJLa8hZsd9ZR41g6nADgNocYz 为底，只换 Loyalty.tsx / loyalty.ts / loyalty.css。
+**顾客资料第三版（2026-10-05/06，migration `customer_crm_v3_*`，留底 `docs/bi_web/customer_crm_v3.sql`）**：第二版上线 5 天只有 1 位顾客
+补资料、0 位标同意，使用者选了 6 项：手机快速登记（`bi_customer_quick`，只写有填的栏位）、顾客扫 QR 自己登记（公开页
+`/join.html?s=HQ|JB`，anon 只能呼叫 `bi_customer_signup`，进 `bi.customer_signup` 待确认，**店员确认后才生效**，10 分钟 30 笔上限；
+海报 `docs/bi_web/qr/join_qr_*.png`）、报价没成交提醒（**Quotation**，`scripts/quote_push.py` 只读 QT/QTDTL 近 120 天 → `bi_quote_upsert`
+（service_role）→ `bi.quote_open` / 视图 `bi.customer_quote`；开出 7 天没转单、之后也没买 → 跟进提醒；SERVER 用 `setup_quotes.bat` 登记每天
+「HomeWorks Quotes」排程，分行跟着 `branch_actual.py --scheduled` 每天推）、装修进度 5 段（plan/rough/tile/install/done，`stage_reco`
+各段推荐类别，30 天没更新提醒）、修改纪录（触发器写 `bi.customer_profile_log`，`bi_customer_log`）、合并重复顾客（`bi.customer_alias`，
+`customer_key` / `customer_doc` 先换成主号码；`bi_customer_merge` / `_unmerge` 只给 owner / manager）。
+**Supabase 连接器遇到含 DROP / DELETE 的变更会要使用者按确认、60 秒过期**：先请使用者守着再套用。最后一批 `customer_crm_v3_pending.sql`
+（2026-10-06 尚未套用）。**线上 10/01 被使用者从自己电脑的原始码重新部署（dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3），那份原始码没有顾客资料页，
+loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加回去。以后使用者若再从电脑部署，要先把 `docs/bi_web/loyalty/` 的档案
+放进那份原始码，否则顾客页又会消失。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
@@ -169,11 +181,12 @@ latestDeployment）。
 | `scripts/run_monthly.py` + `run_monthly.bat` | 抓数 + 产报表一步到位；`--scheduled` 给排程用，输出写 `logs/`，可依 `config.json` 的 `report_delivery.copy_to` 再复制一份 |
 | `scripts/schedule_monthly.py` + `schedule_monthly.bat` | 用 XML 登记 Windows 工作排程器（每月 1 号 08:00，错过会补跑）；`--run-now` / `--status` / `--remove` |
 | `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送、`--setup-branch` 分行流程 |
-| `scripts/branch_actual.py` + `setup_branch.bat` / `run_branch.bat` | 分行电脑用：分行当月实际销售额 → BI（见下节） |
+| `scripts/branch_actual.py` + `setup_branch.bat` / `run_branch.bat` | 分行电脑用：分行当月实际销售额 → BI（见下节）；排程模式顺便推分行报价单 |
+| `scripts/quote_push.py` + `setup_quotes.bat` / `run_quotes.bat` | 报价单（Quotation，只读）→ BI，给顾客资料页的报价没成交提醒；SERVER 每天排程「HomeWorks Quotes」 |
 | `scripts/deploy_bi_web.py` + `deploy_bi_web.bat` | BI 网页（Vercel homeworks-bi）改版上线：用使用者自己的 Vercel 金钥（`vercel_token.json`，不进 git），线上档原样引用、只传改版目录（预设 `docs/bi_web/loyalty/`）的档；`overlay.json` 写明换掉哪些线上档与当初的底，线上被改过就停；`--check` 只检查、`--set-key` 换金钥 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，67 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
+| `tests/` | `python -m pytest tests -q`，73 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

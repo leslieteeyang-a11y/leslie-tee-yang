@@ -27,7 +27,7 @@ from autocount_extract import month_range as month_bounds               # noqa: 
 from backfill import month_range                                        # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "branch-2026-09-28b"
+VERSION = "branch-2026-10-05c"
 AGENT_OK = "LTRIM(RTRIM(ISNULL(h.SalesAgent, ''))) <> ''"     # 排除 agent 空白的单
 
 
@@ -194,6 +194,13 @@ def main():
         months = [previous_month()]
     for m in months:
         run_month(cfg, base_cfg, m, a.dry_run)
+    if a.scheduled:
+        # 顺便推分行的报价单（顾客资料页的报价没成交提醒）；失败不影响上面的实际销售额
+        try:
+            from quote_push import run as push_quotes
+            push_quotes(cfg)
+        except (Exception, SystemExit) as e:                # noqa: BLE001
+            print(f"[!] 报价单没推成功（实际销售额已推完，不受影响）：{e}")
 
 
 if __name__ == "__main__":
