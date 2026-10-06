@@ -139,7 +139,10 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 放进那份原始码，否则顾客页又会消失。2026-10-06 第三版已由 deploy_bi_web.bat 上线（dpl_J5mNzgqdWhDubpFU7CHTs1NgK5Dk）。同日使用者要求登记页「住哪一区」改成
 **送货地址**（员工送货用）：`bi.customer_signup.address`，RPC `bi_customer_signup` 多一个 8 参数版（`p_address` 无预设值，旧 7 参数版保留），
 确认时地址以顾客新填的为准；overlay 以 dpl_J5mN… 为底，只换 join 两档、Loyalty.tsx、loyalty.ts。同日再加**电邮**（`customer_signup.email`、`customer_profile.email`，
-9 参数版 `bi_customer_signup`（`p_email`）、确认时电邮以顾客新填的为准），登记成功后 4 秒自动带到 **www.hemos.com.my**（也有按钮）。
+9 参数版 `bi_customer_signup`（`p_email`）、确认时电邮以顾客新填的为准），登记成功后 4 秒自动带到 **www.hemos.com.my**（也有按钮）。（已上线 dpl_EiyNVLR3WZTKpQsZJtUKhewNXj1T）
+**同日使用者改主意：扫码登记不用店员确认，送出即生效**（migration `customer_signup_auto_confirm`：`bi.customer_signup_apply(id, actor)`
+共用写入规则，9 参数版 `bi_customer_signup` 送出就套用、status = confirmed、handled_by = 「顾客自己扫码登记（HQ/JB）」；被乱填的风险靠
+修改纪录追查）。`bi_customer_signups` 改列「旧的待确认 + 近 14 天扫码登记」，前端改成「最近扫码登记的顾客」给店员跟进。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

@@ -1,10 +1,9 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-06：顾客登记页「住哪一区」改成送货地址，底是第三版上线的那一版（dpl_J5mNzgqdWhDubpFU7CHTs1NgK5Dk）。",
-  "based_on_deployment": "dpl_J5mNzgqdWhDubpFU7CHTs1NgK5Dk",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-06：扫码登记改成不用店员确认（送出即生效），底是加了电邮的那一版（dpl_EiyNVLR3WZTKpQsZJtUKhewNXj1T）。",
+  "based_on_deployment": "dpl_EiyNVLR3WZTKpQsZJtUKhewNXj1T",
   "replaces": {
-    "src/i18n/loyalty.ts": "c9f7db228ee412f6c51727b468a5943f19381dea",
-    "src/join/join.css": "32df28d7f5a1b76b9584bea5a86d514d8a67ac0f",
-    "src/join/main.tsx": "e64326175204de3cf58ecf41060abdd3df9bb014",
-    "src/pages/Loyalty.tsx": "67fdff916f40d91269fd420329bf1fa36dd7f59c"
+    "src/i18n/loyalty.ts": "984a84392a1d37214435be9dffb9ccdf95c74636",
+    "src/join/main.tsx": "96a0022ccc95273e87b9528514d8c0630d5b6d4e",
+    "src/pages/Loyalty.tsx": "9551a5a34a6d763a7837c551e33164df64eeac78"
   }
 }

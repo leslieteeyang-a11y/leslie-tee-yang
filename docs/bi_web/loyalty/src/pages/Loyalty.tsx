@@ -39,7 +39,11 @@ type Detail = { member_id: string; profile: Profile | null; docs: Doc[]; aliases
 type Signup = {
   id: number; member_id: string; main_id: string; name: string | null; birth_month: number | null; birth_day: number | null;
   area: string | null; address?: string | null; email?: string | null; consent: boolean; store: string | null; created_at: string;
-  current: { name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent } | null;
+  status: 'pending' | 'confirmed' | 'rejected';
+  current: {
+    name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent;
+    last_contact_at?: string | null;
+  } | null;
 };
 type LogRow = { at: string; by: string | null; action: string; changes: Record<string, unknown>; member_id: string };
 type Missing = {
@@ -1065,7 +1069,7 @@ function QuickRegister({ t, onSaved, onOpen }: { t: T; onSaved: () => void; onOp
   );
 }
 
-/** 顾客自己扫 QR 登记的资料:店员核对是本人后才写进顾客资料 */
+/** 顾客扫 QR 登记(2026-10-06 起送出即生效):列近 14 天扫码登记的顾客给店员跟进;改版前留下的待确认登记仍可确认 / 删掉 */
 function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id: string) => void }) {
   const [rows, setRows] = useState<Signup[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -1086,16 +1090,16 @@ function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id:
   if (err) return <div className="notice">{t('查询失败:')}{err}</div>;
   if (!rows || rows.length === 0) return null;
   return (
-    <div className="card card-block lp-panel">
-      <h2>{t('顾客自己登记,待确认({n} 位)', { n: rows.length })}</h2>
-      <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-        {t('顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,地址与同意收促销以顾客填的为准。')}
+    <details className="card card-block" open={rows.some((x) => x.status === 'pending')}>
+      <summary><h2 style={{ display: 'inline' }}>{t('最近扫码登记的顾客({n} 位,近 14 天)', { n: rows.length })}</h2></summary>
+      <p className="muted" style={{ fontSize: 13 }}>
+        {t('顾客扫 QR 送出就直接存进顾客资料:已有的名字 / 生日不会被盖掉,地址、电邮与同意收促销以顾客填的为准;每笔改动都在顾客的「修改纪录」。可以在这里打 WhatsApp 欢迎新顾客。')}
       </p>
       <div className="table-scroll">
         <table className="data">
           <thead>
             <tr><th>{t('时间')}</th><th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('生日')}</th><th>{t('地址')}</th>
-              <th>{t('同意收促销')}</th><th>{t('门市')}</th><th /></tr>
+              <th>{t('同意收促销')}</th><th>{t('门市')}</th><th>{t('状态')}</th></tr>
           </thead>
           <tbody>
             {rows.map((x) => (
@@ -1112,15 +1116,26 @@ function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id:
                 <td>{x.consent ? t('同意') : t('不同意')}</td>
                 <td>{x.store}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button className="btn primary" onClick={() => handle(x, true)}>{t('确认')}</button>
-                  <button className="btn" onClick={() => handle(x, false)}>{t('不是本人 / 删掉')}</button>
+                  {x.status === 'pending' ? (
+                    <>
+                      <button className="btn primary" onClick={() => handle(x, true)}>{t('确认')}</button>
+                      <button className="btn" onClick={() => handle(x, false)}>{t('不是本人 / 删掉')}</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {x.current?.last_contact_at ? t('已联络') : t('已登记')}{' '}
+                      </span>
+                      <button className="btn" onClick={() => onOpen(x.main_id)}>{t('打开这位顾客')}</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </details>
   );
 }
 

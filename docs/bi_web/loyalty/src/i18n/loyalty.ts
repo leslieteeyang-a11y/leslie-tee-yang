@@ -238,9 +238,10 @@ const loyalty: Record<string, string> = {
   '谁': 'Who',
   '还没有纪录': 'No history yet',
   '这个阶段可以推荐:': 'Suggest at this stage:',
-  '顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,地址与同意收促销以顾客填的为准。': 'Details customers entered by scanning the QR. Check it is really them (e.g. the number on their phone) before confirming; existing names / birthdays are kept; the address and promotion choice follow what the customer entered.',
-  '顾客自己登记,待确认({n} 位)': 'Self sign-ups to confirm ({n})',
   '顾客自己登记的 QR': 'Self sign-up QR',
+  '最近扫码登记的顾客({n} 位,近 14 天)': 'Recent QR sign-ups ({n}, last 14 days)',
+  '顾客扫 QR 送出就直接存进顾客资料:已有的名字 / 生日不会被盖掉,地址、电邮与同意收促销以顾客填的为准;每笔改动都在顾客的「修改纪录」。可以在这里打 WhatsApp 欢迎新顾客。': 'Customers who scan the QR are saved straight into the customer records: existing names / birthdays are kept; address, email and the promotion choice follow what the customer entered. Every change is in the customer\'s change history. Use this list to welcome new customers on WhatsApp.',
+  '已登记': 'Signed up',
 };
 
 export default loyalty;

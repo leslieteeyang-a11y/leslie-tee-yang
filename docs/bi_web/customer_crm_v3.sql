@@ -672,3 +672,8 @@ grant execute on function public.bi_quote_upsert(text, jsonb) to service_role;
 -- ── 2026-10-06 migration customer_signup_email：登记页加电邮 ──
 -- customer_signup.email、customer_profile.email（≤120 字）；bi_customer_signup 9 参数版（p_email 无预设值，旧 7 / 8 参数版保留），
 -- 电邮转小写、格式检查；bi_customer_signups 的 current 多 email；bi_customer_signup_handle 写入 email = coalesce(新填, 原有)。
+
+-- ── 2026-10-06 migration customer_signup_auto_confirm / customer_signups_recent：扫码登记不用店员确认 ──
+-- bi.customer_signup_apply(p_id, p_actor)（只给 security definer 函数内部用）：写入规则同店员确认 —— 已有名字 / 生日 / 地区不盖掉，
+-- 地址、电邮以新填的为准，同意收促销以顾客选择为准；status = confirmed。9 参数版 bi_customer_signup 送出即呼叫它。
+-- bi_customer_signups 改列 pending + 近 14 天 handled_by like '顾客自己扫码登记%'，current 多 last_contact_at。

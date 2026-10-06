@@ -134,7 +134,15 @@ LIVE_V3 = {
     "src/loyalty/main.tsx": "23b4ff9588119f1d1f0d4162c4b8b1e1a3f0a6e4",
     "src/pages/Loyalty.tsx": "67fdff916f40d91269fd420329bf1fa36dd7f59c",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx", "src/pages/Loyalty.tsx"]
+# 2026-10-06 加电邮那版 dpl_EiyNVLR3WZTKpQsZJtUKhewNXj1T（之后的改版以它为底）
+LIVE_V3 = {
+    **LIVE_V3,
+    "src/i18n/loyalty.ts": "984a84392a1d37214435be9dffb9ccdf95c74636",
+    "src/join/join.css": "484edb74e0e9c1146c8663dd23faf62c3ab1b73c",
+    "src/join/main.tsx": "96a0022ccc95273e87b9528514d8c0630d5b6d4e",
+    "src/pages/Loyalty.tsx": "9551a5a34a6d763a7837c551e33164df64eeac78",
+}
+CHANGED = ["src/i18n/loyalty.ts", "src/join/main.tsx", "src/pages/Loyalty.tsx"]
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
@@ -142,7 +150,7 @@ def test_repo_overlay_replaces_only_the_changed_customer_files():
     assert "overlay.json" not in overlay                   # 说明档本身不上传
     plan = d.plan_files(LIVE_V3, overlay, replaces)
     assert plan["added"] == []
-    assert sorted(plan["replaced"]) == CHANGED             # 送货地址只改登记页、店员确认清单与字典
+    assert sorted(plan["replaced"]) == CHANGED             # 扫码登记直接生效：只改登记页、最近登记清单与字典
     assert sorted(plan["same"]) == sorted(set(LOYALTY_FILES + ["src/i18n/index.ts", "vite.config.ts"]) - set(CHANGED))
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_V3)                       # 线上每个档都还在，没有漏掉任何一页

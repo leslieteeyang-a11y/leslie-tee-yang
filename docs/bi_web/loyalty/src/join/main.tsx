@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import './join.css';
 
 // 顾客自己扫 QR 登记(/join.html?s=HQ 或 ?s=JB):不用登入,只呼叫 RPC public.bi_customer_signup(anon 可用)。
-// 送出后先进「待确认」,店员在顾客资料页按确认才写进顾客资料(使用者 2026-10-05 决定)。
+// 2026-10-06 使用者改成不用店员确认:送出就直接写进顾客资料(每笔改动留在修改纪录)。
 // 这页不回传任何顾客资讯;三种语言写在这里,不进主看板的字典。
 // 2026-10-06 使用者要求「住哪一区」改成送货地址(员工送货用),再加电邮;RPC 用 9 个参数的新版(p_address、p_email)。
 // 送出成功后自动带到品牌网站 www.hemos.com.my(几秒后跳转,也可以直接按按钮)。
@@ -48,9 +48,9 @@ const TXT: Record<string, Record<L, string>> = {
   },
   done: { zh: '谢谢！已收到', en: 'Thank you! Received', ms: 'Terima kasih! Diterima' },
   doneSub: {
-    zh: '店员确认后就完成登记。',
-    en: 'Our staff will confirm your sign-up shortly.',
-    ms: 'Kakitangan kami akan mengesahkan pendaftaran anda.',
+    zh: '登记完成，谢谢支持 HomeWorks！',
+    en: 'You are signed up. Thank you for supporting HomeWorks!',
+    ms: 'Pendaftaran selesai. Terima kasih kerana menyokong HomeWorks!',
   },
   needPhone: { zh: '请输入完整手机号', en: 'Please enter your full mobile number', ms: 'Sila masukkan nombor telefon penuh' },
   needName: { zh: '请填名字', en: 'Please enter your name', ms: 'Sila masukkan nama' },
