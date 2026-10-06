@@ -61,3 +61,43 @@ def test_quotes_task_is_daily_with_its_own_description():
     import schedule_monthly
     xml = schedule_monthly.task_xml(Path("C:/x/run_quotes.bat"), 1, "12:30", Path("C:/x"), daily=True, desc="报价单")
     assert "<ScheduleByDay>" in xml and "<Description>报价单</Description>" in xml and "run_quotes.bat" in xml
+
+
+# ── 送货单 DO（2026-10-06 送货排单） ─────────────────────────────────────────
+from quote_push import build_do_docs, build_do_sql  # noqa: E402
+
+DO = {"DOCKEY", "DOCNO", "DOCDATE", "DEBTORCODE", "DEBTORNAME", "SALESAGENT", "TOTAL", "CANCELLED"}
+DODTL = {"DOCKEY", "DTLKEY", "ITEMCODE", "DESCRIPTION", "QTY", "SUBTOTAL"}
+
+
+def test_do_sql_keeps_cancelled_documents_but_flags_them():
+    sql = build_do_sql(DO, DODTL)
+    assert "FROM [DO] h LEFT JOIN [DODTL] d" in sql
+    assert "CASE WHEN h.Cancelled = 'T' THEN 1 ELSE 0 END AS Cancelled" in sql
+    assert "h.Cancelled = 'F'" not in sql                   # 取消的也要推，BI 才知道这张不用送
+    assert "h.Total AS HdrAmount" in sql and "ORDER BY h.DocDate, h.DocNo, d.DtlKey" in sql
+
+
+def test_do_docs_mark_cancelled():
+    rows = [
+        ("DO-1", date(2026, 10, 6), "300-C001", "MENG 0123456789", "EMILY", 500, "BASIN", 1, 500, 0),
+        ("DO-2", date(2026, 10, 6), "300-C001", "LIM 0129998888", None, None, "TAP", 2, 80, 1),
+    ]
+    d1, d2 = build_do_docs(rows)
+    assert d1["doc_no"] == "DO-1" and d1["cancelled"] is False and d1["items"] == "BASIN x1" and "transferred" not in d1
+    assert d2["cancelled"] is True and d2["amount"] == 80
+
+
+def test_no_do_tables_says_what_to_check():
+    with pytest.raises(SystemExit) as e:
+        build_do_sql(set(), set())
+    assert "DO" in str(e.value)
+
+
+def test_quotes_task_repeats_every_15_minutes_during_the_day():
+    import schedule_monthly
+    xml = schedule_monthly.task_xml(Path("C:/x/run_quotes.bat"), 1, "07:00", Path("C:/x"), daily=True, repeat_minutes=15)
+    assert "<Interval>PT15M</Interval>" in xml and "<Duration>PT14H</Duration>" in xml
+    assert xml.index("<Repetition>") < xml.index("<StartBoundary>")   # 排程器的 XML 规定 Repetition 在前
+    plain = schedule_monthly.task_xml(Path("C:/x/run_branch.bat"), 1, "07:30", Path("C:/x"), daily=True)
+    assert "<Repetition>" not in plain

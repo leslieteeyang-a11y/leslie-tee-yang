@@ -142,22 +142,24 @@ LIVE_V3 = {
     "src/join/main.tsx": "96a0022ccc95273e87b9528514d8c0630d5b6d4e",
     "src/pages/Loyalty.tsx": "9551a5a34a6d763a7837c551e33164df64eeac78",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/join/main.tsx", "src/pages/Loyalty.tsx"]
+CHANGED = ["src/i18n/loyalty.ts", "src/join/main.tsx", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
+NEW_FILES = ["src/pages/Delivery.tsx"]                     # 送货排单
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
     assert "overlay.json" not in overlay                   # 说明档本身不上传
     plan = d.plan_files(LIVE_V3, overlay, replaces)
-    assert plan["added"] == []
-    assert sorted(plan["replaced"]) == CHANGED             # 扫码登记直接生效：只改登记页、最近登记清单与字典
+    assert plan["added"] == NEW_FILES
+    assert sorted(plan["replaced"]) == CHANGED             # 扫码直接生效、1,000 位上限、送货排单
     assert sorted(plan["same"]) == sorted(set(LOYALTY_FILES + ["src/i18n/index.ts", "vite.config.ts"]) - set(CHANGED))
     sent = {f["file"]: f for f in plan["files"]}
-    assert set(sent) == set(LIVE_V3)                       # 线上每个档都还在，没有漏掉任何一页
+    assert set(sent) == set(LIVE_V3) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
     for path, sha in LIVE_V3.items():
         if path not in overlay:
             assert sent[path] == {"file": path, "sha": sha}  # 没改的档原样引用线上那一版
     assert set(plan["upload"]) == set(plan["replaced"]) | set(plan["added"])
+    assert "src/loyalty/loyalty.css" in LIVE_V3              # 被换掉的档线上都有
 
 
 def test_overlay_refuses_a_site_it_was_not_based_on():
@@ -259,9 +261,9 @@ def test_deploy_uploads_only_changed_files_and_prints_new_page(monkeypatch, caps
     fake = run(monkeypatch)
     overlay, _ = d.read_overlay(d.DEFAULT_OVERLAY)
     changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_V3.get(p)]  # 跟线上一样的不重传
-    assert sorted(changed) == CHANGED
+    assert sorted(changed) == sorted(CHANGED + NEW_FILES)
     assert sorted(fake.uploaded) == sorted(d.sha1(overlay[p]) for p in changed)
-    assert len(fake.created) == len(LIVE_V3)
+    assert len(fake.created) == len(LIVE_V3) + len(NEW_FILES)
     out = capsys.readouterr().out
     assert "https://homeworks-bi.vercel.app/" in out and "完成" in out
 

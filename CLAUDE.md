@@ -145,6 +145,14 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 修改纪录追查）。`bi_customer_signups` 改列「旧的待确认 + 近 14 天扫码登记」，前端改成「最近扫码登记的顾客」给店员跟进。
 **PostgREST 每次最多回 1,000 列**：前端直接读 `bi_customers()` 只拿到前 1,000 位（实际 7,921 位，2026-10-06 使用者截图发现）。
 改读 `bi_customers_all()`（回传一个 jsonb 阵列、`jsonb_strip_nulls`），旧函数保留作退路。以后任何会超过 1,000 列的 RPC 都要这样包。
+**送货排单（2026-10-06，migration `delivery_planner` + `delivery_docs_by_date`，留底 `docs/bi_web/delivery.sql`）**：使用者要输入单号看顾客地址、
+排最快路线、一键传司机。选择：单据 = **DO**；地址**只用顾客资料**（`customer_profile.address`，新增 lat / lng / geo_query）；**免费排路线**
+（前端 `src/pages/Delivery.tsx`：OpenStreetMap Nominatim 找坐标、每秒 1 次，找到存回顾客资料；最近邻 + 2-opt 直线距离；找不到可贴 Google Maps
+坐标）；**WhatsApp 整张清单给司机**（每站 Waze 连结 + Google Maps 全程连结，一段最多 9 个中途站）。DO 由 `quote_push.py` 只读推（`bi_delivery_doc_upsert`
+用 upsert、取消的标 cancelled，**不含删除语句**），排程「HomeWorks Quotes」改成 07:00 起 14 小时内每 15 分钟一次（`task_xml(repeat_minutes=15)`）；
+分行电脑也要跑一次 `setup_quotes.bat`。RPC：`bi_delivery_lookup`（DO 单号可只打数字尾码，或打电话）、`bi_delivery_docs(date)`、`bi_customer_set_address`、
+`bi_customer_set_geo`、`bi_delivery_settings`（出发点 `customer_settings.depot` + 司机 `bi.delivery_driver`）、`bi_delivery_set_depot` / `_driver_save`
+（owner / manager）、`bi_delivery_run_save` / `bi_delivery_runs`（`bi.delivery_run` 排单纪录）。依 `bi_company()` 限分行。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
@@ -191,11 +199,11 @@ latestDeployment）。
 | `scripts/schedule_monthly.py` + `schedule_monthly.bat` | 用 XML 登记 Windows 工作排程器（每月 1 号 08:00，错过会补跑）；`--run-now` / `--status` / `--remove` |
 | `scripts/supabase_push.py` + `setup_bi.bat` | 月报成品推进 HomeWorks BI（Supabase，见下节）；`--set-key` 贴金钥、`--check` 测连线、`YYYY-MM` 推送、`--setup-branch` 分行流程 |
 | `scripts/branch_actual.py` + `setup_branch.bat` / `run_branch.bat` | 分行电脑用：分行当月实际销售额 → BI（见下节）；排程模式顺便推分行报价单 |
-| `scripts/quote_push.py` + `setup_quotes.bat` / `run_quotes.bat` | 报价单（Quotation，只读）→ BI，给顾客资料页的报价没成交提醒；SERVER 每天排程「HomeWorks Quotes」 |
+| `scripts/quote_push.py` + `setup_quotes.bat` / `run_quotes.bat` | 报价单（Quotation）与送货单（DO）只读 → BI，给报价没成交提醒与送货排单；排程「HomeWorks Quotes」营业时间每 15 分钟（SERVER 与分行电脑各登记一次） |
 | `scripts/deploy_bi_web.py` + `deploy_bi_web.bat` | BI 网页（Vercel homeworks-bi）改版上线：用使用者自己的 Vercel 金钥（`vercel_token.json`，不进 git），线上档原样引用、只传改版目录（预设 `docs/bi_web/loyalty/`）的档；`overlay.json` 写明换掉哪些线上档与当初的底，线上被改过就停；`--check` 只检查、`--set-key` 换金钥 |
 | `config.json` | SKU 趋势清单、报表渠道栏 |
 | `autocount.example.json` | 连线与对照设定模板 |
-| `tests/` | `python -m pytest tests -q`，73 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
+| `tests/` | `python -m pytest tests -q`，77 个测试：网页行为（示范资料）+ 登入流程（假 sign_in）+ 抓数纯函数（分类、型号、Top 10）+ BI 网页部署（假 Vercel），都不需 AutoCount 或网路 |
 | `README.md` | 使用者视角的完整说明 |
 
 ## 后续路线（使用者已同意的顺序）

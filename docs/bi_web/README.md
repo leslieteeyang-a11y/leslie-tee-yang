@@ -60,3 +60,8 @@ Member（或 Owner）才能由 Claude 部署；或使用者自己部署。
 
 以后做新的 BI 网页改版：另开一个改版目录（路径就是部署路径 + `overlay.json`），
 `python scripts/deploy_bi_web.py docs/bi_web/<目录>`。需要换掉的线上档，先确认手上的底就是线上那一版（SHA1 对得上）。
+
+## 送货排单（2026-10-06）
+
+顾客资料页（`/loyalty.html`）多一区「送货排单」：`src/pages/Delivery.tsx`，数据库见 `delivery.sql`。DO 由 SERVER / 分行电脑的
+`quote_push.py` 每 15 分钟推上来；地址只用顾客资料；排路线用 OpenStreetMap 免费找坐标 + 直线距离排序；WhatsApp 清单传司机。

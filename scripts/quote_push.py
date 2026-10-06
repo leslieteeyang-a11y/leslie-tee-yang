@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""报价单（Quotation）→ HomeWorks BI，给顾客资料页的「报价没成交提醒」用。
+"""报价单（Quotation）与送货单（Delivery Order）→ HomeWorks BI。
 
-    python scripts/quote_push.py               # 抓近 120 天没取消的报价单并推送
+    python scripts/quote_push.py               # 抓近 120 天报价单 + 近 60 天 DO 并推送
     python scripts/quote_push.py --dry-run     # 只印 SQL 与前几张单，不推送
-    python scripts/quote_push.py --scheduled   # 排程用：输出写 logs/quotes_*.log
+    python scripts/quote_push.py --scheduled   # 排程用（每 15 分钟）：输出写 logs/quotes_YYYYMMDD.log
+
+报价单给顾客资料页的「报价没成交提醒」；DO 给「送货排单」：店员输入 DO 单号就看到顾客资料与送货地址
+（2026-10-06 使用者要的，所以排程改成营业时间每 15 分钟一次，当天开的 DO 很快就查得到）。
 
 SERVER（总部账套）与分行电脑（JB 账套）各跑各的；推送时整批取代该公司的报价单快照，重跑不会重复。
 对 AutoCount 只读。「已转单」= 报价单明细有转出数量（TransferedQty），或有 SO / DO / IV / CS 明细注明从这张报价单转来；
@@ -22,8 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config          # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "quotes-2026-10-05"
+VERSION = "quotes-do-2026-10-06"
 DAYS = 120
+DO_DAYS = 60
 TARGETS = ("SODTL", "DODTL", "IVDTL", "CSDTL")
 
 
@@ -91,6 +95,54 @@ def build_docs(rows) -> list[dict]:
     return out
 
 
+def build_do_sql(do: set[str], dodtl: set[str]) -> str:
+    """DO 表头 + 明细（纯函数）。取消的也抓，标 Cancelled，让 BI 那边知道这张不用送。"""
+    if not do or not dodtl:
+        raise SystemExit("这个账套找不到送货单表（DO / DODTL）。请把 discovery 档给 Claude 看。")
+    hdr_amount = next((f"h.{name}" for c, name in (("NETTOTAL", "NetTotal"), ("FINALTOTAL", "FinalTotal"), ("TOTAL", "Total"))
+                       if c in do), "NULL")
+    agent = "h.SalesAgent" if "SALESAGENT" in do else "NULL"
+    name = "h.DebtorName" if "DEBTORNAME" in do else "NULL"
+    cancelled = "CASE WHEN h.Cancelled = 'T' THEN 1 ELSE 0 END" if "CANCELLED" in do else "0"
+    desc = "d.Description" if "DESCRIPTION" in dodtl else "d.ItemCode"
+    sub = "d.SubTotal" if "SUBTOTAL" in dodtl else "0"
+    order = "d.Seq" if "SEQ" in dodtl else ("d.DtlKey" if "DTLKEY" in dodtl else "h.DocKey")
+    return f"""
+SELECT h.DocNo, h.DocDate, h.DebtorCode, {name} AS DebtorName, {agent} AS SalesAgent, {hdr_amount} AS HdrAmount,
+       {desc} AS Description, d.Qty, {sub} AS SubTotal, {cancelled} AS Cancelled
+FROM [DO] h LEFT JOIN [DODTL] d ON d.DocKey = h.DocKey
+WHERE h.DocDate >= ?
+ORDER BY h.DocDate, h.DocNo, {order}
+"""
+
+
+def build_do_docs(rows) -> list[dict]:
+    """DO 明细列 → 每张 DO 一笔（纯函数）。借用报价单的合并逻辑，第 10 栏当「已取消」。"""
+    out = []
+    for d in build_docs(rows):
+        d["cancelled"] = d.pop("transferred")
+        out.append(d)
+    return out
+
+
+def run_do(cfg: dict, conn, dry: bool = False) -> dict:
+    sql = build_do_sql(table_columns(conn, "DO"), table_columns(conn, "DODTL"))
+    since = date.today() - timedelta(days=DO_DAYS)
+    if dry:
+        print(sql)
+    docs = build_do_docs(fetch(conn, sql, (since,))[1])
+    print(f"送货单 DO {since} 起 {len(docs)} 张（取消的 {sum(1 for d in docs if d['cancelled'])} 张）")
+    if dry:
+        for d in docs[:5]:
+            print(" ", d)
+        return {"delivery_orders": len(docs)}
+    sb = supabase_config(cfg)
+    company = sb.get("company") or company_of(cfg)
+    res = _request(sb, "POST", "/rest/v1/rpc/bi_delivery_doc_upsert", {"p_company": company, "p_docs": docs})
+    print(f"已推进 BI：{res.get('company')} DO {res.get('delivery_orders')} 张")
+    return res
+
+
 def run(cfg: dict, dry: bool = False) -> dict:
     conn = connect(cfg)
     targets = {t: table_columns(conn, t) for t in TARGETS}
@@ -111,6 +163,10 @@ def run(cfg: dict, dry: bool = False) -> dict:
     company = sb.get("company") or company_of(cfg)
     res = _request(sb, "POST", "/rest/v1/rpc/bi_quote_upsert", {"p_company": company, "p_docs": docs})
     print(f"已推进 BI：{res.get('company')} 报价单 {res.get('quotes')} 张")
+    try:                                                   # DO 失败不影响报价单（反之亦然，报价单错误会先停在上面）
+        res["do"] = run_do(cfg, conn)
+    except (Exception, SystemExit) as e:                   # noqa: BLE001
+        print(f"[!] 送货单 DO 没推成功：{e}")
     return res
 
 
@@ -121,14 +177,19 @@ def main():
     a = ap.parse_args()
     if a.scheduled:
         log_dir = ROOT / "logs"; log_dir.mkdir(exist_ok=True)
-        f = open(log_dir / f"quotes_{datetime.now():%Y%m%d_%H%M%S}.log", "a", encoding="utf-8")
+        f = open(log_dir / f"quotes_{datetime.now():%Y%m%d}.log", "a", encoding="utf-8")   # 每 15 分钟一次：一天一个档
+        f.write(f"\n===== {datetime.now():%Y-%m-%d %H:%M:%S} =====\n")
         class Tee:
             def write(self, s): sys.__stdout__.write(s); f.write(s); f.flush()
             def flush(self): sys.__stdout__.flush(); f.flush()
         sys.stdout = sys.stderr = Tee()
     cfg = load_autocount_config()
     print(f"账套 {cfg['connection']['database']}")
-    run(cfg, a.dry_run)
+    if a.dry_run:
+        run(cfg, True)
+        run_do(cfg, connect(cfg), True)
+    else:
+        run(cfg)
 
 
 if __name__ == "__main__":

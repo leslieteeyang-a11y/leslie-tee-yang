@@ -3,13 +3,14 @@ import { supabase } from '../lib/supabase';
 import { fmtRM, fmtNum, fmtDate } from '../lib/format';
 import { Kpi } from '../components/ChartCard';
 import { tr, type Lang } from '../lib/i18n';
+import Delivery from './Delivery';
 
 // 顾客资料(2026-09-29 取代积分):门市散客用电话当顾客编号,总部 + JB 合并。购买历史从 bi.fact_sales 现算,
 // 员工补的资料存 bi.customer_profile(RPC public.bi_customer*,migration customer_profiles)。
 // 2026-09-30 第二版(migration customer_crm):跟进提醒、一键 WhatsApp(话术范本)、买了 A 没买 B、同意收促销
 // (汇出与活动只收明确同意的)、顾客分级、促销活动成效、每月顾客报告。档名沿用 Loyalty.tsx / loyalty.html。
 // 2026-10-05 第三版(migration customer_crm_v3_*):手机快速登记、顾客扫 QR 自己登记(店员确认)、报价没成交提醒、
-// 装修进度 5 段 + 推荐类别、修改纪录、合并重复顾客。
+// 装修进度 5 段 + 推荐类别、修改纪录、合并重复顾客。2026-10-06 加「送货排单」(Delivery.tsx)。
 
 type Consent = 'yes' | 'no' | null;
 type Customer = {
@@ -390,6 +391,7 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
                        onClose={() => setSel(null)} onSaved={load} onOpen={open} />
       )}
 
+      <Delivery t={t} role={role} onOpen={open} />
       <QuickRegister t={t} onSaved={load} onOpen={open} />
       <Signups t={t} onDone={load} onOpen={open} />
 

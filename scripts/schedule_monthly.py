@@ -25,8 +25,10 @@ BRANCH_TASK = "HomeWorks Branch Actual"
 QUOTES_TASK = "HomeWorks Quotes"
 
 
-def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: bool = False, desc: str | None = None) -> str:
-    """产生工作排程器的任务定义（纯函数，方便测试）。daily=True 时每天跑（分行当月进度、报价单用）。"""
+def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: bool = False, desc: str | None = None,
+             repeat_minutes: int | None = None, repeat_hours: int = 14) -> str:
+    """产生工作排程器的任务定义（纯函数，方便测试）。daily=True 时每天跑（分行当月进度、报价单用）；
+    repeat_minutes 有值时，从开始时间起每 N 分钟再跑一次，持续 repeat_hours 小时（营业时间内同步 DO）。"""
     hh, mm = time_hhmm.split(":")
     start = f"{date.today().isoformat()}T{int(hh):02d}:{int(mm):02d}:00"
     if daily:
@@ -39,6 +41,11 @@ def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: boo
         <Months><January/><February/><March/><April/><May/><June/><July/><August/>
                 <September/><October/><November/><December/></Months>
       </ScheduleByMonth>"""
+    repetition = (f"""<Repetition>
+        <Interval>PT{repeat_minutes}M</Interval>
+        <Duration>PT{repeat_hours}H</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>""" if repeat_minutes else "")
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -46,6 +53,7 @@ def task_xml(bat_path: Path, day: int, time_hhmm: str, workdir: Path, daily: boo
   </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>
+      {repetition}
       <StartBoundary>{start}</StartBoundary>
       <Enabled>true</Enabled>
       {schedule}
@@ -130,7 +138,9 @@ def main():
         sys.exit("还没连接 AutoCount（找不到 autocount.json）。请先双击 setup_autocount.bat。")
 
     xml = task_xml(ROOT / bat, a.day, a.time, ROOT, daily=a.branch or a.quotes,   # 分行、报价单每天跑
-                   desc="HomeWorks：每天自动从 AutoCount 抓近 120 天的报价单推进 BI（顾客资料的报价没成交提醒）" if a.quotes else None)
+                   desc=("HomeWorks：营业时间每 15 分钟从 AutoCount 只读抓报价单与送货单 DO 推进 BI"
+                         "（顾客资料的报价没成交提醒、送货排单）") if a.quotes else None,
+                   repeat_minutes=15 if a.quotes else None)
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-16") as f:
         f.write(xml)
         tmp = f.name
@@ -139,7 +149,8 @@ def main():
     finally:
         Path(tmp).unlink(missing_ok=True)
     if a.quotes:
-        print(f"已登记排程「{TASK_NAME}」：每天 {a.time} 自动抓报价单并推进 BI。纪录在 {ROOT / 'logs'}（quotes_*.log）。")
+        print(f"已登记排程「{TASK_NAME}」：每天 {a.time} 起 14 小时内每 15 分钟抓一次报价单与送货单 DO 推进 BI。"
+              f"纪录在 {ROOT / 'logs'}（quotes_日期.log）。")
         print("  电脑那天没开也没关系，下次开机会补跑。")
         return
     if a.branch:
