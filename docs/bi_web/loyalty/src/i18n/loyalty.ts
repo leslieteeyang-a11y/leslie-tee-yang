@@ -238,7 +238,7 @@ const loyalty: Record<string, string> = {
   '谁': 'Who',
   '还没有纪录': 'No history yet',
   '这个阶段可以推荐:': 'Suggest at this stage:',
-  '顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,同意收促销以顾客勾的为准。': 'Details customers entered by scanning the QR. Check it is really them (e.g. the number on their phone) before confirming; existing names / birthdays are kept, and the promotion choice follows what the customer ticked.',
+  '顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,地址与同意收促销以顾客填的为准。': 'Details customers entered by scanning the QR. Check it is really them (e.g. the number on their phone) before confirming; existing names / birthdays are kept; the address and promotion choice follow what the customer entered.',
   '顾客自己登记,待确认({n} 位)': 'Self sign-ups to confirm ({n})',
   '顾客自己登记的 QR': 'Self sign-up QR',
 };

@@ -662,3 +662,9 @@ grant execute on function public.bi_customer_signup(text, text, int, int, text, 
 
 revoke all on function public.bi_quote_upsert(text, jsonb) from public, anon, authenticated;
 grant execute on function public.bi_quote_upsert(text, jsonb) to service_role;
+
+-- ── 2026-10-06 migration customer_signup_address：登记页「住哪一区」改成送货地址 ──
+-- alter table bi.customer_signup add column address text check (length(address) <= 300);
+-- public.bi_customer_signup(p_phone, p_name, p_birth_month, p_birth_day, p_area, p_consent, p_store, p_address) 新增 8 参数版
+--   （p_address 无预设值，所以旧网页呼叫 7 个参数仍对到旧版）；bi_customer_signups 的 current 多 address；
+--   bi_customer_signup_handle 写入 address = coalesce(顾客新填, 原有)（送货要最新的地址）。完整内容见 Supabase migration。

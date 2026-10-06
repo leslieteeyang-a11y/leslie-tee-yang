@@ -14,7 +14,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 syst
 .jn-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 16px; }
 .jn-card p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
 .jn label { display: block; font-size: 14px; margin: 12px 0 4px; }
-.jn input, .jn select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.jn input, .jn select, .jn textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.jn textarea { resize: vertical; }
 .jn-row { display: flex; gap: 8px; }
 .jn label.jn-check { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; font-size: 14px; }
 .jn-check input { width: 20px; height: 20px; flex: none; margin-top: 2px; }

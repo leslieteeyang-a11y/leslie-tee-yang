@@ -38,7 +38,7 @@ type Quote = {
 type Detail = { member_id: string; profile: Profile | null; docs: Doc[]; aliases?: string[]; quotes?: Quote[] };
 type Signup = {
   id: number; member_id: string; main_id: string; name: string | null; birth_month: number | null; birth_day: number | null;
-  area: string | null; consent: boolean; store: string | null; created_at: string;
+  area: string | null; address?: string | null; consent: boolean; store: string | null; created_at: string;
   current: { name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent } | null;
 };
 type LogRow = { at: string; by: string | null; action: string; changes: Record<string, unknown>; member_id: string };
@@ -1088,12 +1088,12 @@ function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id:
     <div className="card card-block lp-panel">
       <h2>{t('顾客自己登记,待确认({n} 位)', { n: rows.length })}</h2>
       <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-        {t('顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,同意收促销以顾客勾的为准。')}
+        {t('顾客扫 QR 填的资料。请核对是本人(例如看顾客手机上的号码)再按确认;已有的名字 / 生日不会被盖掉,地址与同意收促销以顾客填的为准。')}
       </p>
       <div className="table-scroll">
         <table className="data">
           <thead>
-            <tr><th>{t('时间')}</th><th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('生日')}</th><th>{t('地区')}</th>
+            <tr><th>{t('时间')}</th><th>{t('电话 / 账号')}</th><th>{t('名字')}</th><th>{t('生日')}</th><th>{t('地址')}</th>
               <th>{t('同意收促销')}</th><th>{t('门市')}</th><th /></tr>
           </thead>
           <tbody>
@@ -1104,7 +1104,7 @@ function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id:
                 <td>{x.name}{x.current?.name && x.current.name !== x.name
                   ? <div className="muted" style={{ fontSize: 12 }}>{t('现有:{n}', { n: x.current.name })}</div> : null}</td>
                 <td>{x.birth_month ? `${x.birth_month}/${x.birth_day}` : ''}</td>
-                <td>{x.area}</td>
+                <td style={{ fontSize: 12, maxWidth: 260 }}>{x.address ?? x.area}</td>
                 <td>{x.consent ? t('同意') : t('不同意')}</td>
                 <td>{x.store}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>

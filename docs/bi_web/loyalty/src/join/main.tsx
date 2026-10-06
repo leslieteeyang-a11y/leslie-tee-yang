@@ -6,6 +6,7 @@ import './join.css';
 // 顾客自己扫 QR 登记(/join.html?s=HQ 或 ?s=JB):不用登入,只呼叫 RPC public.bi_customer_signup(anon 可用)。
 // 送出后先进「待确认」,店员在顾客资料页按确认才写进顾客资料(使用者 2026-10-05 决定)。
 // 这页不回传任何顾客资讯;三种语言写在这里,不进主看板的字典。
+// 2026-10-06 使用者要求「住哪一区」改成送货地址(员工送货用),RPC 用 8 个参数的新版(p_address)。
 
 type L = 'zh' | 'en' | 'ms';
 const TXT: Record<string, Record<L, string>> = {
@@ -20,7 +21,11 @@ const TXT: Record<string, Record<L, string>> = {
   birthday: { zh: '生日（选填）', en: 'Birthday (optional)', ms: 'Hari jadi (pilihan)' },
   month: { zh: '月', en: 'Month', ms: 'Bulan' },
   day: { zh: '日', en: 'Day', ms: 'Hari' },
-  area: { zh: '住哪一区（选填，例：Skudai）', en: 'Area (optional, e.g. Skudai)', ms: 'Kawasan (pilihan, cth. Skudai)' },
+  address: {
+    zh: '送货地址（选填，方便我们送货）', en: 'Delivery address (optional, for our deliveries)',
+    ms: 'Alamat penghantaran (pilihan, untuk penghantaran kami)',
+  },
+  addressHint: { zh: '例：12, Jalan Skudai 3, Taman Universiti, 81300 Skudai', en: 'e.g. 12, Jalan Skudai 3, Taman Universiti, 81300 Skudai', ms: 'cth. 12, Jalan Skudai 3, Taman Universiti, 81300 Skudai' },
   consent: {
     zh: '我同意 HomeWorks 用 WhatsApp 发优惠与新品讯息给我，可随时回复 STOP 取消。',
     en: 'I agree to receive offers and new-product messages from HomeWorks on WhatsApp. Reply STOP anytime to opt out.',
@@ -54,7 +59,7 @@ function Join() {
   const [lang, setLang] = useState<L>(initialLang);
   const t = (k: string) => TXT[k][lang];
   const store = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
-  const [f, setF] = useState({ phone: '', name: '', bm: '', bd: '', area: '', consent: false });
+  const [f, setF] = useState({ phone: '', name: '', bm: '', bd: '', address: '', consent: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -67,7 +72,7 @@ function Join() {
     setErr(null);
     const r = await supabase.rpc('bi_customer_signup', {
       p_phone: f.phone, p_name: f.name, p_birth_month: f.bm ? Number(f.bm) : null, p_birth_day: f.bd ? Number(f.bd) : null,
-      p_area: f.area, p_consent: f.consent, p_store: store === 'HQ' || store === 'JB' ? store : null,
+      p_area: null, p_address: f.address, p_consent: f.consent, p_store: store === 'HQ' || store === 'JB' ? store : null,
     });
     setBusy(false);
     if (r.error) { setErr(t('fail') + r.error.message); return; }
@@ -113,8 +118,9 @@ function Join() {
                 {Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
               </select>
             </div>
-            <label htmlFor="jn-area">{t('area')}</label>
-            <input id="jn-area" maxLength={60} value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} />
+            <label htmlFor="jn-address">{t('address')}</label>
+            <textarea id="jn-address" rows={3} maxLength={300} autoComplete="street-address" placeholder={t('addressHint')}
+                      value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />
             <label className="jn-check">
               <input type="checkbox" checked={f.consent} onChange={(e) => setF({ ...f, consent: e.target.checked })} />
               <span>{t('consent')}</span>
