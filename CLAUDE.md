@@ -150,7 +150,7 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 （前端 `src/pages/Delivery.tsx`：OpenStreetMap Nominatim 找坐标、每秒 1 次，找到存回顾客资料；最近邻 + 2-opt 直线距离；找不到可贴 Google Maps
 坐标）；**WhatsApp 整张清单给司机**（每站 Waze 连结 + Google Maps 全程连结，一段最多 9 个中途站）。DO 由 `quote_push.py` 只读推（`bi_delivery_doc_upsert`
 用 upsert、取消的标 cancelled，**不含删除语句**），排程「HomeWorks Quotes」改成 07:00 起 14 小时内每 15 分钟一次（`task_xml(repeat_minutes=15)`）；
-分行电脑也要跑一次 `setup_quotes.bat`。RPC：`bi_delivery_lookup`（DO 单号可只打数字尾码，或打电话）、`bi_delivery_docs(date)`、`bi_customer_set_address`、
+分行电脑也要跑一次 `setup_quotes.bat`。（2026-10-06：SERVER 上 schedule_monthly.py 没被 ZIP 盖到、不认识 `--quotes`，登记失败 → 排程改由 `quote_push.py --install` 自己登记，`update_from_zip.bat` 改成先复制到 %TEMP% 再跑、xcopy /R /C 显示错误、逐档比对 hash 列出没更新到的档。）RPC：`bi_delivery_lookup`（DO 单号可只打数字尾码，或打电话）、`bi_delivery_docs(date)`、`bi_customer_set_address`、
 `bi_customer_set_geo`、`bi_delivery_settings`（出发点 `customer_settings.depot` + 司机 `bi.delivery_driver`）、`bi_delivery_set_depot` / `_driver_save`
 （owner / manager）、`bi_delivery_run_save` / `bi_delivery_runs`（`bi.delivery_run` 排单纪录）。依 `bi_company()` 限分行。同日（已上线 dpl_8wz78nikWfMpDgAiTXVwWUTK5N6X）使用者要「只输入今天要送的单号，系统自动排路线给顾客资料」→
 **一键排单**：整串贴 DO 单号（空白 / 换行 / 逗号分开，只打数字尾码也可）→ `bi_delivery_lookup_many(text[])`（每个单号一笔、找不到 found=false）→

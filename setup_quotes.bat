@@ -15,7 +15,7 @@ if errorlevel 1 (
 )
 python scripts\quote_push.py
 if errorlevel 1 goto fail
-python scripts\schedule_monthly.py --quotes --time 07:00
+python scripts\quote_push.py --install --time 07:00
 if errorlevel 1 goto fail
 echo.
 echo  Done.

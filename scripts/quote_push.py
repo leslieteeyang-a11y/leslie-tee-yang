@@ -5,6 +5,7 @@
     python scripts/quote_push.py               # 抓近 120 天报价单 + 近 60 天 DO 并推送
     python scripts/quote_push.py --dry-run     # 只印 SQL 与前几张单，不推送
     python scripts/quote_push.py --scheduled   # 排程用（每 15 分钟）：输出写 logs/quotes_YYYYMMDD.log
+    python scripts/quote_push.py --install     # 登记 Windows 排程「HomeWorks Quotes」（setup_quotes.bat 会叫）
 
 报价单给顾客资料页的「报价没成交提醒」；DO 给「送货排单」：店员输入 DO 单号就看到顾客资料与送货地址
 （2026-10-06 使用者要的，所以排程改成营业时间每 15 分钟一次，当天开的 DO 很快就查得到）。
@@ -15,7 +16,9 @@ SERVER（总部账套）与分行电脑（JB 账套）各跑各的；推送时�
 """
 
 import argparse
+import subprocess
 import sys
+import tempfile
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config          # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "quotes-do-2026-10-06b"
+VERSION = "quotes-do-2026-10-06c"
 DAYS = 120
 DO_DAYS = 60
 TARGETS = ("SODTL", "DODTL", "IVDTL", "CSDTL")
@@ -186,11 +189,95 @@ def run(cfg: dict, dry: bool = False) -> dict:
     return res
 
 
+QUOTES_TASK = "HomeWorks Quotes"
+
+
+def quotes_task_xml(workdir: Path, start_hhmm: str = "07:00", every_minutes: int = 15, hours: int = 14) -> str:
+    """「HomeWorks Quotes」排程定义（纯函数，方便测试）：每天 start 起 hours 小时内每 every_minutes 分钟跑一次。
+    自己带一份而不用 schedule_monthly.py，是因为 2026-10-06 SERVER 上那支是旧版（没 --quotes），登记失败；
+    这样只要 quote_push.py 是新的就能登记。Repetition 必须写在 StartBoundary 之前（工作排程器的 XML 顺序规定）。"""
+    hh, mm = start_hhmm.split(":")
+    start = f"{date.today().isoformat()}T{int(hh):02d}:{int(mm):02d}:00"
+    return f"""<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>HomeWorks：营业时间每 {every_minutes} 分钟从 AutoCount 只读抓报价单与送货单 DO 推进 BI（顾客资料的报价没成交提醒、送货排单）</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <Repetition>
+        <Interval>PT{every_minutes}M</Interval>
+        <Duration>PT{hours}H</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>{start}</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{workdir / "run_quotes.bat"}</Command>
+      <Arguments>--scheduled</Arguments>
+      <WorkingDirectory>{workdir}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"""
+
+
+def install_task(start_hhmm: str = "07:00") -> None:
+    """登记（或更新）Windows 工作排程器的「HomeWorks Quotes」。"""
+    if sys.platform != "win32":
+        sys.exit("--install 要在 Windows（SERVER / 分行电脑）上执行，它登记的是 Windows 工作排程器。")
+    if not (ROOT / "run_quotes.bat").exists():
+        sys.exit(f"找不到 {ROOT / 'run_quotes.bat'}。请先用 update_from_zip.bat 把最新 ZIP 装好再试。")
+    with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-16") as f:
+        f.write(quotes_task_xml(ROOT, start_hhmm))
+        tmp = f.name
+    try:
+        r = subprocess.run(["schtasks", "/Create", "/TN", QUOTES_TASK, "/XML", tmp, "/F"],
+                           capture_output=True, text=True, errors="replace")
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+    if r.returncode != 0:
+        sys.exit(f"登记排程失败：{(r.stderr or r.stdout).strip()}\n"
+                 "请检查：若说「拒绝存取」，在 setup_quotes.bat 上按右键 →「以系统管理员身分执行」再试。")
+    print(f"已登记排程「{QUOTES_TASK}」：每天 {start_hhmm} 起 14 小时内每 15 分钟抓一次报价单与送货单 DO 推进 BI。")
+    print(f"  纪录在 {ROOT / 'logs'}（quotes_日期.log）。电脑那天没开也没关系，下次开机会补跑。")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--scheduled", action="store_true", help="排程模式：输出写 logs/quotes_*.log")
+    ap.add_argument("--install", action="store_true", help="登记 Windows 排程「HomeWorks Quotes」（每天 07:00 起每 15 分钟）")
+    ap.add_argument("--time", default="07:00", help="--install 用：每天几点开始，HH:MM（预设 07:00）")
     a = ap.parse_args()
+    if a.install:
+        install_task(a.time)
+        return
     if a.scheduled:
         log_dir = ROOT / "logs"; log_dir.mkdir(exist_ok=True)
         f = open(log_dir / f"quotes_{datetime.now():%Y%m%d}.log", "a", encoding="utf-8")   # 每 15 分钟一次：一天一个档

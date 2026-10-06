@@ -112,3 +112,26 @@ def test_quotes_task_repeats_every_15_minutes_during_the_day():
     assert xml.index("<Repetition>") < xml.index("<StartBoundary>")   # 排程器的 XML 规定 Repetition 在前
     plain = schedule_monthly.task_xml(Path("C:/x/run_branch.bat"), 1, "07:30", Path("C:/x"), daily=True)
     assert "<Repetition>" not in plain
+
+
+def test_install_task_xml_is_self_contained():
+    """setup_quotes.bat 改叫 quote_push.py --install：SERVER 上旧的 schedule_monthly.py 不认识 --quotes（2026-10-06）。"""
+    import xml.dom.minidom
+    from quote_push import quotes_task_xml
+    xml_text = quotes_task_xml(Path("C:/x"))
+    xml.dom.minidom.parseString(xml_text.replace('encoding="UTF-16"', 'encoding="UTF-8"').encode())
+    assert "<Interval>PT15M</Interval>" in xml_text and "<Duration>PT14H</Duration>" in xml_text
+    assert xml_text.index("<Repetition>") < xml_text.index("<StartBoundary>")
+    assert "T07:00:00</StartBoundary>" in xml_text and "<ScheduleByDay>" in xml_text
+    assert "run_quotes.bat</Command>" in xml_text and "<Arguments>--scheduled</Arguments>" in xml_text
+
+
+def test_setup_quotes_bat_does_not_need_schedule_monthly():
+    bat = (ROOT / "setup_quotes.bat").read_text(encoding="ascii")
+    assert "quote_push.py --install" in bat and "schedule_monthly" not in bat
+
+
+def test_updater_runs_from_temp_and_verifies_files():
+    bat = (ROOT / "update_from_zip.bat").read_text(encoding="ascii")
+    assert "--from-temp" in bat and "/R" in bat and "Get-FileHash" in bat
+    assert "/Q >nul" not in bat                       # 复制错误要看得到
