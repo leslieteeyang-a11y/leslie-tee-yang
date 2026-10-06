@@ -4,16 +4,16 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { LangProvider, savedLang, tr, type Lang } from '../lib/i18n';
 import Login from '../components/Login';
-import Loyalty from '../pages/Loyalty';
+import Delivery from '../pages/Delivery';
 import '../styles.css';
-import './loyalty.css';
+import '../loyalty/loyalty.css';
 
-// 顾客资料独立页(/loyalty.html,网址沿用积分时期):柜台只开这一页。登入与主看板共用同一个 Supabase session。
-// 角色:owner / manager / sales 可看可改;汇出名单只给 owner / manager。
+// 送货排单独立页(/delivery.html,2026-10-06):店员只要贴上今天要送的 DO 单号,按一键排单,再选司机传 WhatsApp。
+// 登入与主看板、顾客资料页共用同一个 Supabase session;角色 owner / manager / sales。
 
 const ALLOWED = ['owner', 'manager', 'sales'];
 
-function LoyaltyApp() {
+function DeliveryApp() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [role, setRole] = useState<string | null | undefined>(undefined);
   const [company, setCompany] = useState<string | null>(null);
@@ -38,7 +38,7 @@ function LoyaltyApp() {
     })();
   }, [session?.user?.id]);
 
-  useEffect(() => { document.title = tr(lang, '顾客资料') + ' · Homeworks'; }, [lang]);
+  useEffect(() => { document.title = tr(lang, '送货排单') + ' · Homeworks'; }, [lang]);
 
   function switchLang(l: Lang) {
     setLangState(l);
@@ -53,14 +53,14 @@ function LoyaltyApp() {
   return (
     <div className="shell">
       <div className="topbar">
-        <h1>{t('顾客资料')}</h1>
+        <h1>{t('送货排单')}</h1>
         <div className="spacer" />
         <span className="who">{session.user.email}{store ? ` · ${store}` : ''}</span>
         <div className="seg">
           <button className={lang === 'zh' ? 'active' : ''} onClick={() => switchLang('zh')}>中文</button>
           <button className={lang === 'en' ? 'active' : ''} onClick={() => switchLang('en')}>EN</button>
         </div>
-        <a className="btn" href="/delivery.html">{t('送货排单')}</a>
+        <a className="btn" href="/loyalty.html">{t('顾客资料')}</a>
         <a className="btn" href="/">{t('BI 看板')}</a>
         <button className="btn" onClick={() => supabase.auth.signOut()}>{t('登出')}</button>
       </div>
@@ -69,7 +69,10 @@ function LoyaltyApp() {
       {role !== undefined && !roleErr && !ALLOWED.includes(role ?? '') && (
         <div className="notice">{t('这个帐号没有顾客资料的权限,请老板在 BI 加上 owner / manager / sales 角色。')}</div>
       )}
-      {role && ALLOWED.includes(role) && <Loyalty lang={lang} role={role} company={company} />}
+      {role && ALLOWED.includes(role) && (
+        <Delivery t={(zh, vars) => tr(lang, zh, vars)} role={role} standalone
+                  onOpen={(id) => window.open(`/loyalty.html#m=${encodeURIComponent(id)}`, '_blank', 'noopener')} />
+      )}
     </div>
   );
 }
@@ -77,7 +80,7 @@ function LoyaltyApp() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <LangProvider>
-      <LoyaltyApp />
+      <DeliveryApp />
     </LangProvider>
   </React.StrictMode>
 );

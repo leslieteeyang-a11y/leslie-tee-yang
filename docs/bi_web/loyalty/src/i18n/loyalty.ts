@@ -297,6 +297,15 @@ const loyalty: Record<string, string> = {
   '送货排单': 'Delivery planner',
   '选司机': 'Choose driver',
   '预览给司机的讯息': 'Preview the driver message',
+  '今天要送的 DO 单号': 'DO numbers to deliver today',
+  '一行一张,或用空格分开;只打数字也可以。例:DO-017707 17708 17709': 'One per line or separated by spaces; digits only is fine. e.g. DO-017707 17708 17709',
+  '一键排单': 'Plan in one click',
+  '自动找出顾客资料与送货地址,排好最短路线;再选司机按 WhatsApp 就传出去': 'Finds each customer and delivery address and plans the shortest route; then choose a driver and press WhatsApp',
+  '请先输入今天要送的 DO 单号': 'Enter today\'s DO numbers first',
+  '查询 {n} 张单…': 'Looking up {n} DOs…',
+  '{q}:找不到(刚开的单约 15 分钟后才查得到)': '{q}: not found (new DOs appear within about 15 minutes)',
+  '{q}:这张 DO 已取消': '{q}: this DO is cancelled',
+  '没有地址,请在下面那格补上再按一次「排最短路线」:{l}': 'No address — fill it in below, then press "Plan shortest route" again: {l}',
 };
 
 export default loyalty;

@@ -305,3 +305,8 @@ begin
     execute format('grant execute on function %s to authenticated', f);
   end loop;
 end $$;
+
+-- ── 2026-10-06 migration delivery_lookup_many：一键排单 ──
+-- public.bi_delivery_lookup_many(p_queries text[])：最多 100 个单号；每个单号回一笔（完全相同优先，否则最新一张尾码相同的），
+-- 找不到的回 found = false；顾客编号与 bi_delivery_lookup 相同规则；依 bi_company() 限分行。完整内容见 Supabase migration。
+-- ── migration delivery_docs_by_date：bi_delivery_docs(p_date) 列某天没取消的 DO 与顾客地址 ──

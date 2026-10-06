@@ -142,8 +142,18 @@ LIVE_V3 = {
     "src/join/main.tsx": "96a0022ccc95273e87b9528514d8c0630d5b6d4e",
     "src/pages/Loyalty.tsx": "9551a5a34a6d763a7837c551e33164df64eeac78",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/join/main.tsx", "src/loyalty/loyalty.css", "src/pages/Loyalty.tsx"]
-NEW_FILES = ["src/pages/Delivery.tsx"]                     # 送货排单
+# 2026-10-06 送货排单第一版 dpl_8wz78nikWfMpDgAiTXVwWUTK5N6X（之后的改版以它为底）
+LIVE_V3 = {
+    **LIVE_V3,
+    "src/i18n/loyalty.ts": "6de2f85e076760606566222147f2d8afcbf6dd40",
+    "src/join/main.tsx": "5ae8796bf527c30812caf3d7fdc71c58abb14e5f",
+    "src/loyalty/loyalty.css": "2d0478d6297bb715cd2c89a6c8b74e5d30b1c2d5",
+    "src/pages/Loyalty.tsx": "efb79f26f01118409ced0ab300a769980d3dea73",
+    "src/pages/Delivery.tsx": "da204b1de40c68c8b245c5282fe97f89a2d143c0",
+}
+CHANGED = ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/loyalty/main.tsx", "src/pages/Delivery.tsx",
+           "src/pages/Loyalty.tsx", "vite.config.ts"]
+NEW_FILES = ["delivery.html", "src/delivery/main.tsx"]      # 送货排单独立页
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
@@ -151,8 +161,8 @@ def test_repo_overlay_replaces_only_the_changed_customer_files():
     assert "overlay.json" not in overlay                   # 说明档本身不上传
     plan = d.plan_files(LIVE_V3, overlay, replaces)
     assert plan["added"] == NEW_FILES
-    assert sorted(plan["replaced"]) == CHANGED             # 扫码直接生效、1,000 位上限、送货排单
-    assert sorted(plan["same"]) == sorted(set(LOYALTY_FILES + ["src/i18n/index.ts", "vite.config.ts"]) - set(CHANGED))
+    assert sorted(plan["replaced"]) == CHANGED             # 一键排单 + 独立页（vite.config 多一个入口）
+    assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/i18n/index.ts", "src/join/join.css", "src/join/main.tsx"]
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_V3) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
     for path, sha in LIVE_V3.items():

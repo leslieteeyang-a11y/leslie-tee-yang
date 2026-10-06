@@ -57,3 +57,5 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 /* 2026-10-06:送货排单 */
 .lp-delivery { border: 1px solid var(--accent); }
 .lp-pre { white-space: pre-wrap; font-size: 12px; background: rgba(0, 0, 0, 0.18); padding: 8px 10px; border-radius: 6px; max-height: 320px; overflow: auto; }
+.lp-bulk textarea { width: 100%; font: inherit; font-size: 16px; resize: vertical; }
+.lp-issues { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #e0b43c; }

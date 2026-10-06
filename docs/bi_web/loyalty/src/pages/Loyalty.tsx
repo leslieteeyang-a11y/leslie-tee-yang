@@ -320,6 +320,11 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
     setTemplates((w.data ?? []) as Template[]);
   }
   useEffect(() => { load(); loadSettings(); }, []);
+  // 送货排单页按顾客名字会开 loyalty.html#m=<顾客编号>,这里直接打开那位顾客
+  useEffect(() => {
+    const m = decodeURIComponent(location.hash.match(/^#m=(.+)$/)?.[1] ?? '');
+    if (m) setSel(m);
+  }, []);
 
   const set = (k: keyof Filters) => (e: { target: { value: string } }) => { setF({ ...f, [k]: e.target.value }); setShown(100); };
   const categories = useMemo(() => Array.from(new Set((list ?? []).flatMap((c) => c.categories))).sort(), [list]);

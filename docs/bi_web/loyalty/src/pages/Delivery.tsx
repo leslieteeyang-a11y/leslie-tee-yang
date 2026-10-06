@@ -127,7 +127,7 @@ export function driverMessage(stops: Stop[], opt: { date: string; driver: string
   ];
   stops.forEach((s, i) => {
     lines.push(`${i + 1}. ${s.doc_no ?? '（没有 DO 单号）'}`);
-    lines.push(`👤 ${s.name || '-'}${s.phone ? ` · ${fmtPhone(s.phone)}` : ''}`);
+    lines.push(`👤 ${[s.name, fmtPhone(s.phone)].filter(Boolean).join(' · ') || '-'}`);
     lines.push(`📍 ${s.address || '（没有地址，请先打电话问顾客）'}`);
     if (s.items) lines.push(`🧾 ${s.items}`);
     if (s.note) lines.push(`📝 ${s.note}`);
@@ -169,7 +169,9 @@ async function geocode(address: string): Promise<{ lat: number; lng: number } | 
 function toStop(h: Hit): Stop {
   return {
     key: h.doc_no ?? `M:${h.member_id}`, doc_no: h.doc_no, member_id: h.member_id,
-    name: (h.name ?? h.debtor_name ?? '').replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, ' ').replace(/\s+/g, ' ').trim(),
+    // 门市散客的单据名称多是「CASH（电话）」:去掉电话后只剩 CASH 就不显示,司机看电话就好
+    name: (h.name ?? h.debtor_name ?? '').replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, ' ').replace(/[()（）]/g, ' ')
+      .replace(/\s+/g, ' ').trim().replace(/^CASH$/i, ''),
     phone: phoneOf(h.member_id), address: h.address ?? '', lat: h.lat, lng: h.lng, items: h.items, note: h.note,
     geo: h.lat != null && h.lng != null ? 'ok' : 'todo',
   };
@@ -179,7 +181,19 @@ function localISO(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function Delivery({ t, role, onOpen }: { t: T; role: string | null; onOpen: (id: string) => void }) {
+/** 店员整串贴上的单号 → 一个个单号(空白、换行、逗号、分号都可以分开) */
+export function splitDocNos(text: string): string[] {
+  const out: string[] = [];
+  for (const x of text.split(/[\s,，;；、]+/)) {
+    const v = x.trim().toUpperCase();
+    if (v.length >= 3 && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+export default function Delivery({ t, role, onOpen, standalone = false }: {
+  t: T; role: string | null; onOpen: (id: string) => void; standalone?: boolean;
+}) {
   const canManage = role === 'owner' || role === 'manager';
   const [depots, setDepots] = useState<Record<string, Depot>>({});
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -193,6 +207,8 @@ export default function Delivery({ t, role, onOpen }: { t: T; role: string | nul
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[] | null>(null);
+  const [bulk, setBulk] = useState('');
+  const [bulkIssues, setBulkIssues] = useState<string[]>([]);
 
   async function loadSettings() {
     const r = await supabase.rpc('bi_delivery_settings');
@@ -250,9 +266,33 @@ export default function Delivery({ t, role, onOpen }: { t: T; role: string | nul
     update(s.key, { ...c, geo: 'ok' });
   }
 
-  async function plan() {
+  /** 一键排单:整串单号 → 查 DO 与顾客资料 → 找坐标 → 排最短顺序 */
+  async function bulkPlan() {
+    const nos = splitDocNos(bulk);
+    if (!nos.length) { setMsg(t('请先输入今天要送的 DO 单号')); return; }
+    setBusy('bulk'); setMsg(t('查询 {n} 张单…', { n: nos.length })); setBulkIssues([]);
+    const r = await supabase.rpc('bi_delivery_lookup_many', { p_queries: nos });
+    if (r.error) { setBusy(''); setMsg(r.error.message); return; }
+    const rows = (r.data ?? []) as (Hit & { query: string; found: boolean })[];
+    const issues: string[] = [];
+    const merged = [...stops];
+    for (const h of rows) {
+      if (!h.found) { issues.push(t('{q}:找不到(刚开的单约 15 分钟后才查得到)', { q: h.query })); continue; }
+      if (h.cancelled) { issues.push(t('{q}:这张 DO 已取消', { q: h.doc_no ?? h.query })); continue; }
+      const st = toStop(h);
+      if (!merged.some((x) => x.key === st.key)) merged.push(st);
+    }
+    const noAddr = merged.filter((x) => !x.address).map((x) => x.doc_no ?? x.name);
+    if (noAddr.length) issues.push(t('没有地址,请在下面那格补上再按一次「排最短路线」:{l}', { l: noAddr.join(', ') }));
+    setBulkIssues(issues);
+    setStops(merged);
+    setBulk('');
+    await plan(merged);
+  }
+
+  async function plan(list?: Stop[]) {
     setBusy('plan'); setMsg(null);
-    const cur = [...stops];
+    const cur = [...(list ?? stops)];
     for (let i = 0; i < cur.length; i++) {
       const s = cur[i];
       if (s.lat != null || !s.address) continue;
@@ -305,10 +345,20 @@ export default function Delivery({ t, role, onOpen }: { t: T; role: string | nul
     setRuns((r.data ?? []) as Run[]);
   }
 
-  return (
-    <details className="card card-block lp-delivery" open={stops.length > 0}>
-      <summary><h2 style={{ display: 'inline' }}>{t('送货排单')}</h2>
-        <span className="muted" style={{ fontSize: 13 }}> {t('输入 DO 单号看顾客地址 → 排最短路线 → WhatsApp 给司机')}</span></summary>
+  const body = (
+    <>
+      <div className="lp-box lp-bulk">
+        <b>{t('今天要送的 DO 单号')}</b>
+        <textarea rows={standalone ? 5 : 3} value={bulk} onChange={(e) => setBulk(e.target.value)}
+                  placeholder={t('一行一张,或用空格分开;只打数字也可以。例:DO-017707 17708 17709')} />
+        <div className="lp-row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn primary" disabled={!!busy} onClick={bulkPlan}>{t('一键排单')}</button>
+          <span className="muted" style={{ fontSize: 13 }}>{t('自动找出顾客资料与送货地址,排好最短路线;再选司机按 WhatsApp 就传出去')}</span>
+        </div>
+        {bulkIssues.length > 0 && (
+          <ul className="lp-issues">{bulkIssues.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        )}
+      </div>
 
       <div className="filters" style={{ margin: '10px 0' }}>
         <div className="seg">
@@ -375,7 +425,7 @@ export default function Delivery({ t, role, onOpen }: { t: T; role: string | nul
             </table>
           </div>
           <div className="filters" style={{ marginTop: 10 }}>
-            <button className="btn primary" disabled={!!busy} onClick={plan}>{t('排最短路线')}</button>
+            <button className="btn primary" disabled={!!busy} onClick={() => plan()}>{t('排最短路线')}</button>
             <select value={driverId} onChange={(e) => setDriverId(e.target.value)}>
               <option value="">{t('选司机')}</option>
               {drivers.filter((d) => !d.store || d.store === store).map((d) => (
@@ -411,6 +461,21 @@ export default function Delivery({ t, role, onOpen }: { t: T; role: string | nul
           </div>
         ))}
       </details>
+    </>
+  );
+
+  if (standalone) {
+    return (
+      <div className="card card-block lp-delivery">
+        {body}
+      </div>
+    );
+  }
+  return (
+    <details className="card card-block lp-delivery" open={stops.length > 0}>
+      <summary><h2 style={{ display: 'inline' }}>{t('送货排单')}</h2>
+        <span className="muted" style={{ fontSize: 13 }}> {t('输入 DO 单号看顾客地址 → 排最短路线 → WhatsApp 给司机')}</span></summary>
+      {body}
     </details>
   );
 }
