@@ -336,11 +336,15 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
   const text = driverMessage(stops, { date: localISO(), driver: driver?.name ?? '-', store, depot });
 
   async function send() {
-    if (!driver) { setMsg(t('请先选司机')); return; }
+    // 没选司机也照样打开 WhatsApp(不带号码),在 WhatsApp 里自己挑联络人;2026-10-06 使用者按了以为没反应
+    if (!driver && !window.confirm(t('还没选司机。要直接打开 WhatsApp,自己挑要传给谁吗?'))) {
+      setMsg(t('请先在「选司机」选一位;没有司机的话,在下面「新增司机」填名字和手机号码再按「新增」。'));
+      return;
+    }
     const missing = stops.filter((s) => !s.address).length;
     if (missing && !window.confirm(t('有 {m} 站没有地址,还是要传给司机吗?', { m: missing }))) return;
-    window.open(`https://wa.me/${driver.phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-    const r = await supabase.rpc('bi_delivery_run_save', { p_store: store, p_driver_id: driver.id, p_stops: stops });
+    window.open(`https://wa.me/${driver ? driver.phone : ''}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    const r = await supabase.rpc('bi_delivery_run_save', { p_store: store, p_driver_id: driver ? driver.id : null, p_stops: stops });
     setMsg(r.error ? r.error.message : t('已打开 WhatsApp,并存进排单纪录。'));
     if (runs) loadRuns();
   }
@@ -443,6 +447,9 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
               ))}
             </select>
             <button className="btn primary" disabled={!stops.length} onClick={send}>{t('WhatsApp 传给司机')}</button>
+            {!drivers.some((d) => !d.store || d.store === store) && (
+              <span className="muted" style={{ fontSize: 13 }}>{t('还没有司机:在下面「新增司机」填名字和手机号码,按「新增」')}</span>
+            )}
             <button className="btn" onClick={copy}>{t('复制清单')}</button>
             <button className="btn" onClick={() => { if (window.confirm(t('清空这次的排单?'))) setStops([]); }}>{t('清空')}</button>
             <span className="muted" style={{ fontSize: 13 }}>
@@ -556,9 +563,12 @@ function DeliverySetup({ t, canManage, store, depot, drivers, onChanged, setMsg 
   }
 
   async function addDriver() {
+    if (!dname.trim()) { setMsg(t('请填司机名字。')); return; }
+    if (dphone.replace(/\D/g, '').length < 9) { setMsg(t('请填司机的手机号码(例:0123456789),WhatsApp 要用。')); return; }
     const r = await supabase.rpc('bi_delivery_driver_save', { p_id: null, p_name: dname, p_phone: dphone, p_store: store, p_active: true });
     if (r.error) { setMsg(r.error.message); return; }
     setDname(''); setDphone('');
+    setMsg(t('已新增司机 {n},在上面「选司机」就选得到。', { n: dname.trim() }));
     onChanged();
   }
 

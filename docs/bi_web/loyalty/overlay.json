@@ -1,12 +1,8 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-06：送货排单加「一键排单」（整串 DO 单号）与独立页 delivery.html，底是送货排单第一版上线的那一版（dpl_8wz78nikWfMpDgAiTXVwWUTK5N6X）。",
-  "based_on_deployment": "dpl_8wz78nikWfMpDgAiTXVwWUTK5N6X",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-06：「WhatsApp 传给司机」没选司机时也能打开 WhatsApp、补司机提示，底是 DO 地址版上线的那一版（dpl_BTypgWHPda4by57r7LhEAzacfNwy）。",
+  "based_on_deployment": "dpl_BTypgWHPda4by57r7LhEAzacfNwy",
   "replaces": {
-    "src/i18n/loyalty.ts": "6de2f85e076760606566222147f2d8afcbf6dd40",
-    "src/loyalty/loyalty.css": "2d0478d6297bb715cd2c89a6c8b74e5d30b1c2d5",
-    "src/loyalty/main.tsx": "23b4ff9588119f1d1f0d4162c4b8b1e1a3f0a6e4",
-    "src/pages/Delivery.tsx": "da204b1de40c68c8b245c5282fe97f89a2d143c0",
-    "src/pages/Loyalty.tsx": "efb79f26f01118409ced0ab300a769980d3dea73",
-    "vite.config.ts": "53e7c210236e2d3ef5e0ac74fc2f0436cce45ca1"
+    "src/i18n/loyalty.ts": "00183c9c92af43a559ff3700e3c743dfd46e7930",
+    "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7"
   }
 }

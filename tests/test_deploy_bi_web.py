@@ -151,9 +151,20 @@ LIVE_V3 = {
     "src/pages/Loyalty.tsx": "efb79f26f01118409ced0ab300a769980d3dea73",
     "src/pages/Delivery.tsx": "da204b1de40c68c8b245c5282fe97f89a2d143c0",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/loyalty/main.tsx", "src/pages/Delivery.tsx",
-           "src/pages/Loyalty.tsx", "vite.config.ts"]
-NEW_FILES = ["delivery.html", "src/delivery/main.tsx"]      # 送货排单独立页
+# 2026-10-06 DO 地址 + 一键排单 + 独立页 dpl_BTypgWHPda4by57r7LhEAzacfNwy（之后的改版以它为底）
+LIVE_V3 = {
+    **LIVE_V3,
+    "vite.config.ts": "da9ca40dc49767757889a88ea9dcd5613adc4474",
+    "delivery.html": "a0350088b26053b2efe2b955b729b20bba377f46",
+    "src/delivery/main.tsx": "2364db70d1c2c2afb61f2324cbd9a381f6a97935",
+    "src/i18n/loyalty.ts": "00183c9c92af43a559ff3700e3c743dfd46e7930",
+    "src/loyalty/loyalty.css": "bfe848720d78af2f01e14a7505f6304e4683ac0f",
+    "src/loyalty/main.tsx": "ce948bb608a0565da78d6b4c4e42c13ea9dfec89",
+    "src/pages/Loyalty.tsx": "8b3be3b6f19c09f79f48779689f50bbb1b7f71c8",
+    "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7",
+}
+CHANGED = ["src/i18n/loyalty.ts", "src/pages/Delivery.tsx"]  # 没选司机也能开 WhatsApp、司机提示
+NEW_FILES: list[str] = []
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
@@ -161,8 +172,10 @@ def test_repo_overlay_replaces_only_the_changed_customer_files():
     assert "overlay.json" not in overlay                   # 说明档本身不上传
     plan = d.plan_files(LIVE_V3, overlay, replaces)
     assert plan["added"] == NEW_FILES
-    assert sorted(plan["replaced"]) == CHANGED             # 一键排单 + 独立页（vite.config 多一个入口）
-    assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/i18n/index.ts", "src/join/join.css", "src/join/main.tsx"]
+    assert sorted(plan["replaced"]) == CHANGED
+    assert sorted(plan["same"]) == ["delivery.html", "join.html", "loyalty.html", "src/delivery/main.tsx", "src/i18n/index.ts",
+                                    "src/join/join.css", "src/join/main.tsx", "src/loyalty/loyalty.css", "src/loyalty/main.tsx",
+                                    "src/pages/Loyalty.tsx", "vite.config.ts"]
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_V3) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
     for path, sha in LIVE_V3.items():
@@ -190,8 +203,8 @@ def test_rerun_after_deploy_is_a_no_op():
 
 def test_stops_when_someone_changed_a_replaced_file_online():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = {**LIVE_V3, "src/pages/Loyalty.tsx": "f" * 40}
-    with pytest.raises(d.DeployError, match="Loyalty.tsx.*被改过"):
+    changed = {**LIVE_V3, "src/pages/Delivery.tsx": "f" * 40}
+    with pytest.raises(d.DeployError, match="Delivery.tsx.*被改过"):
         d.plan_files(changed, overlay, replaces)
 
 
