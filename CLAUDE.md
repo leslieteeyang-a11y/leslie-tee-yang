@@ -132,8 +132,9 @@ owner / manager / sales 可看可改，**汇出 CSV 只给 owner / manager**（�
 「HomeWorks Quotes」排程，分行跟着 `branch_actual.py --scheduled` 每天推）、装修进度 5 段（plan/rough/tile/install/done，`stage_reco`
 各段推荐类别，30 天没更新提醒）、修改纪录（触发器写 `bi.customer_profile_log`，`bi_customer_log`）、合并重复顾客（`bi.customer_alias`，
 `customer_key` / `customer_doc` 先换成主号码；`bi_customer_merge` / `_unmerge` 只给 owner / manager）。
-**Supabase 连接器遇到含 DROP / DELETE 的变更会要使用者按确认、60 秒过期**：先请使用者守着再套用。最后一批 `customer_crm_v3_pending.sql`
-（2026-10-06 尚未套用）。**线上 10/01 被使用者从自己电脑的原始码重新部署（dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3），那份原始码没有顾客资料页，
+**Supabase 连接器遇到含 DROP / DELETE 的变更会卡在确认、60 秒过期（使用者那边看不到提示）**：这类 SQL 改请使用者贴进
+Supabase SQL Editor（https://supabase.com/dashboard/project/vwljnypzgfqhatkgulqs/sql/new）按 Run → Run query；SQL 要直接贴在对话里
+（传档给使用者会打不开）。第三版最后一批就是这样在 2026-10-06 套用完成。**线上 10/01 被使用者从自己电脑的原始码重新部署（dpl_HaQ2nQP5AqCakeHKCdYfWZzzmGD3），那份原始码没有顾客资料页，
 loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加回去。以后使用者若再从电脑部署，要先把 `docs/bi_web/loyalty/` 的档案
 放进那份原始码，否则顾客页又会消失。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
