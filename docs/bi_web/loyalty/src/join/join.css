@@ -25,3 +25,4 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 syst
 .jn-small { color: var(--muted); font-size: 12px; margin-top: 14px; }
 .jn-done { text-align: center; padding: 28px 8px; }
 .jn-done .big { font-size: 44px; }
+.jn a.jn-link { display: block; text-align: center; text-decoration: none; margin-top: 8px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; }

@@ -668,3 +668,7 @@ grant execute on function public.bi_quote_upsert(text, jsonb) to service_role;
 -- public.bi_customer_signup(p_phone, p_name, p_birth_month, p_birth_day, p_area, p_consent, p_store, p_address) 新增 8 参数版
 --   （p_address 无预设值，所以旧网页呼叫 7 个参数仍对到旧版）；bi_customer_signups 的 current 多 address；
 --   bi_customer_signup_handle 写入 address = coalesce(顾客新填, 原有)（送货要最新的地址）。完整内容见 Supabase migration。
+
+-- ── 2026-10-06 migration customer_signup_email：登记页加电邮 ──
+-- customer_signup.email、customer_profile.email（≤120 字）；bi_customer_signup 9 参数版（p_email 无预设值，旧 7 / 8 参数版保留），
+-- 电邮转小写、格式检查；bi_customer_signups 的 current 多 email；bi_customer_signup_handle 写入 email = coalesce(新填, 原有)。

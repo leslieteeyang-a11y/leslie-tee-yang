@@ -138,7 +138,8 @@ Supabase SQL Editor（https://supabase.com/dashboard/project/vwljnypzgfqhatkgulq
 loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加回去。以后使用者若再从电脑部署，要先把 `docs/bi_web/loyalty/` 的档案
 放进那份原始码，否则顾客页又会消失。2026-10-06 第三版已由 deploy_bi_web.bat 上线（dpl_J5mNzgqdWhDubpFU7CHTs1NgK5Dk）。同日使用者要求登记页「住哪一区」改成
 **送货地址**（员工送货用）：`bi.customer_signup.address`，RPC `bi_customer_signup` 多一个 8 参数版（`p_address` 无预设值，旧 7 参数版保留），
-确认时地址以顾客新填的为准；overlay 以 dpl_J5mN… 为底，只换 join 两档、Loyalty.tsx、loyalty.ts。
+确认时地址以顾客新填的为准；overlay 以 dpl_J5mN… 为底，只换 join 两档、Loyalty.tsx、loyalty.ts。同日再加**电邮**（`customer_signup.email`、`customer_profile.email`，
+9 参数版 `bi_customer_signup`（`p_email`）、确认时电邮以顾客新填的为准），登记成功后 4 秒自动带到 **www.hemos.com.my**（也有按钮）。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

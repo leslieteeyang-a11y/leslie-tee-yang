@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { supabase } from '../lib/supabase';
 import './join.css';
@@ -6,7 +6,11 @@ import './join.css';
 // 顾客自己扫 QR 登记(/join.html?s=HQ 或 ?s=JB):不用登入,只呼叫 RPC public.bi_customer_signup(anon 可用)。
 // 送出后先进「待确认」,店员在顾客资料页按确认才写进顾客资料(使用者 2026-10-05 决定)。
 // 这页不回传任何顾客资讯;三种语言写在这里,不进主看板的字典。
-// 2026-10-06 使用者要求「住哪一区」改成送货地址(员工送货用),RPC 用 8 个参数的新版(p_address)。
+// 2026-10-06 使用者要求「住哪一区」改成送货地址(员工送货用),再加电邮;RPC 用 9 个参数的新版(p_address、p_email)。
+// 送出成功后自动带到品牌网站 www.hemos.com.my(几秒后跳转,也可以直接按按钮)。
+
+const SITE = 'https://www.hemos.com.my';
+const REDIRECT_SECONDS = 4;
 
 type L = 'zh' | 'en' | 'ms';
 const TXT: Record<string, Record<L, string>> = {
@@ -25,6 +29,10 @@ const TXT: Record<string, Record<L, string>> = {
     zh: '送货地址（选填，方便我们送货）', en: 'Delivery address (optional, for our deliveries)',
     ms: 'Alamat penghantaran (pilihan, untuk penghantaran kami)',
   },
+  email: { zh: '电邮（选填）', en: 'Email (optional)', ms: 'E-mel (pilihan)' },
+  needEmail: { zh: '电邮格式不对，例：ali@gmail.com', en: 'Please check the email, e.g. ali@gmail.com', ms: 'Sila semak e-mel, cth. ali@gmail.com' },
+  goSite: { zh: '前往 Hemos 网站', en: 'Visit the Hemos website', ms: 'Lawati laman web Hemos' },
+  goingSite: { zh: '{s} 秒后带你到 Hemos 网站…', en: 'Taking you to the Hemos website in {s}s…', ms: 'Ke laman web Hemos dalam {s} saat…' },
   addressHint: { zh: '例：12, Jalan Skudai 3, Taman Universiti, 81300 Skudai', en: 'e.g. 12, Jalan Skudai 3, Taman Universiti, 81300 Skudai', ms: 'cth. 12, Jalan Skudai 3, Taman Universiti, 81300 Skudai' },
   consent: {
     zh: '我同意 HomeWorks 用 WhatsApp 发优惠与新品讯息给我，可随时回复 STOP 取消。',
@@ -59,20 +67,30 @@ function Join() {
   const [lang, setLang] = useState<L>(initialLang);
   const t = (k: string) => TXT[k][lang];
   const store = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
-  const [f, setF] = useState({ phone: '', name: '', bm: '', bd: '', address: '', consent: false });
+  const [f, setF] = useState({ phone: '', name: '', bm: '', bd: '', email: '', address: '', consent: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [left, setLeft] = useState(REDIRECT_SECONDS);
+
+  // 登记成功后倒数,时间到就带到品牌网站
+  useEffect(() => {
+    if (!done) return;
+    if (left <= 0) { location.href = SITE; return; }
+    const id = setTimeout(() => setLeft(left - 1), 1000);
+    return () => clearTimeout(id);
+  }, [done, left]);
 
   async function send() {
     if (f.phone.replace(/\D/g, '').length < 8) { setErr(t('needPhone')); return; }
     if (!f.name.trim()) { setErr(t('needName')); return; }
     if (!!f.bm !== !!f.bd) { setErr(t('needBoth')); return; }
+    if (f.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email.trim())) { setErr(t('needEmail')); return; }
     setBusy(true);
     setErr(null);
     const r = await supabase.rpc('bi_customer_signup', {
       p_phone: f.phone, p_name: f.name, p_birth_month: f.bm ? Number(f.bm) : null, p_birth_day: f.bd ? Number(f.bd) : null,
-      p_area: null, p_address: f.address, p_consent: f.consent, p_store: store === 'HQ' || store === 'JB' ? store : null,
+      p_area: null, p_address: f.address, p_email: f.email, p_consent: f.consent, p_store: store === 'HQ' || store === 'JB' ? store : null,
     });
     setBusy(false);
     if (r.error) { setErr(t('fail') + r.error.message); return; }
@@ -97,6 +115,8 @@ function Join() {
             <div className="big">✓</div>
             <h2>{t('done')}</h2>
             <p>{t('doneSub')}</p>
+            <a className="jn-go jn-link" href={SITE}>{t('goSite')}</a>
+            <p className="jn-small">{t('goingSite').replace('{s}', String(left))}</p>
           </div>
         ) : (
           <>
@@ -118,6 +138,9 @@ function Join() {
                 {Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
               </select>
             </div>
+            <label htmlFor="jn-email">{t('email')}</label>
+            <input id="jn-email" type="email" inputMode="email" autoComplete="email" maxLength={120} placeholder="ali@gmail.com"
+                   value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
             <label htmlFor="jn-address">{t('address')}</label>
             <textarea id="jn-address" rows={3} maxLength={300} autoComplete="street-address" placeholder={t('addressHint')}
                       value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />

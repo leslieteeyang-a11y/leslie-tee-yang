@@ -29,7 +29,7 @@ type Profile = {
   name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
   customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
   next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
-  reno_stage?: string | null; reno_stage_at?: string | null;
+  reno_stage?: string | null; reno_stage_at?: string | null; email?: string | null;
 };
 type Quote = {
   company: string; doc_no: string; doc_date: string; sales_agent: string | null; amount: number; transferred: boolean;
@@ -38,7 +38,7 @@ type Quote = {
 type Detail = { member_id: string; profile: Profile | null; docs: Doc[]; aliases?: string[]; quotes?: Quote[] };
 type Signup = {
   id: number; member_id: string; main_id: string; name: string | null; birth_month: number | null; birth_day: number | null;
-  area: string | null; address?: string | null; consent: boolean; store: string | null; created_at: string;
+  area: string | null; address?: string | null; email?: string | null; consent: boolean; store: string | null; created_at: string;
   current: { name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent } | null;
 };
 type LogRow = { at: string; by: string | null; action: string; changes: Record<string, unknown>; member_id: string };
@@ -705,6 +705,7 @@ function CustomerPanel({ id, t, settings, templates, canManage, categories, onCl
             {docs.length ? ` · ${t('首次消费')} ${fmtDate(docs[docs.length - 1].doc_date)}` : ''}
             {d && !docs.length ? ` · ${t('还没有购买纪录')}` : ''}
             {p?.last_contact_at ? ` · ${t('上次联络')} ${new Date(p.last_contact_at).toLocaleDateString('en-MY')}` : ''}
+            {p?.email ? ` · ${p.email}` : ''}
           </div>
         </div>
         <button className="btn" onClick={onClose}>{t('关闭')}</button>
@@ -1104,7 +1105,10 @@ function Signups({ t, onDone, onOpen }: { t: T; onDone: () => void; onOpen: (id:
                 <td>{x.name}{x.current?.name && x.current.name !== x.name
                   ? <div className="muted" style={{ fontSize: 12 }}>{t('现有:{n}', { n: x.current.name })}</div> : null}</td>
                 <td>{x.birth_month ? `${x.birth_month}/${x.birth_day}` : ''}</td>
-                <td style={{ fontSize: 12, maxWidth: 260 }}>{x.address ?? x.area}</td>
+                <td style={{ fontSize: 12, maxWidth: 260 }}>
+                  {x.address ?? x.area}
+                  {x.email && <div className="muted">{x.email}</div>}
+                </td>
                 <td>{x.consent ? t('同意') : t('不同意')}</td>
                 <td>{x.store}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
