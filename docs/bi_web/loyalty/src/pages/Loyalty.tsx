@@ -299,9 +299,16 @@ export default function Loyalty({ lang, role }: { lang: Lang; role: string | nul
   const [campKey, setCampKey] = useState(0);
 
   async function load() {
-    const r = await supabase.rpc('bi_customers');
-    setErr(r.error ? r.error.message : null);
-    setList((r.data ?? []) as Customer[]);
+    // bi_customers_all 回传一个 JSON 阵列:API 每次最多回 1,000 列,直接读 bi_customers 只会拿到前 1,000 位(2026-10-06 修正)
+    const r = await supabase.rpc('bi_customers_all');
+    if (!r.error) {
+      setErr(null);
+      setList(((r.data ?? []) as Customer[]).map((c) => ({ ...c, categories: c.categories ?? [] })));
+      return;
+    }
+    const old = await supabase.rpc('bi_customers');
+    setErr(old.error ? old.error.message : null);
+    setList((old.data ?? []) as Customer[]);
   }
   async function loadSettings() {
     const [s, w] = await Promise.all([supabase.rpc('bi_customer_settings'), supabase.rpc('bi_wa_templates')]);

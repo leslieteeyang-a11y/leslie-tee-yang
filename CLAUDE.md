@@ -143,6 +143,8 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 **同日使用者改主意：扫码登记不用店员确认，送出即生效**（migration `customer_signup_auto_confirm`：`bi.customer_signup_apply(id, actor)`
 共用写入规则，9 参数版 `bi_customer_signup` 送出就套用、status = confirmed、handled_by = 「顾客自己扫码登记（HQ/JB）」；被乱填的风险靠
 修改纪录追查）。`bi_customer_signups` 改列「旧的待确认 + 近 14 天扫码登记」，前端改成「最近扫码登记的顾客」给店员跟进。
+**PostgREST 每次最多回 1,000 列**：前端直接读 `bi_customers()` 只拿到前 1,000 位（实际 7,921 位，2026-10-06 使用者截图发现）。
+改读 `bi_customers_all()`（回传一个 jsonb 阵列、`jsonb_strip_nulls`），旧函数保留作退路。以后任何会超过 1,000 列的 RPC 都要这样包。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
