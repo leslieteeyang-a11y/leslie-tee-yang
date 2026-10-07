@@ -163,6 +163,8 @@ export const PATTERNS_WH: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^数到 ([\d.]+) ?(.*)$/, (m) => `counted ${m[1]} ${m[2]}`.trim()],
   [/^绑定的纸箱条码：(.+)$/, (m) => `Linked carton barcodes: ${m[1]}`],
   [/^找不到「(.+)」。$/, (m) => `"${m[1]}" not found.`],
+  [/^找不到「(.+)」。试试打品名的一部分，或到「查货」把纸箱条码绑定到商品。$/, (m) => `"${m[1]}" not found. Try part of the item name, or link a carton barcode in Lookup.`],
+  [/^找到 (\d+) 项，点要盘的那一项：$/, (m) => `Found ${m[1]} items. Tap the one to count:`],
   [/^找不到「(.+)」。可以到「查货」把纸箱条码绑定到商品。$/, (m) => `"${m[1]}" not found. You can link a carton barcode to an item in Lookup.`],
   [/^(盘点|再数一次) · (.+)$/, (m) => `${m[1] === "盘点" ? "Count" : "Count again"} · ${m[2]}`],
   [/^实际数到几（(.+)）$/, (m) => `Quantity counted (${m[1]})`],

@@ -2,7 +2,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Empty, ErrorBox, Modal } from "../ui";
 import { ScanBox } from "./Scanner";
-import { COUNT_STATUS_LABEL, CountList, countClass, qtyLabel, whenLabel, wh } from "../wh-api";
+import { COUNT_STATUS_LABEL, CountList, FoundItem, countClass, qtyLabel, whenLabel, wh } from "../wh-api";
 
 export function CountTab({ company, locs }: { company: string; locs: string[] }) {
   const [loc, setLoc] = useState(() => { try { return localStorage.getItem("hw-wh-loc") || ""; } catch { return ""; } });
@@ -10,6 +10,7 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
   const [error, setError] = useState("");
   const [counting, setCounting] = useState<{ code: string; desc: string; uom: string; recount?: boolean } | null>(null);
   const [notice, setNotice] = useState<[string, string] | null>(null);
+  const [found, setFound] = useState<FoundItem[] | null>(null);
   const location = locs.includes(loc) ? loc : locs[0] || "";
 
   const load = useCallback(() => {
@@ -22,8 +23,16 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
   async function scan(code: string) {
     setNotice(null); setError("");
     try {
-      const d = await wh.item(company, code);
-      if (!d.found) { setError(`找不到「${code}」。可以到「查货」把纸箱条码绑定到商品。`); return; }
+      setFound(null);
+      let d = await wh.item(company, code);
+      if (!d.found) {
+        // 不是完整代号 / 条码：当成品名或部分代号搜寻，一笔就直接盘，多笔列出来让同事点
+        const f = await wh.find(company, code);
+        if (f.length === 0) { setError(`找不到「${code}」。试试打品名的一部分，或到「查货」把纸箱条码绑定到商品。`); return; }
+        if (f.length > 1) { setFound(f); return; }
+        d = await wh.item(company, f[0].item_code);
+        if (!d.found) return;
+      }
       setCounting({ code: d.item_code, desc: d.description, uom: d.uom, recount: data?.recount.includes(d.item_code) });
     } catch (e) { setError((e as Error).message); }
   }
@@ -40,7 +49,20 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
         </label>
         {p && <span className="muted small">{`近 30 天已盘 ${p.counted_30d} / ${p.items} 个商品`}</span>}
       </div>
-      <ScanBox onCode={scan} placeholder="扫要盘的商品，或打代号" />
+      <ScanBox onCode={scan} placeholder="扫码，或打商品代号 / 品名" />
+      {found && (
+        <>
+          <p className="muted small">{`找到 ${found.length} 项，点要盘的那一项：`}</p>
+          <ul className="list wh-found">
+            {found.map((f) => (
+              <li key={f.item_code} className="click" onClick={() => { setFound(null); scan(f.item_code); }}>
+                <span><b>{f.item_code}</b>{" "}<span className="muted small">{f.description}</span></span>
+                <span className="muted small nowrap">{f.uom}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <ErrorBox error={error} />
       {notice && <div className={notice[0]}>{notice[1]}</div>}
       {!data ? (!error && <p className="muted">载入中…</p>) : (
