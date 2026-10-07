@@ -3,6 +3,7 @@ type T = (s: string) => string;
 const WD: Record<string, string> = { 日: "Sun", 一: "Mon", 二: "Tue", 三: "Wed", 四: "Thu", 五: "Fri", 六: "Sat" };
 
 export const PATTERNS_ATT: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
+  [/^存进去（(\d+) 天，全部分店）$/, (m) => `Save (${m[1]} days, all branches)`],
   [/^迟到 (.+)$/, (m) => `Late ${m[1]}`],
   [/^迟回 (.+)$/, (m) => `Back ${m[1]} late`],
   [/^午休迟回 (.+)$/, (m) => `Late from lunch ${m[1]}`],

@@ -2,6 +2,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { BRANCH_LABEL, Me } from "../api";
 import { Empty, ErrorBox, Modal } from "../ui";
+import { HolidayImport } from "./HolidayImport";
 import { att, AttSettings, AttStaff, Fence, getFix, mapLink, minsLabel, SAT_RULE_LABEL, Shift, weekday } from "../att-api";
 
 export default function Settings({ me }: { me: Me }) {
@@ -270,9 +271,11 @@ function Holidays({ s, branches, onChanged }: { s: AttSettings; branches: string
   const { error, busy, save } = useSave(() => { setDate(""); setName(""); onChanged(); });
   const year = new Date().getFullYear();
   const list = s.holidays.filter((h) => h.date >= `${year}-01-01`);
+  const [importing, setImporting] = useState(false);
   return (
     <section className="card">
-      <h2>公共假日</h2>
+      <div className="pay-top"><h2>公共假日</h2><button className="ghost" onClick={() => setImporting(true)}>一键带入公共假日</button></div>
+      {importing && <HolidayImport existing={s.holidays} onClose={() => setImporting(false)} onDone={() => { setImporting(false); onChanged(); }} />}
       <p className="muted small">假日不算工作日（不算缺勤、迟到）。全国假日选「全部分店」；州属假日（例：柔佛）选该分店。</p>
       <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.saveHoliday({ date, name, branch })); }}>
         <div className="row">

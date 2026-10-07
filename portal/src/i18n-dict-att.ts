@@ -1,5 +1,15 @@
 // 介面用语（三）：打卡模块（含资料库来的班别名称、错误讯息）。键 = 画面上整段中文（去头尾空白）。
 export const DICT_ATT: Record<string, string> = {
+  // 一键带入公共假日
+  "一键带入公共假日": "Add public holidays",
+  "带入公共假日（全国 + 柔佛）": "Add public holidays (national + Johor)",
+  "标「预计」的是按伊斯兰历 / 农历推算的日期，政府公布后请对一次再存；补假也以公布为准。柔佛苏丹的「Hari Hol」等州属假日每年公布后再自己加。":
+    "Dates marked \"estimated\" follow the Islamic / lunar calendar; check them against the official list before saving, and replacement holidays too. Add Johor state days such as Hari Hol yourself once announced.",
+  "预计": "estimated",
+  "已经有": "already set",
+  "柔佛一般不放，确认后再勾": "Usually not a Johor holiday; tick only after checking",
+  "只有部分州放，确认后再勾": "Only some states; tick only after checking",
+  "存进去中…": "Saving…",
   "自己补的下班卡不能撤回，请等 HR 审核。": "A self-filed clock-out can't be withdrawn — please wait for HR.",
   "直属主管（看得到他的出勤）": "Manager (can see their attendance)",
   "那天有打上班卡、没打下班卡。先补上当天的下班时间，才能打今天的卡。补上后会送 HR 审核，被驳回就会还原。": "You clocked in that day but never clocked out. Enter that day's clock-out time before you can clock in today. It goes to HR for review and is undone if rejected.",
