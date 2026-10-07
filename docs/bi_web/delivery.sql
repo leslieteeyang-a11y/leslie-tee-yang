@@ -326,3 +326,16 @@ end $$;
 -- 视图 bi.delivery_doc_full 在最后多 lines, do_remark, delivery_note 三栏（lookup / lookup_many / docs 读视图，自动带出）。
 -- 新 RPC bi_delivery_doc_set_note(p_company, p_doc_no, p_note)：owner / manager / sales，最多 500 字，依 bi_company() 限分行。
 -- 完整 SQL 见 Supabase 的 migration 纪录 delivery_note_and_lines。
+
+-- ═══ migration delivery_pod + delivery_pod_helpers_public（2026-10-07，已套用）════════════════════
+-- 使用者选「司机签收拍照」。司机不用帐号：排单按 WhatsApp / 复制时前端产生 24 字元 token，讯息里带
+-- https://homeworks-bi.vercel.app/driver.html?t=<token>，3 天后失效。
+-- bi.delivery_run 加 token（unique）、token_expires；新表 bi.delivery_pod(run_id, stop_key, doc_no, status delivered|failed,
+-- note, photos text[], lat, lng, created_at)，同一站以最新一笔为准。
+-- bi.driver_run_id(token) / bi.driver_token_visible(token)；public 包装 bi_driver_token_ok（anon）/ bi_driver_token_visible（authenticated），
+-- 让 storage 规则不用给 anon bi schema 的 usage。
+-- RPC：bi_delivery_run_save 多一个 4 参数版（p_token，旧 3 参数版保留）；bi_delivery_runs 附 pods、token，并依 bi_company() 限 HQ / JB；
+-- anon：bi_driver_run(token)（这趟的站 + 签收状态）、bi_driver_pod(token, key, status, note, photos, lat, lng)
+-- （站必须在这趟里、照片路径必须在 <token>/ 下、最多 6 张、每趟最多 300 笔）。
+-- Storage：私有 bucket delivery-pod（5MB、jpeg/png/webp）；policy「driver upload」anon 凭有效 token 只能上传到 <token>/；
+-- 「staff read」authenticated 且 bi_is_allowed、同公司才读得到（前端用 1 小时签名网址显示）。

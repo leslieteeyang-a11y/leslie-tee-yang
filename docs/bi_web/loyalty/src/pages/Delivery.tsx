@@ -28,7 +28,20 @@ export type Stop = {
 };
 type Driver = { id: number; name: string; phone: string; store: string | null };
 type Depot = { address: string; lat: number; lng: number };
-type Run = { id: number; run_date: string; store: string | null; driver_name: string | null; driver_phone: string | null; stops: Stop[]; created_by: string | null };
+type Pod = { stop_key: string; doc_no: string | null; status: 'delivered' | 'failed'; note: string | null; photos: string[]; created_at: string };
+type Run = {
+  id: number; run_date: string; store: string | null; driver_name: string | null; driver_phone: string | null; stops: Stop[]; created_by: string | null;
+  token?: string | null; pods?: Pod[];   // 司机签收(2026-10-07,migration delivery_pod)
+};
+
+/** 司机签收连结的代码:24 个随机字元(网址安全),排单时在前端产生,WhatsApp 讯息里就带得到连结 */
+export function newToken(): string {
+  const b = crypto.getRandomValues(new Uint8Array(18));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+export function driverLink(token: string, origin: string = location.origin): string {
+  return `${origin}/driver.html?t=${token}`;
+}
 
 const STORE: Record<string, string> = { HOMEWORKSSB: 'HQ', HOMEWORKSSOUTHERN: 'JB' };
 
@@ -100,7 +113,7 @@ export function routeKm(stops: Stop[], start: { lat: number; lng: number } | nul
   return total;
 }
 
-function wazeLink(s: Stop): string {
+export function wazeLink(s: { lat: number | null; lng: number | null; address: string }): string {
   return s.lat != null && s.lng != null
     ? `https://waze.com/ul?ll=${s.lat},${s.lng}&navigate=yes`
     : `https://waze.com/ul?q=${encodeURIComponent(s.address)}&navigate=yes`;
@@ -132,7 +145,7 @@ export function fmtLine(l: Line): string {
 }
 
 /** 给司机的 WhatsApp 清单 */
-export function driverMessage(stops: Stop[], opt: { date: string; driver: string; store: string; depot: Depot | null }): string {
+export function driverMessage(stops: Stop[], opt: { date: string; driver: string; store: string; depot: Depot | null; link?: string }): string {
   const total = routeKm(stops, opt.depot);
   const lines = [
     `🚚 HomeWorks 送货单 ${opt.date}`,
@@ -140,6 +153,7 @@ export function driverMessage(stops: Stop[], opt: { date: string; driver: string
     `出发：${opt.store}${opt.depot?.address ? ` ${opt.depot.address}` : ''}`,
     '',
   ];
+  if (opt.link) lines.splice(3, 0, `📲 每送完一站，开这个连结按「已送达」并拍照：`, opt.link);
   stops.forEach((s, i) => {
     lines.push(`${i + 1}. ${s.doc_no ?? '（没有 DO 单号）'}`);
     lines.push(`👤 ${[s.name, fmtPhone(s.phone)].filter(Boolean).join(' · ') || '-'}`);
@@ -369,15 +383,24 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
     }
     const missing = stops.filter((s) => !s.address).length;
     if (missing && !window.confirm(t('有 {m} 站没有地址,还是要传给司机吗?', { m: missing }))) return;
-    window.open(`https://wa.me/${driver ? driver.phone : ''}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-    const r = await supabase.rpc('bi_delivery_run_save', { p_store: store, p_driver_id: driver ? driver.id : null, p_stops: stops });
-    setMsg(r.error ? r.error.message : t('已打开 WhatsApp,并存进排单纪录。'));
+    // 先产生签收连结放进讯息,WhatsApp 要在按钮当下打开(之后才 await,浏览器才不会挡弹出视窗)
+    const token = newToken();
+    const msgText = driverMessage(stops, { date: localISO(), driver: driver?.name ?? '-', store, depot, link: driverLink(token) });
+    window.open(`https://wa.me/${driver ? driver.phone : ''}?text=${encodeURIComponent(msgText)}`, '_blank', 'noopener');
+    const r = await supabase.rpc('bi_delivery_run_save', { p_store: store, p_driver_id: driver ? driver.id : null, p_stops: stops, p_token: token });
+    setMsg(r.error ? r.error.message : t('已打开 WhatsApp,并存进排单纪录。司机按连结签收后,在下面「排单纪录」看进度和照片。'));
     if (runs) loadRuns();
   }
 
   async function copy() {
-    try { await navigator.clipboard.writeText(text); setMsg(t('清单已复制,可以贴到任何地方。')); }
-    catch { setMsg(t('浏览器不让复制,请用「WhatsApp 传给司机」。')); }
+    // 复制也算排出一趟:存进纪录,讯息带签收连结
+    const token = newToken();
+    const msgText = driverMessage(stops, { date: localISO(), driver: driver?.name ?? '-', store, depot, link: driverLink(token) });
+    try { await navigator.clipboard.writeText(msgText); }
+    catch { setMsg(t('浏览器不让复制,请用「WhatsApp 传给司机」。')); return; }
+    const r = await supabase.rpc('bi_delivery_run_save', { p_store: store, p_driver_id: driver ? driver.id : null, p_stops: stops, p_token: token });
+    setMsg(r.error ? r.error.message : t('清单已复制,可以贴到任何地方。'));
+    if (runs) loadRuns();
   }
 
   async function loadRuns() {
@@ -496,12 +519,9 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
       <details style={{ marginTop: 8 }} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && runs === null) loadRuns(); }}>
         <summary className="muted" style={{ fontSize: 13 }}>{t('最近 14 天的排单纪录')}</summary>
         {runs && runs.length === 0 && <div className="muted" style={{ fontSize: 13 }}>{t('还没有纪录')}</div>}
+        {runs && runs.length > 0 && <button className="btn" onClick={loadRuns}>{t('重新整理')}</button>}
         {runs && runs.map((r) => (
-          <div key={r.id} className="lp-row" style={{ alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
-            <span>{r.run_date} · {r.store} · {r.driver_name} · {t('{n} 站', { n: r.stops.length })}</span>
-            <span className="muted">{r.stops.map((s) => s.doc_no ?? s.name).join(', ')}</span>
-            <button className="btn" onClick={() => { setStops(r.stops); if (r.store) setStore(r.store); }}>{t('载入')}</button>
-          </div>
+          <RunRow key={r.id} r={r} t={t} setMsg={setMsg} onLoad={() => { setStops(r.stops); if (r.store) setStore(r.store); }} />
         ))}
       </details>
     </>
@@ -576,6 +596,76 @@ function StopRow({ s, i, n, t, onMove, onRemove, onAddress, onNote, onCoords, on
         <button className="btn" onClick={onRemove}>✕</button>
       </td>
     </tr>
+  );
+}
+
+/** 签收时间(数据库回 UTC)→ 马来西亚时间 14:05 */
+function hhmm(ts: string): string {
+  return new Date(ts).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit' });
+}
+
+/** 一趟排单:站数、签收进度,展开看每站状态、司机备注与照片(照片用 1 小时的签名网址) */
+function RunRow({ r, t, onLoad, setMsg }: { r: Run; t: T; onLoad: () => void; setMsg: (m: string | null) => void }) {
+  const [urls, setUrls] = useState<Record<string, string> | null>(null);
+  const pods = r.pods ?? [];
+  const podOf = (k: string) => pods.find((p) => p.stop_key === k);
+  const done = r.stops.filter((s) => podOf(s.key)?.status === 'delivered').length;
+  const failed = r.stops.filter((s) => podOf(s.key)?.status === 'failed').length;
+
+  async function loadPhotos() {
+    const paths = pods.flatMap((p) => p.photos);
+    if (!paths.length || urls) return;
+    const res = await supabase.storage.from('delivery-pod').createSignedUrls(paths, 3600);
+    if (res.error) { setMsg(res.error.message); return; }
+    setUrls(Object.fromEntries((res.data ?? []).filter((x) => x.signedUrl).map((x) => [x.path ?? '', x.signedUrl as string])));
+  }
+
+  async function copyLink() {
+    if (!r.token) return;
+    try { await navigator.clipboard.writeText(driverLink(r.token)); setMsg(t('司机签收连结已复制(3 天内有效)。')); }
+    catch { setMsg(driverLink(r.token)); }
+  }
+
+  return (
+    <details className="lp-run" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) loadPhotos(); }}>
+      <summary style={{ fontSize: 13 }}>
+        {r.run_date} · {r.store} · {r.driver_name ?? '–'} · {t('{n} 站', { n: r.stops.length })}
+        {r.token && <> · <span className={done === r.stops.length ? 'lp-tag lp-yes' : 'lp-tag'}>{t('已送达 {d}/{n}', { d: done, n: r.stops.length })}</span></>}
+        {failed > 0 && <> <span className="lp-tag lp-no">{t('送不成 {f}', { f: failed })}</span></>}
+      </summary>
+      <div className="lp-row" style={{ gap: 6, margin: '6px 0' }}>
+        <button className="btn" onClick={onLoad}>{t('载入')}</button>
+        {r.token && <button className="btn" onClick={copyLink}>{t('复制司机签收连结')}</button>}
+      </div>
+      <table className="data" style={{ fontSize: 13 }}>
+        <tbody>
+          {r.stops.map((s, i) => {
+            const p = podOf(s.key);
+            return (
+              <tr key={s.key}>
+                <td>{i + 1}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{s.doc_no ?? '–'}</td>
+                <td>{s.name || fmtPhone(s.phone) || '–'}</td>
+                <td>
+                  {!p ? <span className="muted">{r.token ? t('还没签收') : t('(这趟没有签收连结)')}</span>
+                    : <span className={`lp-tag ${p.status === 'delivered' ? 'lp-yes' : 'lp-no'}`}>
+                        {p.status === 'delivered' ? t('已送达') : t('送不成')} · {hhmm(p.created_at)}
+                      </span>}
+                  {p?.note && <div className="muted">{p.note}</div>}
+                </td>
+                <td>
+                  <div className="lp-pod-photos">
+                    {p?.photos.map((ph) => urls?.[ph]
+                      ? <a key={ph} href={urls[ph]} target="_blank" rel="noopener"><img src={urls[ph]} alt="" /></a>
+                      : <span key={ph} className="muted">📷</span>)}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </details>
   );
 }
 

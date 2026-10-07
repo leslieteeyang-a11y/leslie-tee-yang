@@ -65,3 +65,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .lp-lines summary { cursor: pointer; }
 .lp-lines ul { margin: 4px 0 0; padding-left: 18px; }
 .lp-dnote { width: 100%; font: inherit; font-size: 13px; margin-top: 6px; min-width: 180px; }
+
+/* 排单纪录:司机签收进度与照片(2026-10-07) */
+.lp-run { border-top: 1px solid var(--line, #d7dcea); padding: 6px 0; }
+.lp-run summary { cursor: pointer; }
+.lp-pod-photos { display: flex; gap: 4px; flex-wrap: wrap; }
+.lp-pod-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }

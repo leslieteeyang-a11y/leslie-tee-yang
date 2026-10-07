@@ -1,9 +1,21 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-07：送货排单加给司机的备注与完整货品清单（含 10-06 没选司机也能开 WhatsApp），底是 DO 地址版上线的那一版（dpl_BTypgWHPda4by57r7LhEAzacfNwy）。",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-07：司机签收拍照（新增 driver.html、src/driver/），加上给司机的备注、完整货品、没选司机也能开 WhatsApp；底是 DO 地址版上线的那一版（dpl_BTypgWHPda4by57r7LhEAzacfNwy），vite.config 多一个入口所以也要换。replaces 的值可以是清单：线上若已部署 10-06 q 版或 10-07a 版（同一串改版的前几版），也算合法的底。",
   "based_on_deployment": "dpl_BTypgWHPda4by57r7LhEAzacfNwy",
   "replaces": {
-    "src/i18n/loyalty.ts": "00183c9c92af43a559ff3700e3c743dfd46e7930",
-    "src/loyalty/loyalty.css": "bfe848720d78af2f01e14a7505f6304e4683ac0f",
-    "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7"
+    "src/i18n/loyalty.ts": [
+      "00183c9c92af43a559ff3700e3c743dfd46e7930",
+      "f6b7221c9844d91018a754b9dc1ece0c70892768",
+      "7bd47fc5bcafe1bb6e7e36c09419ece3a9698195"
+    ],
+    "src/loyalty/loyalty.css": [
+      "bfe848720d78af2f01e14a7505f6304e4683ac0f",
+      "0a3ffb9e47f76da7b33bf65aa9932d561b2fa4d8"
+    ],
+    "src/pages/Delivery.tsx": [
+      "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7",
+      "7de09b5dacbfc9d9572f33ee3298df51b5288b22",
+      "db194555375303ec92de79aee8909df0ef6c1345"
+    ],
+    "vite.config.ts": "da9ca40dc49767757889a88ea9dcd5613adc4474"
   }
 }

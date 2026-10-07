@@ -86,7 +86,7 @@ def flatten_tree(tree: list) -> dict[str, str]:
     return out
 
 
-def read_overlay(folder: Path) -> tuple[dict[str, bytes], dict[str, str]]:
+def read_overlay(folder: Path) -> tuple[dict[str, bytes], dict[str, str | list[str]]]:
     """改版目录 → ({部署路径: 内容}, {要换掉的路径: 当初为底的 SHA1})。overlay.json 本身不上传。"""
     if not folder.is_dir():
         raise DeployError(f"找不到改版目录 {folder}。请确认程式是最新版（重新下载 ZIP 再双击 update_from_zip.bat）。")
@@ -104,12 +104,17 @@ def read_overlay(folder: Path) -> tuple[dict[str, bytes], dict[str, str]]:
     return files, replaces
 
 
-def plan_files(live: dict[str, str], overlay: dict[str, bytes], replaces: dict[str, str]) -> dict:
+def _bases(v: str | list[str]) -> list[str]:
+    return [v] if isinstance(v, str) else list(v)
+
+
+def plan_files(live: dict[str, str], overlay: dict[str, bytes], replaces: dict[str, str | list[str]]) -> dict:
     """算出这次部署要送的档案清单。回传 {files, upload, added, replaced, same}。
 
     - 线上有、改版没有的档：原样引用（{file, sha}）
     - 改版的新档：上传
-    - 改版要换掉的档：线上那个档必须还是当初的底（replaces 里的 SHA1），否则停下来
+    - 改版要换掉的档：线上那个档必须还是当初的底（replaces 里的 SHA1；也可以是几个 SHA1 的清单 ——
+      使用者不一定每一版都部署，之前几版自己的改版也都算合法的底），否则停下来
     - 改版跟线上内容一样：不算变动（重跑不会重复部署）"""
     added, replaced, same, conflicts = [], [], [], []
     upload: dict[str, bytes] = {}
@@ -123,11 +128,11 @@ def plan_files(live: dict[str, str], overlay: dict[str, bytes], replaces: dict[s
             else:
                 added.append(path)
                 upload[path] = data
-        elif path in replaces and live[path] == replaces[path]:
+        elif path in replaces and live[path] in _bases(replaces[path]):
             replaced.append(path)
             upload[path] = data
         elif path in replaces:
-            conflicts.append(f"{path}：线上这个档在这之间被改过（线上 {live[path][:10]}…，当初的底 {replaces[path][:10]}…）")
+            conflicts.append(f"{path}：线上这个档在这之间被改过（线上 {live[path][:10]}…，当初的底 {_bases(replaces[path])[0][:10]}…）")
         else:
             conflicts.append(f"{path}：线上已经有同名但内容不同的档，改版没说要换掉它")
     if conflicts:
