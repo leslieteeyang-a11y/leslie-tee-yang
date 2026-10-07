@@ -142,6 +142,11 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才看成本、才能填）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
   （`att/HolidayImport.tsx` 内建 2026–2027 全国 + 柔佛名单，伊斯兰历 / 农历标「预计」，HR 勾选后才存）；员工与权限「从 Excel 一次开账号」
   （`pages/BulkStaff.tsx`，贴上 Excel 区块 → ops_staff_save → ops_att_staff_set → ops-account，不用新函数）。测试 `tests/todo_test.sql`。
+- 员工自己申请加入（2026-10-08，使用者选「自己申请、你批准」）：migration `ops_join`（正式环境已套）+ Edge Function `ops-join`（verify_jwt=false，
+  靠邀请码）。管理员在「员工与权限 → 加入申请」复制 / WhatsApp 分享加入链接 `#/join?c=<邀请码>`，可暂停或换新码；员工不用登入填名字、email、
+  自己的密码、手机、性别、到职日 → `ops_join_submit`（只给 service role）存 `ops.join_request`（不存密码），函数用 Auth admin 建账号
+  （email_confirm=true）；**email 已有登入账号就不改密码**（防借申请改 BI 用户密码）。批准（`ops_join_decide`，admin 可审批，选部门 / 分店 / 角色）
+  = 加进 ops.staff 并带入手机、性别、到职日；批准前登入看到 `JoinStatus`「申请审核中」。首页 `join_pending`。测试 `tests/join_test.sql`。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
