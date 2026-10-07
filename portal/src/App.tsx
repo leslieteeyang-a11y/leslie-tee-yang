@@ -17,6 +17,8 @@ import Hr from "./pages/Hr";
 import Warehouse from "./pages/Warehouse";
 import Payroll from "./pages/Payroll";
 import MyPay from "./pages/MyPay";
+import Join from "./pages/Join";
+import JoinStatus from "./pages/JoinStatus";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
 
@@ -51,6 +53,7 @@ export default function App() {
   useEffect(() => setMenuOpen(false), [route]);
 
   if (session === undefined) return <div className="center">载入中…</div>;
+  if (route.startsWith("/join")) return <Join />;
   if (!session) return <Login />;
   if (error)
     return (
@@ -62,11 +65,7 @@ export default function App() {
   if (me === undefined) return <div className="center">载入中…</div>;
   if (me === null)
     return (
-      <div className="center card narrow">
-        <h2>还不能进入营运系统</h2>
-        <p>你的账号（{session.user.email}）还没加入员工名单，或已停用。请找管理员在「员工与权限」把你加进去。</p>
-        <button onClick={() => supabase.auth.signOut()}>登出</button>
-      </div>
+      <JoinStatus email={session.user.email ?? ""} />
     );
 
   const visible = me.modules.filter((m) => m.level !== "none");
@@ -83,7 +82,7 @@ export default function App() {
       page = can(me, "approvals", "view") ? <Approvals me={me} /> : <NoAccess />;
       break;
     case "admin":
-      page = can(me, "admin", "approve") ? <Admin me={me} onChanged={loadMe} /> : <NoAccess />;
+      page = can(me, "admin", "approve") ? <Admin me={me} onChanged={loadMe} sub={arg} /> : <NoAccess />;
       break;
     case "purchasing":
       page = can(me, "purchasing", "view")

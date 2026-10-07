@@ -55,9 +55,10 @@ function AttCard({ a }: { a: HomeAtt }) {
 // 今天要做：把各模块要处理的事整理成一张清单（没有就显示「没有」）
 type TodoHome = Home & { corrections_waiting?: number; leave_waiting?: number; wh_moves_pending?: number | null;
   wh_variances?: number | null; wh_counted_today?: number | null; po_arriving?: number | null; hr_gaps?: number | null;
-  holidays_ahead?: number | null };
+  holidays_ahead?: number | null; join_pending?: number | null };
 function Todo({ h }: { h: TodoHome }) {
   const items: [boolean, string, string, boolean][] = [
+    [!!h.join_pending, `${h.join_pending} 个新员工申请加入`, "#/admin/join", true],
     [!!h.approvals_waiting, `${h.approvals_waiting} 件申请等你审批`, "#/approvals", true],
     [!!h.leave_waiting, `${h.leave_waiting} 张请假等你审核`, "#/hr/todo", true],
     [!!h.corrections_waiting, `${h.corrections_waiting} 张补卡等你审核`, "#/attendance/corrections", true],

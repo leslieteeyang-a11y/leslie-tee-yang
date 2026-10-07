@@ -2,16 +2,19 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, BRANCH_LABEL, DeptModule, Level, LEVEL_LABEL, Me, ROLE_LABEL, StaffAdmin } from "../api";
 import { ErrorBox, Modal, Tabs } from "../ui";
 import { BulkStaff } from "./BulkStaff";
+import JoinAdmin from "./JoinAdmin";
 
-export default function Admin({ me, onChanged }: { me: Me; onChanged: () => void }) {
-  const [tab, setTab] = useState<"staff" | "matrix">("staff");
+export default function Admin({ me, onChanged, sub }: { me: Me; onChanged: () => void; sub?: string }) {
+  const [tab, setTab] = useState<"staff" | "join" | "matrix">(sub === "join" ? "join" : "staff");
   return (
     <>
       <h1>员工与权限</h1>
       <div className="filters">
-        <Tabs value={tab} onChange={setTab} options={[["staff", "员工名单"], ["matrix", "部门权限"]]} />
+        <Tabs value={tab} onChange={setTab} options={[["staff", "员工名单"], ["join", "加入申请"], ["matrix", "部门权限"]]} />
       </div>
-      {tab === "staff" ? <StaffTab me={me} onChanged={onChanged} /> : <MatrixTab me={me} onChanged={onChanged} />}
+      {tab === "staff" && <StaffTab me={me} onChanged={onChanged} />}
+      {tab === "join" && <JoinAdmin me={me} onChanged={onChanged} />}
+      {tab === "matrix" && <MatrixTab me={me} onChanged={onChanged} />}
     </>
   );
 }
