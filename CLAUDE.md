@@ -136,6 +136,12 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   所以 `20261005_ops_payroll_delete.sql`（拿掉财务部的薪资权限 + HR 删单笔记录 `ops_pay_delete`）**还没套**；套好后把 `payroll/History.tsx` 的 `CAN_DELETE` 改 true。
   **手动计算**分页（`payroll/Manual.tsx`，2026-10-05 发薪前一天加）：员工没开账号 / 没打卡时 HR 用；名单与数字只存在浏览器 localStorage
   `hw-pay-manual`（不进资料库，有下载 / 载入备份 JSON），计算同样用 calc.ts，迟到与无薪假手填。
+- 优化（2026-10-07，使用者选的）：migration `ops_todo_aged`（正式环境已套）。首页「今天要做」清单（`ops_home` 加 `po_arriving` 3 天内到货、
+  `hr_gaps`、`holidays_ahead`）；人事「资料缺漏」分页（`ops_hr_gaps`：没填到职日 / 性别 / 手机 / 薪资资料、分店没打卡点、60 天内没假日）；
+  仓库「旧货」分页（`ops.wh_aged_rows` 读 `bi.fact_item_aging` + `bi.mv_sales_item_month`；① 入货 > 12 个月 ② 12 个月没卖 ③ 两者；
+  `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才看成本、才能填）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
+  （`att/HolidayImport.tsx` 内建 2026–2027 全国 + 柔佛名单，伊斯兰历 / 农历标「预计」，HR 勾选后才存）；员工与权限「从 Excel 一次开账号」
+  （`pages/BulkStaff.tsx`，贴上 Excel 区块 → ops_staff_save → ops_att_staff_set → ops-account，不用新函数）。测试 `tests/todo_test.sql`。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
