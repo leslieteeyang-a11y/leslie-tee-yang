@@ -52,9 +52,45 @@ function AttCard({ a }: { a: HomeAtt }) {
   );
 }
 
+// 今天要做：把各模块要处理的事整理成一张清单（没有就显示「没有」）
+type TodoHome = Home & { corrections_waiting?: number; leave_waiting?: number; wh_moves_pending?: number | null;
+  wh_variances?: number | null; wh_counted_today?: number | null; po_arriving?: number | null; hr_gaps?: number | null;
+  holidays_ahead?: number | null };
+function Todo({ h }: { h: TodoHome }) {
+  const items: [boolean, string, string, boolean][] = [
+    [!!h.approvals_waiting, `${h.approvals_waiting} 件申请等你审批`, "#/approvals", true],
+    [!!h.leave_waiting, `${h.leave_waiting} 张请假等你审核`, "#/hr/todo", true],
+    [!!h.corrections_waiting, `${h.corrections_waiting} 张补卡等你审核`, "#/attendance/corrections", true],
+    [!!h.my_overdue, `${h.my_overdue} 个任务已逾期`, "#/tasks", true],
+    [!!h.wh_variances, `${h.wh_variances} 项盘点差异等你审核`, "#/warehouse/review", true],
+    [!!h.wh_moves_pending, `${h.wh_moves_pending} 笔搬动还没输入 AutoCount`, "#/warehouse/moves", false],
+    [h.wh_counted_today === 0, "今天还没盘点", "#/warehouse/count", false],
+    [!!h.po_arriving, `${h.po_arriving} 张 PO 三天内到货，准备收货`, "#/purchasing", false],
+    [!!h.po_overdue, `${h.po_overdue} 张 PO 已过预计到货日，要跟进`, "#/purchasing", true],
+    [!!h.hr_gaps, `${h.hr_gaps} 位员工资料没填齐`, "#/hr/gaps", false],
+    [h.holidays_ahead === 0, "接下来 60 天没有设公共假日", "#/attendance/settings", true],
+  ];
+  const list = items.filter(([on]) => on);
+  return (
+    <section className="card">
+      <h2>今天要做</h2>
+      {list.length === 0 ? <p className="muted">没有要处理的事。</p> : (
+        <ul className="list">
+          {list.map(([, text, href, urgent]) => (
+            <li key={text} className="click" onClick={() => { location.hash = href; }}>
+              <span className={urgent ? "late" : ""}>{text}</span><span className="go">→</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export default function HomePage({ me }: { me: Me }) {
   const [home, setHome] = useState<(Home & { att?: HomeAtt | null; corrections_waiting?: number; leave_waiting?: number; my_pending_leave?: number;
-    wh_moves_pending?: number | null; wh_variances?: number | null; wh_counted_today?: number | null }) | null>(null);
+    wh_moves_pending?: number | null; wh_variances?: number | null; wh_counted_today?: number | null;
+    po_arriving?: number | null; hr_gaps?: number | null; holidays_ahead?: number | null }) | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
 
@@ -73,6 +109,7 @@ export default function HomePage({ me }: { me: Me }) {
       <ErrorBox error={error} />
       <InstallHint />
       {home?.att && <AttCard a={home.att} />}
+      {home && <Todo h={home} />}
       <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
       {home && (
         <div className="kpis">

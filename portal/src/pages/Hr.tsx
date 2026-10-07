@@ -12,12 +12,14 @@ import {
   Balance, daysLabel, leave, LeaveRequest, LeaveType, StaffBalances,
 } from "../leave-api";
 import { BalanceCards, LeaveDetail, LeaveForm, LeaveTable } from "./Leave";
+import HrGaps from "./HrGaps";
 
-type Tab = "todo" | "records" | "balances" | "types";
+type Tab = "todo" | "records" | "balances" | "types" | "gaps";
 
 export default function Hr({ me, sub }: { me: Me; sub?: string }) {
   const canEdit = can(me, "hr", "edit");
   const tabs: [Tab, string][] = [["todo", "请假审核"], ["records", "请假纪录"], ["balances", "假期余额"], ["types", "假别设定"]];
+  if (canEdit) tabs.push(["gaps", "资料缺漏"]);
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "todo";
   return (
     <>
@@ -29,6 +31,7 @@ export default function Hr({ me, sub }: { me: Me; sub?: string }) {
       {tab === "todo" && <Requests scope="todo" />}
       {tab === "records" && <Requests scope="all" />}
       {tab === "balances" && <Balances me={me} canEdit={canEdit} />}
+      {tab === "gaps" && <HrGaps />}
       {tab === "types" && <Types canEdit={can(me, "hr", "approve")} />}
     </>
   );

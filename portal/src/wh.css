@@ -44,3 +44,8 @@ select.narrow-select { width: auto; }
 }
 .show-sm { display: none; }
 @media (max-width: 640px) { .show-sm { display: block; } }
+/* 旧货：上方数字可点来切换 */
+button.kpi { border: 2px solid transparent; text-align: left; cursor: pointer; font: inherit; min-width: 0; }
+button.kpi span, button.kpi small { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+button.kpi.on { border-color: var(--blue); }
+.kpi small { color: var(--muted); font-size: .8rem; }

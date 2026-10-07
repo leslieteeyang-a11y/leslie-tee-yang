@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, BRANCH_LABEL, DeptModule, Level, LEVEL_LABEL, Me, ROLE_LABEL, StaffAdmin } from "../api";
 import { ErrorBox, Modal, Tabs } from "../ui";
+import { BulkStaff } from "./BulkStaff";
 
 export default function Admin({ me, onChanged }: { me: Me; onChanged: () => void }) {
   const [tab, setTab] = useState<"staff" | "matrix">("staff");
@@ -22,6 +23,7 @@ function StaffTab({ me, onChanged }: { me: Me; onChanged: () => void }) {
   const [error, setError] = useState("");
   const [edit, setEdit] = useState<StaffAdmin | "new" | null>(null);
   const [pwFor, setPwFor] = useState<StaffAdmin | null>(null);
+  const [bulk, setBulk] = useState(false);
 
   const load = useCallback(() => {
     api.staffList().then(setRows).catch((e: Error) => setError(e.message));
@@ -32,7 +34,8 @@ function StaffTab({ me, onChanged }: { me: Me; onChanged: () => void }) {
     <>
       <div className="page-head">
         <p className="muted">员工要先在这里加入名单，再设定登入密码，才能进营运系统。营运系统的名单与 HomeWorks BI 分开：加进来的人看不到 BI 的财务数据。</p>
-        <button onClick={() => setEdit("new")}>＋ 新增员工</button>
+        <div className="actions"><button className="ghost" onClick={() => setBulk(true)}>从 Excel 一次开账号</button>
+        <button onClick={() => setEdit("new")}>＋ 新增员工</button></div>
       </div>
       <ErrorBox error={error} />
       {rows && (
@@ -66,6 +69,7 @@ function StaffTab({ me, onChanged }: { me: Me; onChanged: () => void }) {
         <StaffForm me={me} staff={edit === "new" ? undefined : edit} onClose={() => setEdit(null)}
                    onSaved={(s, isNew) => { setEdit(null); load(); onChanged(); if (isNew) setPwFor(s); }} />
       )}
+      {bulk && <BulkStaff me={me} onClose={() => setBulk(false)} onDone={() => { load(); onChanged(); }} />}
       {pwFor && <PasswordForm staff={pwFor} onClose={() => setPwFor(null)} onDone={() => { setPwFor(null); load(); }} />}
     </>
   );

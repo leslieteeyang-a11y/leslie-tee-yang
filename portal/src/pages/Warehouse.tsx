@@ -11,9 +11,10 @@ import { Lookup } from "../wh/Lookup";
 import { MovesTab } from "../wh/Moves";
 import { CountTab } from "../wh/Count";
 import { ReviewTab } from "../wh/Review";
+import { AgedTab } from "../wh/Aged";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "count" | "moves" | "review" | "labels";
+type Tab = "lookup" | "count" | "moves" | "review" | "aged" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
 export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
@@ -30,6 +31,7 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
   if (canApprove) tabs.push(["review", "差异审核"]);
+  tabs.push(["aged", "旧货"]);
   tabs.push(["labels", "印条码"]);
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "lookup";
   const locs = meta.locations.filter((l) => l.company === co);
@@ -50,6 +52,7 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
       {tab === "count" && <CountTab company={co} locs={locs.filter((l) => l.counting).map((l) => l.code)} />}
       {tab === "moves" && <MovesTab me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} canApprove={canApprove} />}
       {tab === "review" && <ReviewTab company={co} meta={meta} onMeta={setMeta} />}
+      {tab === "aged" && <AgedTab company={co} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
     </>
   );

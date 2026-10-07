@@ -61,8 +61,8 @@ export function HolidayImport({ existing, onClose, onDone }: {
             {rows.map((r, i) => (
               <tr key={i} className={r.on ? "" : "off"}>
                 <td><input type="checkbox" checked={r.on} onChange={(e) => set(i, "on", e.target.checked)} /></td>
-                <td className="nowrap"><input type="date" value={r.date} onChange={(e) => set(i, "date", e.target.value)} />{" "}
-                  <span className="muted small">{r.date && weekday(r.date)}</span></td>
+                <td className="nowrap"><input type="date" value={r.date} onChange={(e) => set(i, "date", e.target.value)} />
+                  <div className="muted small">{r.date && weekday(r.date)}</div></td>
                 <td><input value={r.name} onChange={(e) => set(i, "name", e.target.value)} /></td>
                 <td className="small nowrap">
                   {r.est && <span className="ap pending">预计</span>}

@@ -88,3 +88,8 @@ insert into bi.fact_sales (company, doc_type, doc_no, doc_date, item_code, qty) 
   ('HOMEWORKSSB', 'IV', 'IV-1', current_date - 5, 'ST003', 40), ('HOMEWORKSSB', 'IV', 'IV-2', current_date - 5, 'ST004', 2);
 insert into bi.fact_open_order (company, doc_no, dtl_key, doc_date, debtor_name, item_code, qty, transferred_qty, outstanding_qty)
   values ('HOMEWORKSSB', 'SO-1', 1, current_date - 2, 'ABC PLUMBING', 'ST003', 3, 0, 3);
+
+-- 旧货清单（2026-10-07）
+create table bi.fact_item_aging (company text, item_code text, last_receipt_date date, on_hand numeric, stock_value numeric, sold_since numeric);
+create table bi.mv_sales_item_month (company text, yr int, mth int, item_code text, item_key text, item_description text,
+  item_group text, qty numeric, net numeric, profit numeric);
