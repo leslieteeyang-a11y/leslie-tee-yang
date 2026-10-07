@@ -316,3 +316,13 @@ end $$;
 -- （排单页手动改，同步不会盖掉）；bi.geo_cache(addr = bi.addr_key(地址)) 存坐标；视图 bi.delivery_doc_full 算出实际地址
 -- （manual > do > 顾客资料）与 address_source；bi_delivery_lookup / _lookup_many / bi_delivery_docs 改读这个视图；
 -- 新 RPC bi_delivery_doc_set_address(company, doc_no, address)、bi_delivery_geo_set(address, lat, lng)。
+
+-- ═══ migration delivery_note_and_lines（2026-10-07，已套用）═══════════════════════════════════
+-- 使用者：加「给司机的备注」（时间、地点、下货位置），WhatsApp 要有完整货品清单方便对货。
+-- bi.delivery_doc 新增 lines jsonb（[{d, q, u}] DODTL 全部明细）、do_remark（AutoCount DO 表头 Remark1～4）、
+-- delivery_note / note_by / note_at（员工在 BI 写的，同步不盖）。
+-- bi_delivery_doc_upsert 多收 lines / remark；没送（旧版脚本）就保留原值：
+--   lines = coalesce(excluded.lines, d.lines), do_remark = coalesce(excluded.do_remark, d.do_remark)
+-- 视图 bi.delivery_doc_full 在最后多 lines, do_remark, delivery_note 三栏（lookup / lookup_many / docs 读视图，自动带出）。
+-- 新 RPC bi_delivery_doc_set_note(p_company, p_doc_no, p_note)：owner / manager / sales，最多 500 字，依 bi_company() 限分行。
+-- 完整 SQL 见 Supabase 的 migration 纪录 delivery_note_and_lines。

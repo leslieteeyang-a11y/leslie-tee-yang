@@ -1,8 +1,9 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-06：「WhatsApp 传给司机」没选司机时也能打开 WhatsApp、补司机提示，底是 DO 地址版上线的那一版（dpl_BTypgWHPda4by57r7LhEAzacfNwy）。",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都是新增或与线上相同。2026-10-07：送货排单加给司机的备注与完整货品清单（含 10-06 没选司机也能开 WhatsApp），底是 DO 地址版上线的那一版（dpl_BTypgWHPda4by57r7LhEAzacfNwy）。",
   "based_on_deployment": "dpl_BTypgWHPda4by57r7LhEAzacfNwy",
   "replaces": {
     "src/i18n/loyalty.ts": "00183c9c92af43a559ff3700e3c743dfd46e7930",
+    "src/loyalty/loyalty.css": "bfe848720d78af2f01e14a7505f6304e4683ac0f",
     "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7"
   }
 }

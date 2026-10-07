@@ -163,7 +163,7 @@ LIVE_V3 = {
     "src/pages/Loyalty.tsx": "8b3be3b6f19c09f79f48779689f50bbb1b7f71c8",
     "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/pages/Delivery.tsx"]  # 没选司机也能开 WhatsApp、司机提示
+CHANGED = ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Delivery.tsx"]  # 司机提示、给司机的备注、完整货品
 NEW_FILES: list[str] = []
 
 
@@ -174,7 +174,7 @@ def test_repo_overlay_replaces_only_the_changed_customer_files():
     assert plan["added"] == NEW_FILES
     assert sorted(plan["replaced"]) == CHANGED
     assert sorted(plan["same"]) == ["delivery.html", "join.html", "loyalty.html", "src/delivery/main.tsx", "src/i18n/index.ts",
-                                    "src/join/join.css", "src/join/main.tsx", "src/loyalty/loyalty.css", "src/loyalty/main.tsx",
+                                    "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
                                     "src/pages/Loyalty.tsx", "vite.config.ts"]
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_V3) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页

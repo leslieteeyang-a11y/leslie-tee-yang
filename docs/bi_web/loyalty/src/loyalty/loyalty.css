@@ -59,3 +59,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .lp-pre { white-space: pre-wrap; font-size: 12px; background: rgba(0, 0, 0, 0.18); padding: 8px 10px; border-radius: 6px; max-height: 320px; overflow: auto; }
 .lp-bulk textarea { width: 100%; font: inherit; font-size: 16px; resize: vertical; }
 .lp-issues { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #e0b43c; }
+
+/* 送货排单:完整货品、给司机的备注(2026-10-07) */
+.lp-lines { font-size: 12px; margin-top: 2px; }
+.lp-lines summary { cursor: pointer; }
+.lp-lines ul { margin: 4px 0 0; padding-left: 18px; }
+.lp-dnote { width: 100%; font: inherit; font-size: 13px; margin-top: 6px; min-width: 180px; }

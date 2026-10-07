@@ -135,3 +135,21 @@ def test_updater_runs_from_temp_and_verifies_files():
     bat = (ROOT / "update_from_zip.bat").read_text(encoding="ascii")
     assert "--from-temp" in bat and "/R" in bat and "Get-FileHash" in bat
     assert "/Q >nul" not in bat                       # 复制错误要看得到
+
+
+def test_do_sql_reads_uom_and_remarks():
+    sql = build_do_sql(DO | {"REMARK1", "REMARK2"}, DODTL | {"UOM"})
+    assert "d.UOM AS UOM" in sql
+    assert "ISNULL(' / ' + NULLIF(LTRIM(RTRIM(h.Remark1)), ''), '')" in sql and "h.Remark2" in sql and "Remark3" not in sql
+    assert "STUFF(" in sql and ", 1, 3, '')" in sql          # 拿掉开头的「 / 」（3 个字元）
+    plain = build_do_sql(DO, DODTL)
+    assert "NULL AS UOM" in plain and "NULL AS Remark" in plain
+
+
+def test_do_docs_keep_every_line_for_the_driver():
+    """2026-10-07：司机要看完整货品清单对货（items 只留前 3 项），还有 DO 的备注。"""
+    rows = [("DO-9", date(2026, 10, 7), "300-K001", "KAI", None, 0, f"ITEM {i}", i, 0, 0, "Site 5", "UNIT" if i % 2 else None,
+             "  Call  before 10am ") for i in range(1, 6)]
+    (d,) = build_do_docs(rows)
+    assert len(d["lines"]) == 5 and d["lines"][0] == {"d": "ITEM 1", "q": 1.0, "u": "UNIT"} and d["lines"][1]["u"] is None
+    assert d["items"].endswith("（共 5 项）") and d["remark"] == "Call before 10am"

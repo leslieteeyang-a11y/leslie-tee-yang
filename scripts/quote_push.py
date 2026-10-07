@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from autocount_db import connect, fetch, load_autocount_config          # noqa: E402
 from supabase_push import _request, company_of, supabase_config         # noqa: E402
 
-VERSION = "quotes-do-2026-10-06c"
+VERSION = "quotes-do-2026-10-07"
 DAYS = 120
 DO_DAYS = 60
 TARGETS = ("SODTL", "DODTL", "IVDTL", "CSDTL")
@@ -98,6 +98,15 @@ def build_docs(rows) -> list[dict]:
     return out
 
 
+def _join_sql(cols: list[str], sep: str) -> str:
+    """几个文字栏位去空白后用 sep 接起来，全空回 NULL。不用 CONCAT_WS（SQL Server 2017 才有，AutoCount 常配旧版
+    SQL Express）：每段前面加 sep 再用 STUFF 拿掉第一个。"""
+    if not cols:
+        return "NULL"
+    body = " + ".join(f"ISNULL('{sep}' + NULLIF(LTRIM(RTRIM({c})), ''), '')" for c in cols)
+    return f"NULLIF(STUFF({body}, 1, {len(sep)}, ''), '')"
+
+
 def build_do_sql(do: set[str], dodtl: set[str]) -> str:
     """DO 表头 + 明细（纯函数）。取消的也抓，标 Cancelled，让 BI 那边知道这张不用送。"""
     if not do or not dodtl:
@@ -113,12 +122,14 @@ def build_do_sql(do: set[str], dodtl: set[str]) -> str:
     # 送货地址：DO 表头的 Deliver Address（DeliverAddr1～4 + 邮编）；没有这些栏位就不抓（不用发票地址，承包商的发票地址是办公室）
     parts = [f"h.{c}" for c, u in (("DeliverAddr1", "DELIVERADDR1"), ("DeliverAddr2", "DELIVERADDR2"), ("DeliverAddr3", "DELIVERADDR3"),
                                    ("DeliverAddr4", "DELIVERADDR4"), ("DeliverPostCode", "DELIVERPOSTCODE")) if u in do]
-    # 不用 CONCAT_WS（SQL Server 2017 才有，AutoCount 常配旧版 SQL Express）：每段前面加「, 」再用 STUFF 拿掉第一个
-    address = ("NULLIF(STUFF(" + " + ".join(f"ISNULL(', ' + NULLIF(LTRIM(RTRIM({c})), ''), '')" for c in parts) + ", 1, 2, ''), '')"
-               if parts else "NULL")
+    address = _join_sql(parts, ", ")
+    uom = "d.UOM" if "UOM" in dodtl else "NULL"
+    # 表头 Remark1～4：员工在 AutoCount 打的备注（2026-10-07 使用者要给司机看特别要求）
+    remark = _join_sql([f"h.Remark{i}" for i in range(1, 5) if f"REMARK{i}" in do], " / ")
     return f"""
 SELECT h.DocNo, h.DocDate, h.DebtorCode, {name} AS DebtorName, {agent} AS SalesAgent, {hdr_amount} AS HdrAmount,
-       {desc} AS Description, d.Qty, {sub} AS SubTotal, {cancelled} AS Cancelled, {address} AS DeliverAddress
+       {desc} AS Description, d.Qty, {sub} AS SubTotal, {cancelled} AS Cancelled, {address} AS DeliverAddress,
+       {uom} AS UOM, {remark} AS Remark
 FROM [DO] h LEFT JOIN [DODTL] d ON d.DocKey = h.DocKey
 WHERE h.DocDate >= ?
 ORDER BY h.DocDate, h.DocNo, {order}
@@ -126,19 +137,29 @@ ORDER BY h.DocDate, h.DocNo, {order}
 
 
 def build_do_docs(rows) -> list[dict]:
-    """DO 明细列 → 每张 DO 一笔（纯函数）。借用报价单的合并逻辑，第 10 栏当「已取消」，第 11 栏是送货地址（表头，每行都一样）。"""
+    """DO 明细列 → 每张 DO 一笔（纯函数）。借用报价单的合并逻辑，第 10 栏当「已取消」；第 11 栏送货地址、第 13 栏备注
+    （表头，每行都一样）；第 12 栏单位。lines = 全部明细（品名 / 数量 / 单位），给司机对货用，不像 items 只留前 3 项。"""
     addr: dict[str, str] = {}
+    remark: dict[str, str] = {}
+    lines: dict[str, list] = {}
     base = []
     for r in rows:
-        r = list(r)
-        a = r[10] if len(r) > 10 else None
-        if a and str(a).strip() and r[0] not in addr:
-            addr[r[0]] = " ".join(str(a).split())
+        r = list(r) + [None] * (13 - len(r))
+        key = str(r[0]).strip()
+        for col, store in ((10, addr), (12, remark)):
+            v = r[col]
+            if v and str(v).strip() and key not in store:
+                store[key] = " ".join(str(v).split())
+        if r[6]:
+            q = float(r[7] or 0)
+            lines.setdefault(key, []).append({"d": str(r[6]).strip(), "q": q, "u": (str(r[11]).strip() or None) if r[11] else None})
         base.append(r[:10])
     out = []
     for d in build_docs(base):
         d["cancelled"] = d.pop("transferred")
         d["address"] = addr.get(d["doc_no"])
+        d["remark"] = remark.get(d["doc_no"])
+        d["lines"] = lines.get(d["doc_no"], [])
         out.append(d)
     return out
 

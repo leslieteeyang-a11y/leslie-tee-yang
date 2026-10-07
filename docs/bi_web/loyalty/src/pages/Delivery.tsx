@@ -16,11 +16,15 @@ type Hit = {
   amount: number | null; items: string | null; cancelled: boolean; member_id: string | null;
   name: string | null; address: string | null; lat: number | null; lng: number | null; geo_query?: string | null; note: string | null;
   address_source?: 'manual' | 'do' | 'profile' | null;
+  lines?: Line[] | null; do_remark?: string | null; delivery_note?: string | null;
 };
+/** DO 明细一行:品名 / 数量 / 单位(quote_push.py 从 DODTL 全部抓,2026-10-07 起) */
+export type Line = { d: string; q: number; u?: string | null };
 export type Stop = {
   key: string; doc_no: string | null; member_id: string | null; name: string; phone: string; address: string;
   lat: number | null; lng: number | null; items: string | null; note: string | null; geo: 'ok' | 'none' | 'todo';
   company?: string | null; source?: 'manual' | 'do' | 'profile' | null;
+  lines?: Line[] | null; remark?: string | null; dnote?: string | null;   // 完整货品、AutoCount DO 备注、给司机的备注
 };
 type Driver = { id: number; name: string; phone: string; store: string | null };
 type Depot = { address: string; lat: number; lng: number };
@@ -120,6 +124,13 @@ export function gmapRoutes(stops: Stop[], depot: Depot | null): string[] {
   return out;
 }
 
+/** 「HEMOS TAP × 2 UNIT」;数量是整数就不印小数 */
+export function fmtLine(l: Line): string {
+  const q = Number(l.q) || 0;
+  const qty = Number.isInteger(q) ? String(q) : String(Math.round(q * 1000) / 1000);
+  return `${l.d} × ${qty}${l.u ? ` ${l.u}` : ''}`;
+}
+
 /** 给司机的 WhatsApp 清单 */
 export function driverMessage(stops: Stop[], opt: { date: string; driver: string; store: string; depot: Depot | null }): string {
   const total = routeKm(stops, opt.depot);
@@ -133,8 +144,13 @@ export function driverMessage(stops: Stop[], opt: { date: string; driver: string
     lines.push(`${i + 1}. ${s.doc_no ?? '（没有 DO 单号）'}`);
     lines.push(`👤 ${[s.name, fmtPhone(s.phone)].filter(Boolean).join(' · ') || '-'}`);
     lines.push(`📍 ${s.address || '（没有地址，请先打电话问顾客）'}`);
-    if (s.items) lines.push(`🧾 ${s.items}`);
-    if (s.note) lines.push(`📝 ${s.note}`);
+    if (s.dnote) lines.push(`⚠️ 备注：${s.dnote}`);
+    if (s.remark) lines.push(`📝 单据备注：${s.remark}`);
+    if (s.lines?.length) {
+      // 完整货品清单,司机出车前可以逐项对数量
+      lines.push(`🧾 货品（${s.lines.length} 项）：`);
+      s.lines.forEach((l) => lines.push(`   • ${fmtLine(l)}`));
+    } else if (s.items) lines.push(`🧾 ${s.items}`);
     if (s.address || s.lat != null) lines.push(`🧭 ${wazeLink(s)}`);
     lines.push('');
   });
@@ -177,6 +193,7 @@ function toStop(h: Hit): Stop {
     name: (h.name ?? h.debtor_name ?? '').replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, ' ').replace(/[()（）]/g, ' ')
       .replace(/\s+/g, ' ').trim().replace(/^CASH$/i, ''),
     phone: phoneOf(h.member_id), address: h.address ?? '', lat: h.lat, lng: h.lng, items: h.items, note: h.note,
+    lines: h.lines ?? null, remark: h.do_remark ?? null, dnote: h.delivery_note ?? null,
     geo: h.lat != null && h.lng != null ? 'ok' : 'todo', company: h.company, source: h.address_source ?? null,
   };
 }
@@ -267,6 +284,15 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
       if (r.error) { setMsg(r.error.message); return; }
     }
     update(s.key, { address, lat: null, lng: null, geo: 'todo', source: s.doc_no ? 'manual' : 'profile' });
+  }
+
+  /** 给司机的备注:有 DO 就存进那张 DO(同步不会盖掉,下次查同一张单还在);用电话加的站只留在这次排单 */
+  async function saveNote(s: Stop, note: string) {
+    if (s.doc_no && s.company) {
+      const r = await supabase.rpc('bi_delivery_doc_set_note', { p_company: s.company, p_doc_no: s.doc_no, p_note: note });
+      if (r.error) { setMsg(r.error.message); return; }
+    }
+    update(s.key, { dnote: note.trim() || null });
   }
 
   async function saveCoords(s: Stop, text: string) {
@@ -432,7 +458,7 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
                 {stops.map((s, i) => (
                   <StopRow key={s.key} s={s} i={i} n={stops.length} t={t}
                            onMove={(d) => move(i, d)} onRemove={() => setStops(stops.filter((x) => x.key !== s.key))}
-                           onAddress={(a) => saveAddress(s, a)} onCoords={(c) => saveCoords(s, c)}
+                           onAddress={(a) => saveAddress(s, a)} onNote={(x) => saveNote(s, x)} onCoords={(c) => saveCoords(s, c)}
                            onOpen={() => s.member_id && onOpen(s.member_id)} />
                 ))}
               </tbody>
@@ -497,13 +523,15 @@ export default function Delivery({ t, role, onOpen, standalone = false }: {
   );
 }
 
-function StopRow({ s, i, n, t, onMove, onRemove, onAddress, onCoords, onOpen }: {
+function StopRow({ s, i, n, t, onMove, onRemove, onAddress, onNote, onCoords, onOpen }: {
   s: Stop; i: number; n: number; t: T; onMove: (d: number) => void; onRemove: () => void;
-  onAddress: (a: string) => void; onCoords: (c: string) => void; onOpen: () => void;
+  onAddress: (a: string) => void; onNote: (x: string) => void; onCoords: (c: string) => void; onOpen: () => void;
 }) {
   const [addr, setAddr] = useState(s.address);
+  const [note, setNote] = useState(s.dnote ?? '');
   const [coords, setCoords] = useState('');
   useEffect(() => { setAddr(s.address); }, [s.address]);
+  useEffect(() => { setNote(s.dnote ?? ''); }, [s.dnote]);
   return (
     <tr>
       <td>{i + 1}</td>
@@ -511,7 +539,16 @@ function StopRow({ s, i, n, t, onMove, onRemove, onAddress, onCoords, onOpen }: 
       <td>
         <span className="lp-click" onClick={onOpen}>{s.name || '–'}</span>
         <div className="muted" style={{ fontSize: 12 }}>{fmtPhone(s.phone)}</div>
-        {s.items && <div className="muted" style={{ fontSize: 12 }}>{s.items}</div>}
+        {s.lines?.length ? (
+          <details className="lp-lines">
+            <summary className="muted">{t('货品 {n} 项', { n: s.lines.length })}</summary>
+            <ul>{s.lines.map((l, k) => <li key={k}>{fmtLine(l)}</li>)}</ul>
+          </details>
+        ) : s.items && <div className="muted" style={{ fontSize: 12 }}>{s.items}</div>}
+        {s.remark && <div className="muted" style={{ fontSize: 12 }}>📝 {t('单据备注')}:{s.remark}</div>}
+        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className="lp-dnote"
+                  placeholder={t('给司机的备注:时间、地点、下货位置…')} />
+        {note.trim() !== (s.dnote ?? '') && <button className="btn" onClick={() => onNote(note)}>{t('储存备注')}</button>}
       </td>
       <td style={{ minWidth: 220 }}>
         <textarea rows={2} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={t('没有地址,请填上')}
