@@ -188,7 +188,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
   async function send(how: "wa" | "copy") {
     if (busy) return;
     if (how === "wa" && !driver && !window.confirm(ui("还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？"))) {
-      setError("请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。");
+      setError("请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。");
       return;
     }
     const missing = stops.filter((s) => !s.address).length;
@@ -319,7 +319,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
                 }}>清空</button>
               </div>
               {drivers.length === 0 && (
-                <p className="muted small">还没有司机：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。</p>
+                <p className="muted small">还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。</p>
               )}
               <p className="muted small">
                 {`${stops.length} 站`}{routeKm(stops, depot) ? " · " : ""}{routeKm(stops, depot) ? `直线约 ${routeKm(stops, depot).toFixed(0)} km` : ""}

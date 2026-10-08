@@ -43,8 +43,8 @@ export const DICT_DLV: Record<string, string> = {
   "清空": "Clear",
   "清空这次的排单？": "Clear this plan?",
   "预览给司机的讯息": "Preview the driver's message",
-  "还没有司机：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。":
-    "No drivers yet: for staff drivers, ask an admin to set their department to \"Delivery & install\" and fill in a mobile number in Staff & access; add outside drivers in the Settings tab.",
+  "还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。":
+    "No drivers yet: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" and fill in a mobile number in Staff & access; add outside drivers in the Settings tab.",
   "还没设出发点（在「设定」分页），路线从第一站开始排。": "No starting point set (Settings tab) — the route starts from the first stop.",
   "给司机的备注：时间、地点、下货位置…": "Note for the driver: time, place, where to unload…",
   "储存备注": "Save note",
@@ -73,8 +73,8 @@ export const DICT_DLV: Record<string, string> = {
     "Can't read the coordinates. Paste a Google Maps link, or numbers like 1.5321, 103.6612.",
   "请先输入今天要送的 DO 单号。": "Enter today's DO numbers first.",
   "还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？": "No driver chosen. Open WhatsApp anyway and pick the contact yourself?",
-  "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。":
-    "Choose a driver first. If there are none: for staff drivers, ask an admin to set their department to \"Delivery & install\" with a mobile number; add outside drivers in Settings.",
+  "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。":
+    "Choose a driver first. If there are none: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" with a mobile number; add outside drivers in Settings.",
   "浏览器不让复制，请用「WhatsApp 传给司机」。": "The browser won't allow copying — use \"WhatsApp to driver\".",
   "已打开 WhatsApp，并存进排单纪录。司机按连结签收后，在「排单纪录」看进度和照片。":
     "WhatsApp opened and the run saved. When the driver signs off via the link, see progress and photos in Runs.",
@@ -112,8 +112,8 @@ export const DICT_DLV: Record<string, string> = {
     "Only the postcode area was found. Long-press the shop in Google Maps, paste the coordinates into Coordinates and save again.",
   "司机": "Drivers",
   "员工司机": "Staff drivers",
-  "「送货安装」部门、有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。":
-    "Active staff in the \"Delivery & install\" department with a mobile number are listed automatically; they sign off in My deliveries after logging in. Add them in Staff & access.",
+  "「送货部」「物流部」有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。":
+    "Active staff in the \"Delivery\" and \"Logistics\" departments with a mobile number are listed automatically; they sign off in My deliveries after logging in. Add them in Staff & access.",
   "还没有。": "None yet.",
   "外包司机": "Outside drivers",
   "不是员工的司机：他们收到 WhatsApp 后用里面的签收连结，不用登入。": "Drivers who aren't staff: they use the sign-off link in the WhatsApp message — no login needed.",
@@ -136,8 +136,8 @@ export const DICT_DLV: Record<string, string> = {
   "一趟最多 100 站。": "At most 100 stops per run.",
   "排单资料不完整，请重新整理页面再排一次。": "The plan is incomplete — refresh the page and plan again.",
   "连结代码不对，请重新整理页面再按一次。": "Link code is invalid — refresh the page and try again.",
-  "这位司机不在「送货安装」部门、没有手机号码、已停用，或不属于这间分店。":
-    "This driver isn't in the \"Delivery & install\" department, has no mobile number, is inactive, or belongs to another branch.",
+  "这位司机不在送货部 / 物流部、没有手机号码、已停用，或不属于这间分店。":
+    "This driver isn't in the Delivery or Logistics department, has no mobile number, is inactive, or belongs to another branch.",
   "找不到这位司机，或他不属于这间分店。": "Driver not found, or belongs to another branch.",
   "出发点要有坐标。": "The starting point needs coordinates.",
   "司机要有名字和完整手机号码。": "A driver needs a name and a full mobile number.",

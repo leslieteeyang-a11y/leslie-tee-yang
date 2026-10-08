@@ -200,6 +200,44 @@ select pg_temp.expect_error(format($q$select public.ops_dlv_driver_save('{"id":%
 select pg_temp.expect_error($q$select public.ops_dlv_set_depot('HOMEWORKSSOUTHERN', 'JB', 1.5, 103.7)$q$, '分店');
 -- 送货部但没有手机号码的员工不能当司机（司机清单也不会列）
 select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"staff","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
-  (select (public.ops_dlv_meta()->>'me_id'))), '送货安装');
+  (select (public.ops_dlv_meta()->>'me_id'))), '送货部 / 物流部');
+reset role;
+
+-- 物流部（20261008d）：新部门、预设权限、也能当司机；「送货安装」部门改名「送货部」
+do $$ begin
+  assert (select name from ops.department where code = 'logistics') = '物流部', 'logistics dept';
+  assert (select name from ops.department where code = 'delivery') = '送货部', 'delivery renamed';
+  assert (select string_agg(module || ':' || level, ',' order by module) from ops.dept_module where department = 'logistics')
+       = 'approvals:edit,attendance:edit,dashboard:view,delivery:edit,leave:edit,purchasing:view,tasks:edit,warehouse:edit',
+    'logistics modules';
+end $$;
+set role authenticated;
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"logi@example.com","name":"物流阿华","department":"logistics","branch":"HOMEWORKSSB","phone":"016-555 1234"}');
+select public.ops_staff_save('{"email":"logi.jb@example.com","name":"JB 物流","department":"logistics","branch":"HOMEWORKSSOUTHERN","phone":"016-555 9999"}');
+select pg_temp.as_user('logi@example.com');
+do $$ declare m jsonb := public.ops_dlv_meta(); me jsonb := public.ops_me(); r jsonb; v_id bigint; begin
+  assert m->>'level' = 'edit', 'logistics can plan: ' || m::text;
+  assert exists (select 1 from jsonb_array_elements(me->'modules') x where x->>'key' = 'warehouse' and x->>'level' = 'edit'), 'warehouse edit';
+  assert exists (select 1 from jsonb_array_elements(me->'modules') x where x->>'key' = 'purchasing' and x->>'level' = 'view'), 'purchasing view';
+  assert exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'kind' = 'staff' and d->>'name' = '物流阿华'
+                 and d->>'phone' = '60165551234'), 'logistics staff listed as driver: ' || (m->'drivers')::text;
+  assert exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'name' = '司机阿强'), 'delivery staff still drivers';
+  assert not exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'name' = 'JB 物流'), 'JB logistics hidden from HQ';
+  r := public.ops_dlv_run_save(jsonb_build_object('company', '', 'driver_kind', 'staff', 'driver_id', m->>'me_id',
+         'stops', '[{"key":"DO-017707","doc_no":"DO-017707"}]'::jsonb, 'token', 'TOKEN_logistics_run_0000001'));
+  v_id := (r->>'id')::bigint;
+  assert jsonb_array_length(public.ops_dlv_my_runs()) = 1, 'logistics driver sees own run';
+end $$;
+reset role;
+select set_config('dlv.logi_jb', (select id::text from ops.staff where email = 'logi.jb@example.com'), false),
+       set_config('dlv.hqsales', (select id::text from ops.staff where email = 'hqsales@example.com'), false);
+set role authenticated;
+-- 不能指派别间分店的物流部员工
+select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"staff","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
+  current_setting('dlv.logi_jb')), '送货部 / 物流部');
+-- 销售部的人不能当司机
+select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"staff","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
+  current_setting('dlv.hqsales')), '送货部 / 物流部');
 reset role;
 select 'dlv_test ok';

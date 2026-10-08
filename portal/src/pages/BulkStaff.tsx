@@ -6,7 +6,7 @@ import { att } from "../att-api";
 import { Modal } from "../ui";
 
 const ALIAS: Record<string, string> = { hr: "hr", 人事部: "hr", 管理: "mgmt", 老板: "mgmt", 采购: "purchasing", 订货: "purchasing",
-  送货: "delivery", 安装: "delivery", 司机: "delivery", 会计: "finance", 网店: "ecommerce", 门市: "sales", store: "sales" };
+  送货: "delivery", 安装: "delivery", 司机: "delivery", 物流: "logistics", logistics: "logistics", 会计: "finance", 网店: "ecommerce", 门市: "sales", store: "sales" };
 const HEAD = ["姓名", "Email", "部门", "分店", "职位", "手机", "到职日", "性别"];
 const SAMPLE = ["TAN AH KOW", "ahkow@gmail.com", "仓库", "总行", "仓务员", "012-3456789", "2024-03-01", "男"];
 

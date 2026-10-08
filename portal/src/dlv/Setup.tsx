@@ -73,7 +73,7 @@ export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company:
       <section className="card">
         <h2>司机</h2>
         <h3>员工司机</h3>
-        <p className="muted small">「送货安装」部门、有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。</p>
+        <p className="muted small">「送货部」「物流部」有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。</p>
         {staffDrivers.length === 0 ? <p className="muted">还没有。</p> : (
           <ul className="list">{staffDrivers.map((d) => <li key={d.id}><span>{d.name}</span><span className="muted">{fmtPhone(d.phone)}</span></li>)}</ul>
         )}
