@@ -5,6 +5,7 @@ export const DICT_DB: Record<string, string> = {
   "订货与 ETA": "Purchasing & ETA",
   "仓库": "Warehouse",
   "送货安装": "Delivery & install",
+  "送货": "Delivery",
   "送货部": "Delivery",
   "物流部": "Logistics",
   "销售": "Sales",

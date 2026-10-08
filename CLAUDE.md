@@ -154,7 +154,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
-- 送货安装（2026-10-08，使用者：「把送货功能跟员工多部门功能连在一起，不要分成两个地方」）：把 BI 顾客资料页里的送货排单 +
+- 送货（模块 key `delivery`；原名「送货安装」，使用者 2026-10-08：「只要送货，没有安装」→ 20261008c 一并把名称改成「送货」）（2026-10-08，使用者：「把送货功能跟员工多部门功能连在一起，不要分成两个地方」）：把 BI 顾客资料页里的送货排单 +
   司机签收拍照搬进来（另一个 Claude 对话在 BI 分支 `claude/pensive-fermi-gtqw9c` 做的，以 ZIP 交过来）。**资料不搬家**：DO（SERVER 的
   `quote_push.py` 每 15 分钟只读推 AutoCount DO，含 Deliver Address、全部明细、Remark1～4）、地址、备注、排单、签收都在 `bi.delivery_*`，
   这里加一层 `public.ops_dlv_*`（migration `20261008b_ops_delivery.sql`，**正式环境已套**，分三次：`ops_delivery` + 多人审查后的 `ops_delivery_review_fixes` + `ops_delivery_fixes2`，合起来 = 这个档；另外 BI 的 `bi_driver_run` 每站多回传 `geo`，migration `driver_run_geo`）改用 ops 权限：只看（销售）=
@@ -167,7 +167,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，两边资料相通；要不要关掉由使用者决定。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
-  模块名称「送货安装」不变）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
+  模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
   Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，

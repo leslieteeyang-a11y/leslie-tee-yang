@@ -1,4 +1,4 @@
--- 送货安装测试（接在 join_test.sql 之后跑）。BI 的送货表在 stub_supabase.sql。
+-- 送货测试（接在 join_test.sql 之后跑）。BI 的送货表在 stub_supabase.sql。
 \set ON_ERROR_STOP 1
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
 begin
@@ -69,7 +69,7 @@ do $$ begin
 end $$;
 -- 采购部没有送货模块
 select pg_temp.as_user('hr@example.com');
-select pg_temp.expect_error($q$select public.ops_dlv_meta()$q$, '送货安装');
+select pg_temp.expect_error($q$select public.ops_dlv_meta()$q$, '「送货」模块');
 
 -- 2. 司机（送货部可编辑）：改地址、备注、存坐标、排单
 select pg_temp.as_user('driver@example.com');

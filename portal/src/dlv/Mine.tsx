@@ -1,4 +1,4 @@
-// 送货安装 · 我的送货：员工司机登入就看得到派给自己、连结还有效的排单，直接签收（不用点 WhatsApp 里的连结）。
+// 送货 · 我的送货：员工司机登入就看得到派给自己、连结还有效的排单，直接签收（不用点 WhatsApp 里的连结）。
 import { useEffect, useState } from "react";
 import { dlv, Run } from "../dlv-api";
 import { Empty, ErrorBox } from "../ui";

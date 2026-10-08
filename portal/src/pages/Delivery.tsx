@@ -1,4 +1,4 @@
-// 送货安装：排单（DO 单号 → 最短路线 → WhatsApp 司机）、排单纪录（签收进度与照片）、我的送货（员工司机签收）、设定。
+// 送货：排单（DO 单号 → 最短路线 → WhatsApp 司机）、排单纪录（签收进度与照片）、我的送货（员工司机签收）、设定。
 // 路由 #/delivery/<分页>；司机不用登入的签收页是 #/driver?t=<代码>（App.tsx 在登入前处理）。
 // 资料与 BI 顾客资料页的旧送货排单共用（bi.delivery_*），SERVER 每 15 分钟从 AutoCount 只读推 DO 进来。
 import { useCallback, useEffect, useState } from "react";
@@ -39,7 +39,7 @@ export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
   return (
     <>
       <div className="page-head">
-        <h1>送货安装</h1>
+        <h1>送货</h1>
         {meta.companies.length > 1 && tab !== "mine" && (
           <select value={co} onChange={(e) => pick(e.target.value)} className="narrow-select">
             {meta.companies.map((c) => <option key={c} value={c}>{BRANCH_LABEL[c] || c}</option>)}

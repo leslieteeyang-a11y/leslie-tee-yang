@@ -1,4 +1,4 @@
-// 送货安装 · 排单纪录：近 14 天每一趟、每站签收状态、司机备注与照片（照片用 1 小时有效的网址）。
+// 送货 · 排单纪录：近 14 天每一趟、每站签收状态、司机备注与照片（照片用 1 小时有效的网址）。
 import { useEffect, useState } from "react";
 import { dlv, driverLink, fmtPhone, hhmmKL, Run, Stop } from "../dlv-api";
 import { Empty, ErrorBox } from "../ui";

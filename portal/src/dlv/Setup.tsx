@@ -1,4 +1,4 @@
-// 送货安装 · 设定（可审批）：出发点（排路线从这里开始）、外包司机。员工司机在「员工与权限」管理。
+// 送货 · 设定（可审批）：出发点（排路线从这里开始）、外包司机。员工司机在「员工与权限」管理。
 import { useEffect, useState } from "react";
 import { BRANCH_LABEL } from "../api";
 import { dlv, DlvMeta, fmtPhone, geocode, parseCoords, STORE, ui } from "../dlv-api";

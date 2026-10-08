@@ -1,4 +1,4 @@
-// 送货安装 · 排单：整串 DO 单号 → 顾客与送货地址 → 找坐标、排最短路线 → 选司机 → WhatsApp 整张清单（含签收连结）。
+// 送货 · 排单：整串 DO 单号 → 顾客与送货地址 → 找坐标、排最短路线 → 选司机 → WhatsApp 整张清单（含签收连结）。
 // 只看的人（门市）用同一页查 DO 与地址，但不能改、不能排单。
 import { useEffect, useRef, useState } from "react";
 import {

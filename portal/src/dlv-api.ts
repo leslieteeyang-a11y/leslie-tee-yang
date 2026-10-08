@@ -1,4 +1,4 @@
-// 送货安装模块的资料层：RPC、型别与纯函数（排路线、组 WhatsApp 清单）。
+// 送货模块的资料层：RPC、型别与纯函数（排路线、组 WhatsApp 清单）。
 // 资料在 BI 的 bi.delivery_*（与 BI 顾客资料页的旧送货排单共用同一份）；权限在 public.ops_dlv_* 函数里检查。
 // 路线：OpenStreetMap（Nominatim）找坐标、每秒最多 1 次；顺序 = 最近邻 + 2-opt（直线距离，不是实际车程）。
 import { supabase } from "./supabase";
