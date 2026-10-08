@@ -53,7 +53,7 @@ export default function App() {
   useEffect(() => setMenuOpen(false), [route]);
 
   if (session === undefined) return <div className="center">载入中…</div>;
-  if (route.startsWith("/join")) return <Join />;
+  if (route.startsWith("/join")) return <Join key={route} sessionEmail={session ? session.user.email || "—" : undefined} />;
   if (!session) return <Login />;
   if (error)
     return (

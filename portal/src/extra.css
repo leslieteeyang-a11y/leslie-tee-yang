@@ -10,3 +10,4 @@
 .login.join form { max-width: 520px; }
 .join-link { background: #f3f6fa; border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; font-size: .85rem; }
 .ghost-link { display: inline-flex; align-items: center; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--blue); font-weight: 600; }
+.text-btn { background: none; border: 0; padding: 0; color: var(--blue); font-weight: 600; text-decoration: underline; cursor: pointer; }

@@ -142,11 +142,14 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才看成本、才能填）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
   （`att/HolidayImport.tsx` 内建 2026–2027 全国 + 柔佛名单，伊斯兰历 / 农历标「预计」，HR 勾选后才存）；员工与权限「从 Excel 一次开账号」
   （`pages/BulkStaff.tsx`，贴上 Excel 区块 → ops_staff_save → ops_att_staff_set → ops-account，不用新函数）。测试 `tests/todo_test.sql`。
-- 员工自己申请加入（2026-10-08，使用者选「自己申请、你批准」）：migration `ops_join`（正式环境已套）+ Edge Function `ops-join`（verify_jwt=false，
-  靠邀请码）。管理员在「员工与权限 → 加入申请」复制 / WhatsApp 分享加入链接 `#/join?c=<邀请码>`，可暂停或换新码；员工不用登入填名字、email、
-  自己的密码、手机、性别、到职日 → `ops_join_submit`（只给 service role）存 `ops.join_request`（不存密码），函数用 Auth admin 建账号
-  （email_confirm=true）；**email 已有登入账号就不改密码**（防借申请改 BI 用户密码）。批准（`ops_join_decide`，admin 可审批，选部门 / 分店 / 角色）
-  = 加进 ops.staff 并带入手机、性别、到职日；批准前登入看到 `JoinStatus`「申请审核中」。首页 `join_pending`。测试 `tests/join_test.sql`。
+- 员工自己申请加入（2026-10-08，使用者选「自己申请、你批准」）：migration `ops_join` + `ops_join_v2`（正式环境都已套）+ Edge Function
+  `ops-join` v2（verify_jwt=false，靠邀请码；管理员动作用呼叫者 token 叫 RPC 验身分）。管理员在「员工与权限 → 加入申请」复制 / WhatsApp 分享
+  `#/join?c=<12 码邀请码>`，可暂停或换新码（打开链接就先检查码）。员工不用登入填名字、email、自己的密码、手机、性别、到职日。
+  **送出时不建账号**（第一版 email_confirm=true 当场建，程式审查抓到：拿到链接的人可用别人的 email 先占账号）：函数把密码做成 bcrypt 杂凑
+  存 `join_request.pw_hash`，**批准时**（`ops-join` action decide → `ops_join_decide` → `ops_join_pw`）才用 `password_hash` 建账号，
+  拒绝 = 清掉杂凑。email 已有登入账号（BI 用户）→ 先用他输入的密码 signInWithPassword 验证才收，不存杂凑、不改密码；没账号但在
+  `bi.allowed_users` 的不收。同一 email 有待审申请不收（不覆盖）；同 IP 一小时 5 张。批准时已在名单：在职 = 连上（不动部门权限）、停用 = 复职。
+  建账号失败在「最近处理过」可按「再试一次」（action account）。管理员批准前要确认是本人（画面有提示）。首页 `join_pending`。测试 `tests/join_test.sql`。
 - **中英双语（2026-09-28）**：`portal/src/i18n*.ts` 是 DOM 翻译层，切到 EN 时 MutationObserver 只把「整段完全等于」
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），

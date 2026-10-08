@@ -26,10 +26,17 @@ export const DICT_MORE: Record<string, string> = {
   "密码至少 8 个字。": "Password must be at least 8 characters.",
   "两次输入的密码不一样。": "The two passwords don't match.",
   "申请已送出 ✓": "Application sent ✓",
-  "这个 email 本来就有登入账号，密码没有改。管理员批准后，用原本的密码登入；忘了密码请找管理员。":
-    "This email already has a login; the password was not changed. After approval, log in with your existing password; ask the admin if you forgot it.",
-  "管理员批准后，就可以用这个 email 和你刚才设的密码登入。": "After the admin approves, log in with this email and the password you just set.",
-  "批准前登入会看到「申请审核中」。": "Before approval, logging in shows \"Application under review\".",
+  "管理员批准后，用你原本的密码登入。": "After the admin approves, log in with your existing password.",
+  "管理员批准后，就可以用这个 email 和你刚才设的密码登入。批准前还不能登入。":
+    "After the admin approves, log in with this email and the password you just set. You can't log in before approval.",
+  "网路有问题，请再按一次。": "Network problem. Please tap again.",
+  "网路有问题，请再试一次。": "Network problem. Please try again.",
+  "你已经登入了": "You're already logged in",
+  "进入系统": "Open the system",
+  "这个加入链接已经失效。请向管理员要新的链接。": "This join link has expired. Ask the admin for a new one.",
+  "已经有账号？去登入": "Already have an account? Log in",
+  "没有账号或忘记密码，请找管理员。刚申请加入的，要等管理员批准后才能登入。":
+    "No account or forgot your password? Ask the admin. If you just applied to join, you can log in after the admin approves.",
   "去登入": "Go to login",
   "申请审核中": "Application under review",
   "重新整理": "Refresh",
@@ -40,8 +47,15 @@ export const DICT_MORE: Record<string, string> = {
   // 员工与权限 · 加入申请
   "加入申请": "Join requests",
   "加入链接": "Join link",
-  "发到员工群组。员工打开后自己填名字、email、密码，你在下面批准后他就能登入。":
-    "Share this in the staff group. Staff fill in their name, email and password; once you approve below they can log in.",
+  "发到员工群组。员工打开后自己填名字、email、密码，你在下面批准后他就能登入（批准前没有账号）。":
+    "Share this in the staff group. Staff fill in their name, email and password; once you approve below they can log in (no account exists before approval).",
+  "已有账号": "Has account",
+  "登入账号还没建好": "Login not created yet",
+  "再试一次": "Try again",
+  "这个 email 本来就有登入账号（例：BI），申请时已用那个账号的密码验证过。":
+    "This email already had a login (e.g. BI); its password was verified when applying.",
+  "批准前请确认是本人（例：打他填的电话，问 email 对不对）。批准后就用他申请时设的密码开登入账号。":
+    "Before approving, confirm it's really them (e.g. call the phone number and check the email). Approving creates their login with the password they set.",
   "复制链接": "Copy link",
   "已复制 ✓": "Copied ✓",
   "WhatsApp 分享": "Share on WhatsApp",
@@ -71,6 +85,19 @@ export const DICT_MORE: Record<string, string> = {
   "请选部门。": "Please choose a department.",
   "这个 email 已经在员工名单里了。": "This email is already on the staff list.",
   "密码至少 8 个字元": "Password must be at least 8 characters",
+  "这个 email 已经送出过申请，正在等管理员处理。资料要改请直接找管理员。":
+    "This email has already applied and is waiting for the admin. Ask the admin to change any details.",
+  "这个 email 的账号要由管理员开，请直接找管理员。": "The admin needs to create the account for this email. Please ask the admin.",
+  "密码处理失败，请再送一次。": "Couldn't process the password. Please submit again.",
+  "送出太多次了，请一个小时后再试。": "Too many submissions. Please try again in an hour.",
+  "上班地点不对。": "Invalid work location.",
+  "到职日格式不对。": "Invalid join date.",
+  "这个 email 已经有 HomeWorks 登入账号（例如 BI）。请输入那个账号的密码；忘了密码请找管理员。":
+    "This email already has a HomeWorks login (e.g. BI). Enter that account's password, or ask the admin if you forgot it.",
+  "密码太长了（最多 72 个英文字元）": "Password too long (max 72 characters)",
+  "缺少申请编号": "Missing request id",
+  "不认识的动作": "Unknown action",
+  "请先登入": "Please log in first",
   // 首页
   "今天要做": "To do today",
   "没有要处理的事。": "Nothing to handle.",
@@ -144,6 +171,14 @@ export const PATTERNS_MORE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^等你批准（(\d+)）$/, (m) => `Waiting for your approval (${m[1]})`],
   [/^加入申请：(.+)$/, (m) => `Join request: ${m[1]}`],
   [/^拒绝 (.+) 的申请？$/, (m) => `Reject ${m[1]}'s application?`],
+  [/^目前登入的是 (.+)。要帮另一个人申请，请先登出。$/, (m) => `You're logged in as ${m[1]}. To apply for someone else, log out first.`],
+  [/^建登入账号失败：(.+)$/, (m) => `Couldn't create the login: ${m[1]}`],
+  [/^(.+) 的登入账号已建好。$/, (m) => `Login created for ${m[1]}.`],
+  [/^已拒绝 (.+) 的申请。$/, (m) => `Rejected ${m[1]}'s application.`],
+  [/^(.+) 已加进员工名单，但登入账号没建好：(.+)（可在下面「最近处理过」按「再试一次」）$/,
+    (m) => `${m[1]} was added to the staff list, but the login wasn't created: ${m[2]} (use "Try again" under "Recently handled")`],
+  [/^(.+) 本来就在员工名单，已连上这张申请（部门、权限没改）。$/, (m) => `${m[1]} was already on the staff list; linked this request (department and permissions unchanged).`],
+  [/^(.+) 已加进员工名单，现在可以用自己设的密码登入了。$/, (m) => `${m[1]} was added to the staff list and can now log in with their own password.`],
   [/^· 到职 (.+)$/, (m) => `· joined ${m[1]}`],
   [/^备注：(.+)$/, (m) => `Note: ${m[1]}`],
   [/^管理员留言：(.+)$/, (m) => `Admin's message: ${m[1]}`],

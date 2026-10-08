@@ -32,7 +32,7 @@ export default function Login() {
         <label>密码<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <div className="error">{error}</div>}
         <button disabled={busy}>{busy ? "登入中…" : "登入"}</button>
-        <p className="hint">没有账号或忘记密码，请找管理员。</p>
+        <p className="hint">没有账号或忘记密码，请找管理员。刚申请加入的，要等管理员批准后才能登入。</p>
         <LangSwitch className="light" />
       </form>
     </div>
