@@ -25,13 +25,15 @@ export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
   const [myLeft, setMyLeft] = useState<number | null>(null);   // 我是司机：今天还有几站要送
   const planCount = useRef(0);   // 排单分页上排到一半的站数（换分店会清空）
-  const loadMeta = useCallback(() => { setError(""); dlv.meta().then(setMeta).catch((e: Error) => setError(e.message)); }, []);
+  // 物流部多半「会排单、也当司机」：今天真的有站要送才先开「我的送货」，不然开「排单」。
+  // 「还有几站」跟设定一起拿（任何员工都能叫，不是司机就是 0），分页一开始就定好，不会先开排单再自己跳走
+  const loadMeta = useCallback(() => {
+    setError("");
+    Promise.all([dlv.meta(), dlv.home().then((h) => h.my_stops_left).catch(() => 0)])
+      .then(([m, left]) => { setMyLeft(left); setMeta(m); })
+      .catch((e: Error) => setError(e.message));
+  }, []);
   useEffect(loadMeta, [loadMeta]);
-  // 物流部多半「会排单、也当司机」：今天真的有站要送才先开「我的送货」，不然开「排单」
-  useEffect(() => {
-    if (!meta || meta.level === "view" || !meta.drivers.some((d) => d.kind === "staff" && d.id === me.staff.id)) return;
-    dlv.home().then((h) => setMyLeft(h.my_stops_left)).catch(() => { /* 拿不到就照样开排单 */ });
-  }, [meta, me.staff.id]);
   if (!meta) return error
     ? <><ErrorBox error={error} /><button className="ghost" onClick={loadMeta}>重试</button></>
     : <p className="muted">载入中…</p>;
