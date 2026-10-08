@@ -1,7 +1,7 @@
 // 送货 · 设定（可审批）：出发点（排路线从这里开始）、外包司机。员工司机在「员工与权限」管理。
 import { useEffect, useState } from "react";
 import { BRANCH_LABEL } from "../api";
-import { dlv, DlvMeta, fmtPhone, geocode, parseCoords, STORE, ui } from "../dlv-api";
+import { dlv, DlvMeta, fmtPhone, geocode, OSM_CREDIT, parseCoords, STORE, ui } from "../dlv-api";
 import { ErrorBox } from "../ui";
 
 export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company: string; onChanged: () => void }) {
@@ -14,7 +14,10 @@ export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company:
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => { setAddr(depot?.address ?? ""); setCoords(depot ? `${depot.lat}, ${depot.lng}` : ""); }, [depot, store]);
+  // 只在出发点真的变了（换分店 / 储存后）才重设；新增或移除司机会重新载入 meta，不能把还没储存的输入清掉
+  useEffect(() => { setAddr(depot?.address ?? ""); setCoords(depot ? `${depot.lat}, ${depot.lng}` : ""); },
+    [store, depot?.address, depot?.lat, depot?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allBranches = meta.companies.length > 1;   // 两间分店共用的外包司机，只有管全部分店的人能改
 
   const staffDrivers = meta.drivers.filter((d) => d.kind === "staff" && (!d.store || d.store === store));
   const extDrivers = meta.drivers.filter((d) => d.kind === "ext" && (!d.store || d.store === store));
@@ -68,6 +71,7 @@ export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company:
           </label>
         </div>
         <div className="actions left"><button disabled={busy} onClick={saveDepot}>储存出发点</button></div>
+        <p className="muted small">{OSM_CREDIT}</p>
       </section>
 
       <section className="card">
@@ -83,12 +87,12 @@ export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company:
           <ul className="list">
             {extDrivers.map((d) => (
               <li key={d.id}>
-                <span>{d.name} <span className="muted">{fmtPhone(d.phone)}</span></span>
-                <button className="ghost small" disabled={busy}
+                <span>{d.name} <span className="muted">{fmtPhone(d.phone)}</span>{!d.store && <span className="tag">两间分店共用</span>}</span>
+                {(d.store || allBranches) && <button className="ghost small" disabled={busy}
                         onClick={() => window.confirm(ui(`不再列出司机 ${d.name}？`))
                           && run(() => dlv.saveDriver({ id: d.id, name: d.name, phone: d.phone, company, active: false }), "已移除。")}>
                   移除
-                </button>
+                </button>}
               </li>
             ))}
           </ul>

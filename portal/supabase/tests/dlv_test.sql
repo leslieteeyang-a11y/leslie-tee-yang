@@ -240,4 +240,21 @@ select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company"
 select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"staff","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
   current_setting('dlv.hqsales')), '送货部 / 物流部');
 reset role;
+
+-- 两间分店共用的外包司机（store 空白）：只管一间分店的人不能改；管全部分店的人改了仍是共用（20261008e）
+insert into bi.delivery_driver (name, phone, store) values ('共用外包', '60138888888', null);
+select set_config('dlv.shared', (select id::text from bi.delivery_driver where name = '共用外包'), false);
+set role authenticated;
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"jbboss@example.com","name":"JB 经理","department":"mgmt","branch":"HOMEWORKSSOUTHERN"}');
+select pg_temp.as_user('jbboss@example.com');
+select pg_temp.expect_error(format($q$select public.ops_dlv_driver_save('{"id":%s,"name":"共用外包","phone":"0138888888","company":"","active":false}')$q$,
+  current_setting('dlv.shared')), '两间分店共用');
+select pg_temp.as_user('boss@example.com');
+select public.ops_dlv_driver_save(jsonb_build_object('id', current_setting('dlv.shared'), 'name', '共用外包', 'phone', '0138888888',
+  'company', 'HOMEWORKSSB', 'active', false));
+reset role;
+do $$ begin
+  assert (select store is null and not active from bi.delivery_driver where name = '共用外包'), 'shared driver stays shared';
+end $$;
 select 'dlv_test ok';

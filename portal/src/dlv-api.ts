@@ -166,7 +166,9 @@ function gmapPoint(p: { lat?: number | null; lng?: number | null; address?: stri
 
 /** Google Maps 全程连结；一条最多 9 个中途站，超过就分段 */
 export function gmapRoutes(stops: Stop[], depot: Depot | null): string[] {
-  const pts: { lat?: number | null; lng?: number | null; address?: string; geo?: string }[] = [...(depot ? [depot] : []), ...stops];
+  // 没坐标又没地址的站（使用者确认「没有地址也要传」）不放进全程路线，不然整条路线的终点 / 中途站是空的
+  const pts: { lat?: number | null; lng?: number | null; address?: string; geo?: string }[] = [...(depot ? [depot] : []), ...stops]
+    .filter((p) => (p.lat != null && p.lng != null) || !!p.address?.trim());
   const out: string[] = [];
   for (let i = 0; i < pts.length - 1; i += 10) {
     const seg = pts.slice(i, Math.min(i + 11, pts.length));
@@ -233,9 +235,16 @@ async function geoGap(): Promise<void> {
   if (wait > 0) await new Promise((res) => setTimeout(res, wait));
 }
 
+/** 地图位置资料来源（OpenStreetMap 的使用规定要标出来） */
+export const OSM_CREDIT = "地图位置资料 © OpenStreetMap 贡献者";
+// 这次开网页期间找过、确定找不到的地址：不再重问（OpenStreetMap 规定不要重复送同一个查询）；改了地址就是新的一笔
+const geoMiss = new Set<string>();
+
 /** 地址 → 坐标（OpenStreetMap，免费）。先整段地址，找不到再用 5 位邮编（只是邮区的大概位置，approx = true）。
  *  网路出错 / 被限流就直接回 null，不拿邮编乱猜。 */
 export async function geocode(address: string): Promise<(Pt & { approx?: boolean }) | null> {
+  const key = address.trim().toLowerCase();
+  if (geoMiss.has(key)) return null;
   const post = address.match(/\b\d{5}\b/)?.[0];
   const tries: [string, boolean][] = [[`q=${encodeURIComponent(address)}&countrycodes=my,sg`, false],
     ...(post ? [[`postalcode=${post}&countrycodes=my`, true] as [string, boolean]] : [])];
@@ -251,6 +260,7 @@ export async function geocode(address: string): Promise<(Pt & { approx?: boolean
       return null;
     }
   }
+  geoMiss.add(key);   // 两种都问过、确定找不到（网路出错不算）
   return null;
 }
 

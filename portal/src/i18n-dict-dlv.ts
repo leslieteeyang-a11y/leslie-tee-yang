@@ -141,6 +141,9 @@ export const DICT_DLV: Record<string, string> = {
   "找不到这位司机，或他不属于这间分店。": "Driver not found, or belongs to another branch.",
   "出发点要有坐标。": "The starting point needs coordinates.",
   "司机要有名字和完整手机号码。": "A driver needs a name and a full mobile number.",
+  "地图位置资料 © OpenStreetMap 贡献者": "Map data © OpenStreetMap contributors",
+  "两间分店共用": "Shared by both branches",
+  "这位外包司机两间分店共用，只有管理全部分店的人能改。": "This outside driver is shared by both branches; only someone who manages all branches can change them.",
 };
 
 export const PATTERNS_DLV: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
@@ -154,6 +157,8 @@ export const PATTERNS_DLV: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^(.+)：这张 DO 已取消$/, (m) => `${m[1]}: this DO is cancelled`],
   [/^没有地址，请在下面那格补上再按一次「排最短路线」：(.+)$/, (m) => `No address — fill it in below, then tap "Order shortest route" again: ${m[1]}`],
   [/^找位置中… (\d+) \/ (\d+)$/, (m) => `Looking up locations… ${m[1]} / ${m[2]}`],
+  [/^已排好。有 (\d+) 站是途中才加入的，还没找位置，请再按一次「排最短路线」。$/,
+    (m) => `Done. ${m[1]} stop(s) were added while planning and haven't been located yet; press "Order shortest route" again.`],
   [/^已排好。(\d+) 站找不到位置（排在最后），请贴 Google Maps 坐标或改地址后再按一次。$/,
     (m) => `Done. ${m[1]} stop(s) couldn't be located (put last) — paste Google Maps coordinates or fix the address, then try again.`],
   [/^已排好最短顺序（直线距离约 (\d+) km）。可以用 ↑ ↓ 微调。$/,

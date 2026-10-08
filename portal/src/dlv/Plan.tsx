@@ -2,7 +2,7 @@
 // 只看的人（门市）用同一页查 DO 与地址，但不能改、不能排单。
 import { useEffect, useRef, useState } from "react";
 import {
-  dlv, DlvMeta, driverLink, driverMessage, fmtLine, fmtPhone, geocode, Hit, newToken, orderStops, parseCoords, phoneOf,
+  dlv, DlvMeta, driverLink, driverMessage, fmtLine, fmtPhone, geocode, Hit, newToken, orderStops, OSM_CREDIT, parseCoords, phoneOf,
   routeKm, splitDocNos, Stop, STORE, todayKL, toStop, ui,
 } from "../dlv-api";
 import { ErrorBox } from "../ui";
@@ -27,6 +27,8 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
   const [error, setError] = useState("");
   // 已传出去的那一趟：同样的站与司机再按一次 WhatsApp / 复制，沿用同一个签收连结、不另存一趟（避免重复排单）
   const [sent, setSent] = useState<{ token: string; sig: string } | null>(null);
+  // 讯息已经传出去、但还没存成功的连结：重按时沿用，存成功后之前传出去的那个连结就能用
+  const pending = useRef<{ token: string; sig: string } | null>(null);
   const gen = useRef(0);   // 找位置要好几秒；中途换分店 / 清空 / 再排一次，旧的结果就丢掉
   const stopsRef = useRef<Stop[]>(stops);   // 「现在」画面上的清单（找完位置要合并回去）
   stopsRef.current = stops;
@@ -56,8 +58,11 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
     return add.length;
   }
 
+  // 排路线 / 一键排单 / 传送中：查询与列出这天的 DO 先不能按（不然它们结束时会把「忙碌中」清掉，半路就能传出没排好的单）
+  const working = busy === "plan" || busy === "bulk" || busy === "send";
+
   async function lookup() {
-    if (!query.trim()) return;
+    if (!query.trim() || busy) return;
     setBusy("lookup"); setError("");
     const my = gen.current;
     try {
@@ -70,6 +75,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
   }
 
   async function loadDay() {
+    if (busy) return;
     setBusy("day"); setError("");
     const my = gen.current;
     try { const d = await dlv.docs(company, day); if (gen.current === my) setDayDocs(d); } catch (e) { fail(e); } finally { setBusy(""); }
@@ -164,8 +170,10 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
     stopsRef.current = result;
     setStops(result);
     setBusy("");
-    const missing = result.filter((s) => s.lat == null).length;
+    const missing = result.filter((s) => s.lat == null && s.geo === "none").length;
+    const unsearched = result.filter((s) => s.lat == null && s.geo !== "none" && s.address).length;   // 找位置途中才加入的站
     const approx = result.filter((s) => s.geo === "approx").length;
+    if (unsearched) { say(`已排好。有 ${unsearched} 站是途中才加入的，还没找位置，请再按一次「排最短路线」。`); return; }
     say(missing
       ? `已排好。${missing} 站找不到位置（排在最后），请贴 Google Maps 坐标或改地址后再按一次。`
       : approx
@@ -195,7 +203,8 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
     if (missing && !window.confirm(ui(`有 ${missing} 站没有地址，还是要传给司机吗？`))) return;
     const sig = JSON.stringify([driverKey, stops.map((s) => [s.key, s.address, s.lat, s.lng, s.dnote])]);
     const again = sent?.sig === sig;
-    const token = again ? sent!.token : newToken();
+    const token = again ? sent!.token : pending.current?.sig === sig ? pending.current.token : newToken();
+    if (!again) pending.current = { token, sig };
     const text = driverMessage(stops, { date: todayKL(), driver: driver?.name ?? "-", store, depot, link: driverLink(token) });
     if (how === "wa") {
       // 要在按钮当下打开（之后才 await），浏览器才不会挡弹出视窗
@@ -210,7 +219,13 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
     }
     setBusy("send");
     try {
-      await dlv.saveRun({ company, driver_kind: driver?.kind ?? null, driver_id: driver?.id ?? null, stops, token });
+      try {
+        await dlv.saveRun({ company, driver_kind: driver?.kind ?? null, driver_id: driver?.id ?? null, stops, token });
+      } catch (e) {
+        // 上一次其实存进去了、只是没收到回应（断线）：同一个连结已经在资料库，当作成功
+        if (!(e instanceof Error && /duplicate key|unique/i.test(e.message))) throw e;
+      }
+      pending.current = null;
       setSent({ token, sig });
       say(how === "wa" ? "已打开 WhatsApp，并存进排单纪录。司机按连结签收后，在「排单纪录」看进度和照片。"
                        : "清单已复制（含签收连结），可以贴到任何地方；也已存进排单纪录。");
@@ -236,9 +251,9 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
       <div className="toolbar">
         <input placeholder="DO 单号或顾客电话" value={query} onChange={(e) => setQuery(e.target.value)}
                onKeyDown={(e) => { if (e.key === "Enter") lookup(); }} />
-        <button disabled={busy === "lookup"} onClick={lookup}>{readOnly ? "查询" : "查询并加入"}</button>
+        <button disabled={!!busy} onClick={lookup}>{readOnly ? "查询" : "查询并加入"}</button>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
-        <button className="ghost" disabled={busy === "day"} onClick={loadDay}>列出这天的 DO</button>
+        <button className="ghost" disabled={!!busy} onClick={loadDay}>列出这天的 DO</button>
       </div>
       <ErrorBox error={error} />
       {info && <p className="ok">{info}</p>}
@@ -255,7 +270,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
                   {h.delivery_note && <><br /><span className="small">⚠️ {h.delivery_note}</span></>}
                 </span>
                 {h.cancelled ? <span className="tag">已取消</span>
-                  : !readOnly && <button className="small" onClick={() => addStops([h])}>加入</button>}
+                  : !readOnly && <button className="small" disabled={working} onClick={() => addStops([h])}>加入</button>}
               </li>
             ))}
           </ul>
@@ -268,7 +283,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
             <b>{`${day} 的 DO（${dayDocs.length} 张）`}</b>
             <span>
               {!readOnly && dayDocs.length > 0 && (
-                <button className="small" onClick={() => say(`加入 ${addStops(dayDocs)} 张。`)}>全部加入</button>
+                <button className="small" disabled={working} onClick={() => say(`加入 ${addStops(dayDocs)} 张。`)}>全部加入</button>
               )} <button className="ghost small" onClick={() => setDayDocs(null)}>关闭</button>
             </span>
           </div>
@@ -278,7 +293,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
                 <li key={h.doc_no!} className="dlv-hit">
                   <span><b>{h.doc_no}</b> {toStop(h).name || h.debtor_name}<br /><span className="muted small">{h.address || "没有地址"}</span></span>
                   {readOnly ? null : stops.some((s) => s.key === h.doc_no) ? <span className="muted small">已加入</span>
-                    : <button className="small" onClick={() => addStops([h])}>加入</button>}
+                    : <button className="small" disabled={working} onClick={() => addStops([h])}>加入</button>}
                 </li>
               ))}
             </ul>
@@ -329,6 +344,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
                 <summary>预览给司机的讯息</summary>
                 <pre className="dlv-pre">{preview}</pre>
               </details>
+              <p className="muted small">{OSM_CREDIT}</p>
             </>
           )}
         </section>
