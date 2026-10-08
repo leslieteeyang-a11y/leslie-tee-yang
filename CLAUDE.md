@@ -163,14 +163,18 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `#/driver?t=<代码>`，不用登入，3 天有效；App.tsx 在登入前处理）。签收沿用 BI 的 anon 函数 `bi_driver_run` / `bi_driver_pod` 与私有 bucket
   `delivery-pod`；营运员工看照片靠 policy「delivery-pod ops read」（`ops_dlv_photo_ok`）。**照片路径 = `<连结代码>/…`，拿到路径就能用 anon 的 `bi_driver_pod` 假签收**，所以路径与照片跟连结代码同规则（`ops.dlv_full_access`）：可编辑、这趟的司机，或连结已过期；只看的人只拿 `photo_count`。查 DO 的函数不回 `note`（顾客资料内部备注）/ `amount` / `sales_agent` / `debtor_code`。首页计数以「同一天同一门市的站」算（`ops.dlv_stop_signed`），重复排的单不重复算；前端再按一次 WhatsApp 沿用同一个连结、不另存。`i18n.ts` 多了 `translate="no"`（司机签收页自带三语）。前端 `src/pages/Delivery.tsx`、`src/dlv/*`、
   `src/dlv-api.ts`、`src/dlv.css`、`src/i18n-dict-dlv.ts`；首页卡片 `dlv/HomeCard.tsx`（`ops_dlv_home`）。司机签收页自带中 / 英 / 马来文、不进字典。
-  模块开关 `20261008c_ops_delivery_ready.sql`（`ops.module.ready = true`）**等前端部署后才套**。测试 `tests/dlv_test.sql`（BI 送货表的 stub 在
-  `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，两边资料相通；要不要关掉由使用者决定。
+  **已上线（2026-10-08）**：前端部署 `dpl_82vXLYdAsviB5ddPSYhMEwp7EQNf` READY 之后才套模块开关 `20261008c_ops_delivery_ready.sql`
+  （= `ops_delivery_ready`，`ops.module.ready = true` + 名称「送货」）。合并后审查的修正：外包司机 store 为 NULL = 两间分店共用，只有分店 ALL
+  的人能改（migration `20261008e_ops_dlv_driver_shared.sql` = `ops_dlv_driver_shared`，已套）；排路线 / 一键排单 / 传送中不能再查询或加站；
+  存排单断线重按沿用同一个连结（`pending` ref，`duplicate key` 当成功）；OSM 标示 `OSM_CREDIT`；找不到的地址本次开网页不重问（`geoMiss`）。
+  测试 `tests/dlv_test.sql`（BI 送货表的 stub 在 `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，
+  两边资料相通；要不要关掉由使用者决定（BI 的 sales 角色在旧页仍拿得到签收连结，是 BI 原本的行为）。JB 没有 DO 资料 = JB 那台电脑没跑 `quote_push.py`。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
   Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
-  3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
+  3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
   GitHub `leslieteeyang-a11y/hr-attendance-app`，没有环境变数 = 没接数据库，最后一次提交只是「Create page.tsx」，
   没有资料要搬）。那个专案与 repo 是否删除 / 暂停由使用者决定，未经同意不要动。
