@@ -16,6 +16,21 @@ function reply(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
+// PostgREST 偶尔把刚签发的 token 判成「JWT issued at future」（401 / PGRST303；2026-10-08 记录到一次就是这里的
+// ops_join_check，同一把金钥几毫秒前才通过 → 伺服器闲置后取时间的问题）。这个 401 在执行 SQL 之前就挡下，
+// 等一下再送一次是安全的（送出申请、批准都不会做两次）。只重送一次，只限 /rest/v1/ 的文字 body。
+async function fetchRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status !== 401) return res;
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : "";
+  const body = init?.body;
+  if (!url.includes("/rest/v1/") || (body != null && typeof body !== "string")) return res;
+  const text = await res.clone().text().catch(() => "");
+  if (!text.includes("PGRST303") || !text.includes("issued at future")) return res;
+  await new Promise((r) => setTimeout(r, 1500));
+  return fetch(input, init);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return reply(405, { error: "只接受 POST" });
@@ -37,9 +52,11 @@ Deno.serve(async (req) => {
   if (password.length < 8) return reply(400, { error: "密码至少 8 个字元" });
 
   // 1. 用呼叫者自己的身分问：你是 admin 吗？顺便拿员工名单（ops_staff_admin_list 只有 admin 能叫）
-  const asCaller = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
+  const asCaller = createClient(url, anon, { global: { headers: { Authorization: authHeader }, fetch: fetchRetry } });
   const { data: me, error: meErr } = await asCaller.rpc("ops_me");
-  if (meErr || !me || me.staff?.role !== "admin") return reply(403, { error: "只有管理员可以设定员工密码" });
+  // 查身分本身失败（登入过期、连线问题）不要说成「不是管理员」，免得管理员以为权限被拿掉
+  if (meErr) return reply(401, { error: `确认身分失败，请重新整理后再试一次（${meErr.message}）` });
+  if (!me || me.staff?.role !== "admin") return reply(403, { error: "只有管理员可以设定员工密码" });
   const { data: staffList, error: listErr } = await asCaller.rpc("ops_staff_admin_list");
   if (listErr) return reply(403, { error: listErr.message });
   const staff = (staffList as Array<{ id: number; email: string; active: boolean }>).find((s) => s.id === body.staff_id);

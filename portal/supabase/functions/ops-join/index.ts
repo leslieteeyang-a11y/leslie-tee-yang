@@ -24,6 +24,21 @@ function reply(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
+// PostgREST 偶尔把刚签发的 token 判成「JWT issued at future」（401 / PGRST303；2026-10-08 记录到一次就是这里的
+// ops_join_check，同一把金钥几毫秒前才通过 → 伺服器闲置后取时间的问题）。这个 401 在执行 SQL 之前就挡下，
+// 等一下再送一次是安全的（送出申请、批准都不会做两次）。只重送一次，只限 /rest/v1/ 的文字 body。
+async function fetchRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status !== 401) return res;
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : "";
+  const body = init?.body;
+  if (!url.includes("/rest/v1/") || (body != null && typeof body !== "string")) return res;
+  const text = await res.clone().text().catch(() => "");
+  if (!text.includes("PGRST303") || !text.includes("issued at future")) return res;
+  await new Promise((r) => setTimeout(r, 1500));
+  return fetch(input, init);
+}
+
 async function findUser(admin: SupabaseClient, email: string): Promise<{ id: string } | null> {
   for (let page = 1; page <= 20; page++) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
@@ -62,7 +77,7 @@ Deno.serve(async (req) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+  const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: fetchRetry } });
   const action = String(body.action ?? "submit");
 
   try {
@@ -76,7 +91,7 @@ Deno.serve(async (req) => {
       const authHeader = req.headers.get("Authorization") ?? "";
       if (!authHeader.startsWith("Bearer ")) return reply(401, { error: "请先登入" });
       const asCaller = createClient(url, anon, {
-        global: { headers: { Authorization: authHeader } },
+        global: { headers: { Authorization: authHeader }, fetch: fetchRetry },
         auth: { persistSession: false, autoRefreshToken: false },
       });
       const id = Number(body.id);

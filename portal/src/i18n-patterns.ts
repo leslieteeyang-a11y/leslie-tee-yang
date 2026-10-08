@@ -27,6 +27,7 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^这张申请已经处理过了（(.+)）。$/, (m) => `This request has already been decided (${m[1]}).`],
   [/^找不到 PO (.+)。$/, (m) => `PO ${m[1]} not found.`],
   [/^未知的决定：(.+)$/, (m) => `Unknown decision: ${m[1]}`],
+  [/^确认身分失败，请重新整理后再试一次（(.+)）$/, (m) => `Couldn't confirm who you are — refresh and try again (${m[1]})`],
   // PO 修改纪录：「状态→已出货，ETA→2026-10-15，备注：…」
   [/^(状态→|ETA→|清掉 ETA|挂上货柜|拿掉货柜|备注：)/, (m, t) =>
     (m.input ?? "").split("，").map((part) => {

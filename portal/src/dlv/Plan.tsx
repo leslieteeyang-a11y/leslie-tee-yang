@@ -7,9 +7,10 @@ import {
 } from "../dlv-api";
 import { ErrorBox } from "../ui";
 
-export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
+export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onCount }: {
   meta: DlvMeta; company: string; readOnly: boolean; onSent: () => void;
   seed?: Stop[] | null; onSeedUsed?: () => void;      // 从「排单纪录」载入一趟旧的排单
+  onCount?: (n: number) => void;                      // 告诉外面现在排了几站（换分店前先问）
 }) {
   const store = STORE[company];
   const depot = meta.depot[store] ?? null;
@@ -32,6 +33,9 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
   const gen = useRef(0);   // 找位置要好几秒；中途换分店 / 清空 / 再排一次，旧的结果就丢掉
   const stopsRef = useRef<Stop[]>(stops);   // 「现在」画面上的清单（找完位置要合并回去）
   stopsRef.current = stops;
+  // 出发点、外包司机只有「可审批」（主管、管理层）能在「设定」分页改；其他人的提示改成请主管设定
+  const canSetup = meta.level === "approve";
+  useEffect(() => { onCount?.(stops.length); }, [stops.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 换分店：清掉这次的排单（DO 属于某一间分店）
   useEffect(() => {
@@ -196,7 +200,9 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
   async function send(how: "wa" | "copy") {
     if (busy) return;
     if (how === "wa" && !driver && !window.confirm(ui("还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？"))) {
-      setError("请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。");
+      setError(canSetup
+        ? "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。"
+        : "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机请主管或管理层在「送货 → 设定」新增。");
       return;
     }
     const missing = stops.filter((s) => !s.address).length;
@@ -334,11 +340,14 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
                 }}>清空</button>
               </div>
               {drivers.length === 0 && (
-                <p className="muted small">还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。</p>
+                <p className="muted small">{canSetup
+                  ? "还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。"
+                  : "还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机请主管或管理层在「送货 → 设定」新增。"}</p>
               )}
               <p className="muted small">
                 {`${stops.length} 站`}{routeKm(stops, depot) ? " · " : ""}{routeKm(stops, depot) ? `直线约 ${routeKm(stops, depot).toFixed(0)} km` : ""}
-                {!depot && " · "}{!depot && "还没设出发点（在「设定」分页），路线从第一站开始排。"}
+                {!depot && " · "}{!depot && (canSetup ? "还没设出发点（在「设定」分页），路线从第一站开始排。"
+                                    : "还没设出发点（请主管或管理层在「送货 → 设定」设定），路线从第一站开始排。")}
               </p>
               <details>
                 <summary>预览给司机的讯息</summary>

@@ -1,12 +1,12 @@
 // 送货：排单（DO 单号 → 最短路线 → WhatsApp 司机）、排单纪录（签收进度与照片）、我的送货（员工司机签收）、设定。
 // 路由 #/delivery/<分页>；司机不用登入的签收页是 #/driver?t=<代码>（App.tsx 在登入前处理）。
 // 资料与 BI 顾客资料页的旧送货排单共用（bi.delivery_*），SERVER 每 15 分钟从 AutoCount 只读推 DO 进来。
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BRANCH_LABEL, Me } from "../api";
 import { go } from "../router";
 import { fmtAgo } from "../sync";
 import { ErrorBox, Tabs } from "../ui";
-import { dlv, DlvMeta, Stop } from "../dlv-api";
+import { dlv, DlvMeta, Stop, ui } from "../dlv-api";
 import { PlanTab } from "../dlv/Plan";
 import { RunsTab } from "../dlv/Runs";
 import { MineTab } from "../dlv/Mine";
@@ -23,9 +23,18 @@ export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
   const [reload, setReload] = useState(0);
   const [seed, setSeed] = useState<Stop[] | null>(null);   // 从排单纪录载入一趟
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
-  const loadMeta = useCallback(() => { dlv.meta().then(setMeta).catch((e: Error) => setError(e.message)); }, []);
+  const [myLeft, setMyLeft] = useState<number | null>(null);   // 我是司机：今天还有几站要送
+  const planCount = useRef(0);   // 排单分页上排到一半的站数（换分店会清空）
+  const loadMeta = useCallback(() => { setError(""); dlv.meta().then(setMeta).catch((e: Error) => setError(e.message)); }, []);
   useEffect(loadMeta, [loadMeta]);
-  if (!meta) return error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>;
+  // 物流部多半「会排单、也当司机」：今天真的有站要送才先开「我的送货」，不然开「排单」
+  useEffect(() => {
+    if (!meta || meta.level === "view" || !meta.drivers.some((d) => d.kind === "staff" && d.id === me.staff.id)) return;
+    dlv.home().then((h) => setMyLeft(h.my_stops_left)).catch(() => { /* 拿不到就照样开排单 */ });
+  }, [meta, me.staff.id]);
+  if (!meta) return error
+    ? <><ErrorBox error={error} /><button className="ghost" onClick={loadMeta}>重试</button></>
+    : <p className="muted">载入中…</p>;
 
   const co = meta.companies.includes(company) ? company : meta.companies[0];
   const canEdit = meta.level !== "view";
@@ -33,8 +42,13 @@ export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
   const tabs: [Tab, string][] = [["plan", canEdit ? "排单" : "查单"], ["runs", "排单纪录"]];
   if (isDriver) tabs.push(["mine", "我的送货"]);
   if (meta.level === "approve") tabs.push(["setup", "设定"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : isDriver && !sub ? "mine" : "plan";
-  const pick = (c: string) => { setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ } };
+  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab)
+    : isDriver && !sub && (!canEdit || (myLeft ?? 0) > 0) ? "mine" : "plan";
+  const pick = (c: string) => {
+    if (c === co) return;
+    if (planCount.current > 0 && !window.confirm(ui("换分店会清空这次排到一半的单，确定吗？"))) return;
+    setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ }
+  };
 
   return (
     <>
@@ -53,7 +67,7 @@ export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
       {/* 排单一直挂着、只是藏起来：去「设定」加司机 / 出发点再回来，排到一半的单还在 */}
       <div hidden={tab !== "plan"}>
         <PlanTab meta={meta} company={co} readOnly={!canEdit} onSent={() => setReload((n) => n + 1)}
-                 seed={seed} onSeedUsed={() => setSeed(null)} />
+                 seed={seed} onSeedUsed={() => setSeed(null)} onCount={(n) => { planCount.current = n; }} />
       </div>
       {tab === "runs" && (
         <RunsTab company={co} canEdit={canEdit} reloadKey={reload}

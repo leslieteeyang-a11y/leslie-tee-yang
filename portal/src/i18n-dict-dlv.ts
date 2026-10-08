@@ -46,6 +46,11 @@ export const DICT_DLV: Record<string, string> = {
   "还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。":
     "No drivers yet: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" and fill in a mobile number in Staff & access; add outside drivers in the Settings tab.",
   "还没设出发点（在「设定」分页），路线从第一站开始排。": "No starting point set (Settings tab) — the route starts from the first stop.",
+  "还没有司机：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机请主管或管理层在「送货 → 设定」新增。":
+    "No drivers yet: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" and fill in a mobile number in Staff & access; ask a manager to add outside drivers in Delivery → Settings.",
+  "还没设出发点（请主管或管理层在「送货 → 设定」设定），路线从第一站开始排。":
+    "No starting point set (ask a manager to set it in Delivery → Settings) — the route starts from the first stop.",
+  "换分店会清空这次排到一半的单，确定吗？": "Switching branch clears the plan you are building. Continue?",
   "给司机的备注：时间、地点、下货位置…": "Note for the driver: time, place, where to unload…",
   "储存备注": "Save note",
   "没有地址，请填上": "No address — please fill in",
@@ -75,6 +80,8 @@ export const DICT_DLV: Record<string, string> = {
   "还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？": "No driver chosen. Open WhatsApp anyway and pick the contact yourself?",
   "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机在「设定」分页新增。":
     "Choose a driver first. If there are none: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" with a mobile number; add outside drivers in Settings.",
+  "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货部」或「物流部」并填手机；外包司机请主管或管理层在「送货 → 设定」新增。":
+    "Choose a driver first. If there are none: for staff drivers, ask an admin to set their department to \"Delivery\" or \"Logistics\" with a mobile number; ask a manager to add outside drivers in Delivery → Settings.",
   "浏览器不让复制，请用「WhatsApp 传给司机」。": "The browser won't allow copying — use \"WhatsApp to driver\".",
   "已打开 WhatsApp，并存进排单纪录。司机按连结签收后，在「排单纪录」看进度和照片。":
     "WhatsApp opened and the run saved. When the driver signs off via the link, see progress and photos in Runs.",
