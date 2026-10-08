@@ -17,6 +17,7 @@ import { DICT_LEAVE, PATTERNS_LEAVE } from "./i18n-dict-leave";
 import { DICT_WH, PATTERNS_WH } from "./i18n-dict-wh";
 import { DICT_PAY, PATTERNS_PAY } from "./i18n-dict-pay";
 import { DICT_MORE, PATTERNS_MORE } from "./i18n-dict-more";
+import { DICT_DLV, PATTERNS_DLV } from "./i18n-dict-dlv";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -34,8 +35,8 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
-const ALL_PATTERNS = [...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
+const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
+const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */
@@ -62,6 +63,9 @@ export function tr(text: string): string {
 const ATTRS = ["placeholder", "title", "aria-label"];
 
 function translateNode(node: Node): void {
+  // translate="no" 的区块（例：司机签收页自己带中 / 英 / 马来文）不翻
+  const host = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
+  if (host?.closest?.('[translate="no"]')) return;
   if (node.nodeType === Node.TEXT_NODE) {
     const v = node.nodeValue ?? "";
     const t = tr(v);

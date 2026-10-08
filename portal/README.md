@@ -16,6 +16,7 @@
 | `src/api.ts` | 型别与所有 `ops_*` 呼叫 |
 | `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Attendance（打卡）/ Admin / Planned（规划中模块）/ Login / Password |
 | `src/att/`、`src/att-api.ts`、`src/att.css` | 打卡模块：Today（打卡、补下班卡、外勤签到）、Camera（自拍）、Records（逐日纪录、月报 CSV）、Board（团队今天）、Corrections（补卡）、Settings（HR 设定） |
+| `src/pages/Delivery.tsx`、`src/dlv/`、`src/dlv-api.ts`、`src/dlv.css` | 送货安装：Plan（一键排单、最短路线、WhatsApp 司机）、Runs（排单纪录、签收照片）、Mine（员工司机签收）、Setup（出发点、外包司机）、DriverSign（司机签收页，`#/driver?t=` 不用登入）、HomeCard（首页提醒） |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
 | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
@@ -66,3 +67,13 @@ Vercel 自己 `npm install` + `vite build`。
   全部用 `{file, sha, size}` 参照（没改的档沿用上一版的 SHA）。每次呼叫都很小，不会因内容太大而中断。
   `public/` 底下的档要保留 `public/` 前缀。部署后用 `list_deployment_files` 核对每个档的 uid（= SHA1）与本机一致。
 - 新功能尽量放新的小档（例：`src/sync.tsx`、`src/extra.css`），少动大档，部署时要上传的量就小。
+
+## 送货安装
+
+- 资料与 HomeWorks BI 共用（`bi.delivery_*`）：SERVER 的 `scripts/quote_push.py`（BI 分支）营业时间每 15 分钟从 AutoCount 只读推 DO。
+- 店员：整串贴 DO 单号（只打数字尾码也可）→ 找顾客与送货地址（手动改过的 > DO 的 Deliver Address > 顾客资料）→ OpenStreetMap 找坐标
+  （每秒 1 次）→ 最近邻 + 2-opt 排顺序（直线距离）→ 选司机 → WhatsApp 整张清单（每站货品、备注、Waze 连结、Google Maps 全程路线、签收连结）。
+- 司机：员工司机登入在「我的送货」签收；外包司机用讯息里的 `#/driver?t=<代码>`（3 天有效，不用登入）。每站可打勾对货、拍照（压到 1280px）、
+  按「已送达 / 送不成」（要写原因）。照片在 Storage 私有 bucket `delivery-pod/<代码>/`。
+- 权限：`ops_dlv_*` 函数开头检查 `delivery` 模块等级与分店；签收连结代码只给可编辑的人与这趟的司机。照片路径里有连结代码，所以照片同样只给这些人（连结过期后只看的人也看得到）。
+- 英文模式：`translate="no"` 的区块不翻（司机签收页自带中 / 英 / 马来文）；`window.confirm` 用 `dlv-api.ts` 的 `ui()` 先翻。

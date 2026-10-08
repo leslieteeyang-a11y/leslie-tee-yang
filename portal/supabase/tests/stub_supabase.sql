@@ -93,3 +93,46 @@ insert into bi.fact_open_order (company, doc_no, dtl_key, doc_date, debtor_name,
 create table bi.fact_item_aging (company text, item_code text, last_receipt_date date, on_hand numeric, stock_value numeric, sold_since numeric);
 create table bi.mv_sales_item_month (company text, yr int, mth int, item_code text, item_key text, item_description text,
   item_group text, qty numeric, net numeric, profit numeric);
+
+-- 送货安装（2026-10-08）：BI 那边的送货表与函数（正式环境由 BI 的 migration delivery_* 建立；这里只取用到的，view 简化）
+create function storage.foldername(name text) returns text[] language sql immutable as $$
+  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
+$$;
+create function bi.customer_phone(p_name text) returns text language sql immutable as $$
+  select case when d ~ '^01[0-9]{8,9}$' then '6' || d when d ~ '^601[0-9]{8,9}$' then d end
+    from (select regexp_replace(coalesce(p_name, ''), '\D', '', 'g') as d) x
+$$;
+create function bi.customer_key(p_input text) returns text language sql stable as $$
+  select case when p_input ~ '^A:' then p_input else bi.customer_phone(p_input) end
+$$;
+create function bi.addr_key(p text) returns text language sql immutable as $$
+  select nullif(lower(regexp_replace(trim(coalesce(p, '')), '[\s,]+', ' ', 'g')), '')
+$$;
+create table bi.customer_profile (member_id text primary key, name text, address text, note text, lat numeric, lng numeric,
+  geo_query text, created_by text, updated_by text, updated_at timestamptz default now());
+create table bi.customer_settings (id int primary key, depot jsonb default '{}'::jsonb, updated_at timestamptz, updated_by text);
+insert into bi.customer_settings (id) values (1);
+create table bi.geo_cache (addr text primary key, address text, lat numeric, lng numeric, updated_at timestamptz default now(),
+  updated_by text);
+create table bi.delivery_doc (company text, doc_no text, doc_date date, debtor_code text, debtor_name text, sales_agent text,
+  amount numeric, items text, cancelled boolean default false, synced_at timestamptz default now(), address text,
+  address_override text, override_by text, override_at timestamptz, lines jsonb, do_remark text, delivery_note text,
+  note_by text, note_at timestamptz, primary key (company, doc_no));
+create view bi.delivery_doc_full as
+  select d.company, d.doc_no, d.doc_date, d.debtor_code, d.debtor_name, d.sales_agent, d.amount, d.items, d.cancelled,
+         coalesce(bi.customer_phone(d.debtor_name), 'A:' || d.company || ':' || d.debtor_code) as member_id,
+         p.name, p.note,
+         coalesce(nullif(trim(d.address_override), ''), nullif(trim(d.address), '')) as address,
+         case when nullif(trim(d.address_override), '') is not null then 'manual'
+              when nullif(trim(d.address), '') is not null then 'do' end as address_source,
+         d.address as do_address, g.lat, g.lng, d.lines, d.do_remark, d.delivery_note
+    from bi.delivery_doc d
+    left join bi.customer_profile p on p.member_id = coalesce(bi.customer_phone(d.debtor_name), 'A:' || d.company || ':' || d.debtor_code)
+    left join bi.geo_cache g on g.addr = bi.addr_key(coalesce(nullif(trim(d.address_override), ''), d.address));
+create table bi.delivery_driver (id bigint generated always as identity primary key, name text, phone text, store text,
+  active boolean default true, updated_at timestamptz default now(), updated_by text);
+create table bi.delivery_run (id bigint generated always as identity primary key,
+  run_date date default (now() at time zone 'Asia/Kuala_Lumpur')::date, store text, driver_name text, driver_phone text,
+  stops jsonb, created_at timestamptz default now(), created_by text, token text unique, token_expires timestamptz);
+create table bi.delivery_pod (id bigint generated always as identity primary key, run_id bigint, stop_key text, doc_no text,
+  status text, note text, photos text[] default '{}', lat numeric, lng numeric, created_at timestamptz default now());

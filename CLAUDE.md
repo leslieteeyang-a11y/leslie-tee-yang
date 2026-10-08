@@ -154,6 +154,17 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
+- 送货安装（2026-10-08，使用者：「把送货功能跟员工多部门功能连在一起，不要分成两个地方」）：把 BI 顾客资料页里的送货排单 +
+  司机签收拍照搬进来（另一个 Claude 对话在 BI 分支 `claude/pensive-fermi-gtqw9c` 做的，以 ZIP 交过来）。**资料不搬家**：DO（SERVER 的
+  `quote_push.py` 每 15 分钟只读推 AutoCount DO，含 Deliver Address、全部明细、Remark1～4）、地址、备注、排单、签收都在 `bi.delivery_*`，
+  这里加一层 `public.ops_dlv_*`（migration `20261008b_ops_delivery.sql`，**正式环境已套**，分三次：`ops_delivery` + 多人审查后的 `ops_delivery_review_fixes` + `ops_delivery_fixes2`，合起来 = 这个档；另外 BI 的 `bi_driver_run` 每站多回传 `geo`，migration `driver_run_geo`）改用 ops 权限：只看（销售）=
+  查 DO / 看纪录；可编辑（送货、仓库）= 排单、改这张 DO 的地址 / 给司机的备注、存坐标；可审批 = 出发点、外包司机。分店照 `sees_company`。
+  司机 = 送货部门有手机号的在职员工（`driver_staff_id`，登入后在「我的送货」签收）+ 外包司机 `bi.delivery_driver`（用 WhatsApp 里的连结
+  `#/driver?t=<代码>`，不用登入，3 天有效；App.tsx 在登入前处理）。签收沿用 BI 的 anon 函数 `bi_driver_run` / `bi_driver_pod` 与私有 bucket
+  `delivery-pod`；营运员工看照片靠 policy「delivery-pod ops read」（`ops_dlv_photo_ok`）。**照片路径 = `<连结代码>/…`，拿到路径就能用 anon 的 `bi_driver_pod` 假签收**，所以路径与照片跟连结代码同规则（`ops.dlv_full_access`）：可编辑、这趟的司机，或连结已过期；只看的人只拿 `photo_count`。查 DO 的函数不回 `note`（顾客资料内部备注）/ `amount` / `sales_agent` / `debtor_code`。首页计数以「同一天同一门市的站」算（`ops.dlv_stop_signed`），重复排的单不重复算；前端再按一次 WhatsApp 沿用同一个连结、不另存。`i18n.ts` 多了 `translate="no"`（司机签收页自带三语）。前端 `src/pages/Delivery.tsx`、`src/dlv/*`、
+  `src/dlv-api.ts`、`src/dlv.css`、`src/i18n-dict-dlv.ts`；首页卡片 `dlv/HomeCard.tsx`（`ops_dlv_home`）。司机签收页自带中 / 英 / 马来文、不进字典。
+  模块开关 `20261008c_ops_delivery_ready.sql`（`ops.module.ready = true`）**等前端部署后才套**。测试 `tests/dlv_test.sql`（BI 送货表的 stub 在
+  `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，两边资料相通；要不要关掉由使用者决定。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，

@@ -1,0 +1,77 @@
+/* 送货安装模块（2026-10-08） */
+.dlv-issues { margin: 10px 0 0; padding-left: 20px; color: var(--amber); }
+.dlv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.dlv-hit { align-items: center; }
+.dlv-hit button { flex-shrink: 0; }
+table.dlv-stops td { vertical-align: top; }
+.dlv-cust { min-width: 220px; }
+.dlv-addr { min-width: 220px; }
+.dlv-addr textarea, .dlv-note { font-size: .88rem; margin-top: 4px; }
+.dlv-geo { min-width: 120px; }
+.dlv-coords { display: flex; gap: 4px; margin-top: 4px; }
+.dlv-coords input { font-size: .85rem; padding: 4px 6px; }
+.dlv-lines { font-size: .85rem; margin-top: 4px; }
+.dlv-lines ul { margin: 4px 0 0; padding-left: 18px; }
+.dlv-send select { width: auto; max-width: 100%; }
+.dlv-pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 8px; font-size: .85rem; max-height: 360px; overflow: auto; }
+.tag.ok-tag { background: var(--green-soft); color: var(--green); }
+.tag.late { background: var(--red-soft); color: var(--red); }
+.dlv-run summary { color: var(--text); }
+.dlv-run summary b { color: var(--text); }
+.dlv-run .table-wrap { box-shadow: none; }
+.dlv-photos { display: flex; gap: 4px; flex-wrap: wrap; }
+.dlv-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
+
+/* 司机签收（#/driver 不用登入的页面与「我的送货」共用） */
+.dv-page { max-width: 560px; margin: 0 auto; padding: 16px 12px 40px; }
+.dv { max-width: 560px; }
+.dv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.dv-top h1 { margin: 0; }
+.dv-lang { display: flex; gap: 4px; }
+.dv-lang button { background: var(--card); color: var(--text); border: 1px solid var(--line); padding: 4px 10px; font-weight: 500; }
+.dv-lang button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.dv-head { font-size: .9rem; color: var(--muted); margin-bottom: 12px; }
+.dv-head b { color: var(--text); font-size: 1rem; }
+.dv-bar { height: 8px; border-radius: 4px; background: var(--line); margin: 6px 0; overflow: hidden; }
+.dv-bar span { display: block; height: 100%; background: var(--green); }
+.dv-stop { padding: 14px; border: 1px solid var(--line); }
+.dv-stop.dv-delivered { border-color: var(--green); }
+.dv-stop.dv-failed { border-color: var(--red); }
+.dv-title { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+.dv-no { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 600; }
+.dv-main { flex: 1; min-width: 0; }
+.dv-caret { color: var(--muted); }
+.dv-tag { display: inline-block; margin-left: 6px; font-size: .75rem; padding: 1px 8px; border-radius: 10px; color: #fff; }
+.dv-tag-delivered { background: var(--green); }
+.dv-tag-failed { background: var(--red); }
+.dv-addr { margin: 10px 0 6px; }
+.dv-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.dv a.dv-btn { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--bg); font-size: .9rem; }
+.dv-warn { background: var(--amber-soft); color: var(--amber); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-weight: 600; }
+.dv-muted { color: var(--muted); font-size: .9rem; margin: 6px 0; }
+.dv-goods { margin: 8px 0; }
+.dv label.dv-line { color: var(--text); font-size: .95rem; margin-top: 6px; }
+.dv label.dv-line input { width: 20px; height: 20px; flex: none; }
+.dv label.dv-photo { display: block; text-align: center; margin-top: 12px; padding: 14px; border: 2px dashed var(--blue); border-radius: 10px; color: var(--blue); font-weight: 600; cursor: pointer; }
+.dv-photo input { display: none; }
+.dv-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.dv-thumb { position: relative; }
+.dv-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.dv-thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; padding: 0; background: var(--red); font-size: .75rem; }
+.dv label.dv-note { margin-top: 10px; }
+.dv .dv-actions button { flex: 1; padding: 12px; font-size: 1rem; }
+.dv .dv-actions button.dv-ok { background: var(--green); }
+.dv .dv-actions button.dv-no-btn { background: var(--red); flex: 0 0 auto; padding: 12px 16px; }
+.dv-redo { margin-top: 8px; }
+
+/* 手机：排单表改成一站一张卡（表格横向太挤） */
+@media (max-width: 700px) {
+  table.dlv-stops thead { display: none; }
+  table.dlv-stops, table.dlv-stops tbody, table.dlv-stops tr, table.dlv-stops td { display: block; width: 100%; }
+  table.dlv-stops tr { position: relative; padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
+  table.dlv-stops tr:last-child { border-bottom: 0; }
+  table.dlv-stops td { border: 0; padding: 3px 0; min-width: 0; }
+  table.dlv-stops td:first-child { position: absolute; top: 10px; right: 0; width: auto; color: var(--muted); }
+  table.dlv-stops td:nth-child(2) { font-weight: 600; }
+  table.dlv-stops td:last-child { display: flex; gap: 6px; }
+}

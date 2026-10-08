@@ -19,6 +19,8 @@ import Payroll from "./pages/Payroll";
 import MyPay from "./pages/MyPay";
 import Join from "./pages/Join";
 import JoinStatus from "./pages/JoinStatus";
+import Delivery from "./pages/Delivery";
+import { DriverPage } from "./dlv/DriverSign";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
 
@@ -52,6 +54,7 @@ export default function App() {
 
   useEffect(() => setMenuOpen(false), [route]);
 
+  if (route.startsWith("/driver")) return <DriverPage key={route} />; // 司机签收连结：不用登入
   if (session === undefined) return <div className="center">载入中…</div>;
   if (route.startsWith("/join")) return <Join key={route} sessionEmail={session ? session.user.email || "—" : undefined} />;
   if (!session) return <Login />;
@@ -97,6 +100,9 @@ export default function App() {
       break;
     case "warehouse":
       page = can(me, "warehouse", "view") ? <><SyncNote /><Warehouse me={me} sub={arg} /></> : <NoAccess />;
+      break;
+    case "delivery":
+      page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
       break;
     case "payroll":
       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
