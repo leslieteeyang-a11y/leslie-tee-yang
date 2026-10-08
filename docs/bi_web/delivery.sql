@@ -339,3 +339,11 @@ end $$;
 -- （站必须在这趟里、照片路径必须在 <token>/ 下、最多 6 张、每趟最多 300 笔）。
 -- Storage：私有 bucket delivery-pod（5MB、jpeg/png/webp）；policy「driver upload」anon 凭有效 token 只能上传到 <token>/；
 -- 「staff read」authenticated 且 bi_is_allowed、同公司才读得到（前端用 1 小时签名网址显示）。
+
+-- ═══ 2026-10-08：送货搬进营运系统（homeworks-ops，portal/）═══════════════════════════════════════
+-- 使用者要「跟员工多部门功能连在一起，不要分成两个地方」。资料仍在这些 bi.delivery_* 表，营运系统加一层 public.ops_dlv_*
+-- （ops 权限 / 分店），交接包见 docs/ops_delivery/（HANDOFF.md + delivery-module.patch，以营运分支 118aaca 为底）。
+-- 正式环境已套：ops_delivery、ops_delivery_review_fixes、ops_delivery_fixes2（建 ops.dlv_* / public.ops_dlv_*、
+-- bi.delivery_run 加 driver_staff_id、storage policy「delivery-pod ops read」），以及 BI 这边的
+-- migration driver_run_geo：bi_driver_run 每站多回传 'geo'（approx = 坐标只是邮区中心，营运系统的司机页导航改用地址）。
+-- 营运系统的模块开关 20261008c_ops_delivery_ready.sql 要等那边部署前端后才套。

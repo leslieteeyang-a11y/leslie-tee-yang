@@ -160,6 +160,13 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 `quote_push.py` 读 DO 表头 DeliverAddr1～4 + DeliverPostCode（不用 CONCAT_WS，旧 SQL Server 没有；不用发票地址），migration `delivery_do_address`：
 地址顺序 **手动改过的（只改那张 DO，`address_override`，同步不盖）> DO 的 Deliver Address > 顾客资料**（承包商每张 DO 可能是不同工地，所以单据优先），
 坐标改存 `bi.geo_cache`（按地址），视图 `bi.delivery_doc_full`。**2026-10-06 已全部上线**：SERVER 更新到 p 版（quotes-do-2026-10-06c，update_from_zip 显示 All files updated）、网页 dpl_BTypgWHPda4by57r7LhEAzacfNwy（Delivery.tsx / Loyalty.tsx 与仓库一致）、排程「HomeWorks Quotes」已登记（报价单 167 张、未转单 82；DO 980 张、有送货地址 718）。还没做：分行电脑跑 update_from_zip + setup_quotes；排单页设定 HQ 出发点与司机。**2026-10-07 给司机的备注 + 完整货品**（migration `delivery_note_and_lines`）：`bi.delivery_doc` 加 `lines`（DODTL 全部明细 d/q/u）、`do_remark`（DO 表头 Remark1～4）、`delivery_note`（员工在排单页写，`bi_delivery_doc_set_note`，同步不盖）；旧版脚本没送 lines / remark 时保留原值。WhatsApp 清单每站印 ⚠️ 备注、📝 单据备注、逐项货品「品名 × 数量 单位」；顾客资料的 note 不再传给司机（那是内部备注）。quote_push 版本 `quotes-do-2026-10-07`。**同日 司机签收拍照**（migration `delivery_pod` + `delivery_pod_helpers_public`，留底 `docs/bi_web/delivery.sql`）：排单按 WhatsApp / 复制时前端产生 token，讯息带 `/driver.html?t=…`（3 天有效，司机不用帐号）；司机页 `src/driver/main.tsx`（中 / 英 / 马来文）：导航、打电话、逐项打勾对货、拍照（压到 1280px JPEG）、「已送达」/「送不成」（要原因）、定位 4 秒拿不到就略过；照片在私有 bucket `delivery-pod/<token>/`，签收进 `bi.delivery_pod`。店里在排单纪录（`RunRow`）看每站状态、司机备注、照片（签名网址）、可再复制司机连结。anon 不给 bi schema usage，storage 规则呼叫 public 包装函数。
+**送货搬进营运系统（2026-10-08）**：使用者要「把送货功能跟员工多部门功能连在一起，不要分成两个地方」。营运系统（`homeworks-ops`，
+另一个 Claude 对话在分支 `claude/gifted-faraday-b16op8` 的 `portal/` 开发，同一个 Supabase 的 `ops` schema，员工名单 `ops.staff` + 模块权限）
+本来就预留了「送货安装」模块。这里做好整个模块交给那边：交接包 `docs/ops_delivery/`（`HANDOFF.md` + `delivery-module.patch`，以那边 `118aaca` 为底，
+`git am` 实测无冲突、那边全部测试 + 新的 `dlv_test.sql` 通过、build 通过），ZIP `HomeWorks-送货模块-给营运系统-2026-10-08.zip` 已交给使用者上传到那边。
+**资料不搬家**（仍是 `bi.delivery_*`），资料库部分正式环境已套（`ops_delivery` + `ops_delivery_review_fixes` + `ops_delivery_fixes2` + BI 的 `driver_run_geo`）；
+那边部署前端后再套模块开关 `20261008c`。经两轮多人审查（照片路径含签收代码 → 只看的人只给张数；查 DO 不回内部备注与金额；重复排单不重复计；
+找位置期间不盖掉编辑…）。BI 的旧送货页（`/delivery.html`、`/driver.html`）先留着，资料两边相通；要不要关掉由使用者决定。
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿

@@ -1,0 +1,2620 @@
+From 872a865931413c68437131e4df457090016db058 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 8 Oct 2026 11:46:33 +0000
+Subject: [PATCH] =?UTF-8?q?=E9=80=81=E8=B4=A7=E5=AE=89=E8=A3=85=E6=A8=A1?=
+ =?UTF-8?q?=E5=9D=97=EF=BC=9A=E6=8A=8A=20BI=20=E7=9A=84=E9=80=81=E8=B4=A7?=
+ =?UTF-8?q?=E6=8E=92=E5=8D=95=E4=B8=8E=E5=8F=B8=E6=9C=BA=E7=AD=BE=E6=94=B6?=
+ =?UTF-8?q?=E6=8B=8D=E7=85=A7=E6=90=AC=E8=BF=9B=E8=90=A5=E8=BF=90=E7=B3=BB?=
+ =?UTF-8?q?=E7=BB=9F?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+使用者要「把送货功能跟员工多部门功能连在一起，不要分成两个地方」。资料不搬家（仍是 bi.delivery_*，SERVER 每 15 分钟
+只读推 AutoCount DO），加一层 ops_dlv_* 函数改用营运系统的员工名单、模块权限与分店：只看 = 查 DO / 看纪录，
+可编辑 = 排单、改地址与给司机的备注、传 WhatsApp，可审批 = 出发点与外包司机。员工司机登入在「我的送货」签收，
+外包司机用 WhatsApp 里的 #/driver?t= 连结（不用登入）。
+
+交出前经过两轮多人审查：照片路径里就是签收连结代码，所以照片跟代码同规则（只看的人在连结有效期间只看张数）；
+查 DO 不回顾客内部备注与金额；重复按 WhatsApp 不另存一趟、首页计数不重复；找位置期间改的地址不会被盖掉；
+换分页不会清掉排到一半的单；只找到邮区的坐标会标出来、导航改用地址；英文模式的确认框与司机页错误讯息都有翻。
+资料库正式环境已套（ops_delivery + ops_delivery_review_fixes + ops_delivery_fixes2）；20261008c 模块开关等前端部署后才套。
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FukrbyV1LJiGqNzUs29hwZ
+---
+ CLAUDE.md                                     |  11 +
+ portal/README.md                              |  11 +
+ portal/src/App.tsx                            |   6 +
+ portal/src/dlv-api.ts                         | 293 ++++++++++
+ portal/src/dlv.css                            |  77 +++
+ portal/src/dlv/DriverSign.tsx                 | 261 +++++++++
+ portal/src/dlv/HomeCard.tsx                   |  27 +
+ portal/src/dlv/Mine.tsx                       |  28 +
+ portal/src/dlv/Plan.tsx                       | 407 ++++++++++++++
+ portal/src/dlv/Runs.tsx                       | 106 ++++
+ portal/src/dlv/Setup.tsx                      | 104 ++++
+ portal/src/i18n-dict-dlv.ts                   | 181 ++++++
+ portal/src/i18n.ts                            |   8 +-
+ portal/src/pages/Delivery.tsx                 |  66 +++
+ portal/src/pages/Home.tsx                     |   2 +
+ .../migrations/20261008b_ops_delivery.sql     | 526 ++++++++++++++++++
+ .../20261008c_ops_delivery_ready.sql          |   6 +
+ portal/supabase/tests/dlv_test.sql            | 205 +++++++
+ portal/supabase/tests/run.sh                  |   1 +
+ portal/supabase/tests/stub_supabase.sql       |  43 ++
+ 20 files changed, 2367 insertions(+), 2 deletions(-)
+ create mode 100644 portal/src/dlv-api.ts
+ create mode 100644 portal/src/dlv.css
+ create mode 100644 portal/src/dlv/DriverSign.tsx
+ create mode 100644 portal/src/dlv/HomeCard.tsx
+ create mode 100644 portal/src/dlv/Mine.tsx
+ create mode 100644 portal/src/dlv/Plan.tsx
+ create mode 100644 portal/src/dlv/Runs.tsx
+ create mode 100644 portal/src/dlv/Setup.tsx
+ create mode 100644 portal/src/i18n-dict-dlv.ts
+ create mode 100644 portal/src/pages/Delivery.tsx
+ create mode 100644 portal/supabase/migrations/20261008b_ops_delivery.sql
+ create mode 100644 portal/supabase/migrations/20261008c_ops_delivery_ready.sql
+ create mode 100644 portal/supabase/tests/dlv_test.sql
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index de486ac..dbc07c8 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -154,6 +154,17 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   字典键（去头尾空白）或符合 `i18n-patterns.ts` 格式的文字节点 / placeholder / title 换成英文，员工输入的资料不动。
+   **新增介面文字一定要把中文原句加进 `i18n-dict-*.ts`**（带数字 / 名称的句子加 pattern；数据库错误讯息放 `i18n-dict-db.ts`），
+   否则英文模式会漏翻。语言存 localStorage `hw-lang`，切换会重新载入。
++- 送货安装（2026-10-08，使用者：「把送货功能跟员工多部门功能连在一起，不要分成两个地方」）：把 BI 顾客资料页里的送货排单 +
++  司机签收拍照搬进来（另一个 Claude 对话在 BI 分支 `claude/pensive-fermi-gtqw9c` 做的，以 ZIP 交过来）。**资料不搬家**：DO（SERVER 的
++  `quote_push.py` 每 15 分钟只读推 AutoCount DO，含 Deliver Address、全部明细、Remark1～4）、地址、备注、排单、签收都在 `bi.delivery_*`，
++  这里加一层 `public.ops_dlv_*`（migration `20261008b_ops_delivery.sql`，**正式环境已套**，分三次：`ops_delivery` + 多人审查后的 `ops_delivery_review_fixes` + `ops_delivery_fixes2`，合起来 = 这个档；另外 BI 的 `bi_driver_run` 每站多回传 `geo`，migration `driver_run_geo`）改用 ops 权限：只看（销售）=
++  查 DO / 看纪录；可编辑（送货、仓库）= 排单、改这张 DO 的地址 / 给司机的备注、存坐标；可审批 = 出发点、外包司机。分店照 `sees_company`。
++  司机 = 送货部门有手机号的在职员工（`driver_staff_id`，登入后在「我的送货」签收）+ 外包司机 `bi.delivery_driver`（用 WhatsApp 里的连结
++  `#/driver?t=<代码>`，不用登入，3 天有效；App.tsx 在登入前处理）。签收沿用 BI 的 anon 函数 `bi_driver_run` / `bi_driver_pod` 与私有 bucket
++  `delivery-pod`；营运员工看照片靠 policy「delivery-pod ops read」（`ops_dlv_photo_ok`）。**照片路径 = `<连结代码>/…`，拿到路径就能用 anon 的 `bi_driver_pod` 假签收**，所以路径与照片跟连结代码同规则（`ops.dlv_full_access`）：可编辑、这趟的司机，或连结已过期；只看的人只拿 `photo_count`。查 DO 的函数不回 `note`（顾客资料内部备注）/ `amount` / `sales_agent` / `debtor_code`。首页计数以「同一天同一门市的站」算（`ops.dlv_stop_signed`），重复排的单不重复算；前端再按一次 WhatsApp 沿用同一个连结、不另存。`i18n.ts` 多了 `translate="no"`（司机签收页自带三语）。前端 `src/pages/Delivery.tsx`、`src/dlv/*`、
++  `src/dlv-api.ts`、`src/dlv.css`、`src/i18n-dict-dlv.ts`；首页卡片 `dlv/HomeCard.tsx`（`ops_dlv_home`）。司机签收页自带中 / 英 / 马来文、不进字典。
++  模块开关 `20261008c_ops_delivery_ready.sql`（`ops.module.ready = true`）**等前端部署后才套**。测试 `tests/dlv_test.sql`（BI 送货表的 stub 在
++  `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，两边资料相通；要不要关掉由使用者决定。
+ - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
+   3 仓库 + 送货安装；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
+   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
+diff --git a/portal/README.md b/portal/README.md
+index 6e96921..166d2f3 100644
+--- a/portal/README.md
++++ b/portal/README.md
+@@ -16,6 +16,7 @@
+ | `src/api.ts` | 型别与所有 `ops_*` 呼叫 |
+ | `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Attendance（打卡）/ Admin / Planned（规划中模块）/ Login / Password |
+ | `src/att/`、`src/att-api.ts`、`src/att.css` | 打卡模块：Today（打卡、补下班卡、外勤签到）、Camera（自拍）、Records（逐日纪录、月报 CSV）、Board（团队今天）、Corrections（补卡）、Settings（HR 设定） |
++| `src/pages/Delivery.tsx`、`src/dlv/`、`src/dlv-api.ts`、`src/dlv.css` | 送货安装：Plan（一键排单、最短路线、WhatsApp 司机）、Runs（排单纪录、签收照片）、Mine（员工司机签收）、Setup（出发点、外包司机）、DriverSign（司机签收页，`#/driver?t=` 不用登入）、HomeCard（首页提醒） |
+ | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
+ | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
+ | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
+@@ -66,3 +67,13 @@ Vercel 自己 `npm install` + `vite build`。
+   全部用 `{file, sha, size}` 参照（没改的档沿用上一版的 SHA）。每次呼叫都很小，不会因内容太大而中断。
+   `public/` 底下的档要保留 `public/` 前缀。部署后用 `list_deployment_files` 核对每个档的 uid（= SHA1）与本机一致。
+ - 新功能尽量放新的小档（例：`src/sync.tsx`、`src/extra.css`），少动大档，部署时要上传的量就小。
++
++## 送货安装
++
++- 资料与 HomeWorks BI 共用（`bi.delivery_*`）：SERVER 的 `scripts/quote_push.py`（BI 分支）营业时间每 15 分钟从 AutoCount 只读推 DO。
++- 店员：整串贴 DO 单号（只打数字尾码也可）→ 找顾客与送货地址（手动改过的 > DO 的 Deliver Address > 顾客资料）→ OpenStreetMap 找坐标
++  （每秒 1 次）→ 最近邻 + 2-opt 排顺序（直线距离）→ 选司机 → WhatsApp 整张清单（每站货品、备注、Waze 连结、Google Maps 全程路线、签收连结）。
++- 司机：员工司机登入在「我的送货」签收；外包司机用讯息里的 `#/driver?t=<代码>`（3 天有效，不用登入）。每站可打勾对货、拍照（压到 1280px）、
++  按「已送达 / 送不成」（要写原因）。照片在 Storage 私有 bucket `delivery-pod/<代码>/`。
++- 权限：`ops_dlv_*` 函数开头检查 `delivery` 模块等级与分店；签收连结代码只给可编辑的人与这趟的司机。照片路径里有连结代码，所以照片同样只给这些人（连结过期后只看的人也看得到）。
++- 英文模式：`translate="no"` 的区块不翻（司机签收页自带中 / 英 / 马来文）；`window.confirm` 用 `dlv-api.ts` 的 `ui()` 先翻。
+diff --git a/portal/src/App.tsx b/portal/src/App.tsx
+index 2d7011f..a52b714 100644
+--- a/portal/src/App.tsx
++++ b/portal/src/App.tsx
+@@ -19,6 +19,8 @@ import Payroll from "./pages/Payroll";
+ import MyPay from "./pages/MyPay";
+ import Join from "./pages/Join";
+ import JoinStatus from "./pages/JoinStatus";
++import Delivery from "./pages/Delivery";
++import { DriverPage } from "./dlv/DriverSign";
+ import { SyncNote } from "./sync";
+ import LangSwitch from "./LangSwitch";
+ 
+@@ -52,6 +54,7 @@ export default function App() {
+ 
+   useEffect(() => setMenuOpen(false), [route]);
+ 
++  if (route.startsWith("/driver")) return <DriverPage key={route} />; // 司机签收连结：不用登入
+   if (session === undefined) return <div className="center">载入中…</div>;
+   if (route.startsWith("/join")) return <Join key={route} sessionEmail={session ? session.user.email || "—" : undefined} />;
+   if (!session) return <Login />;
+@@ -98,6 +101,9 @@ export default function App() {
+     case "warehouse":
+       page = can(me, "warehouse", "view") ? <><SyncNote /><Warehouse me={me} sub={arg} /></> : <NoAccess />;
+       break;
++    case "delivery":
++      page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
++      break;
+     case "payroll":
+       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
+       break;
+diff --git a/portal/src/dlv-api.ts b/portal/src/dlv-api.ts
+new file mode 100644
+index 0000000..ce934d4
+--- /dev/null
++++ b/portal/src/dlv-api.ts
+@@ -0,0 +1,293 @@
++// 送货安装模块的资料层：RPC、型别与纯函数（排路线、组 WhatsApp 清单）。
++// 资料在 BI 的 bi.delivery_*（与 BI 顾客资料页的旧送货排单共用同一份）；权限在 public.ops_dlv_* 函数里检查。
++// 路线：OpenStreetMap（Nominatim）找坐标、每秒最多 1 次；顺序 = 最近邻 + 2-opt（直线距离，不是实际车程）。
++import { supabase } from "./supabase";
++import { getLang, tr } from "./i18n";
++
++export type DlvLevel = "view" | "edit" | "approve";
++/** DO 明细一行：品名 / 数量 / 单位（SERVER 的 quote_push.py 从 DODTL 全部抓） */
++export interface Line { d: string; q: number; u?: string | null }
++export interface Hit {
++  query?: string; found?: boolean;
++  doc_no: string | null; company: string | null; doc_date: string | null; debtor_name: string | null; sales_agent?: string | null;
++  amount?: number | null; items: string | null; cancelled: boolean; member_id: string | null;
++  name: string | null; address: string | null; lat: number | null; lng: number | null;
++  address_source?: "manual" | "do" | "profile" | null;
++  lines?: Line[] | null; do_remark?: string | null; delivery_note?: string | null;
++}
++export interface Stop {
++  key: string; doc_no: string | null; member_id: string | null; name: string; phone: string; address: string;
++  lat: number | null; lng: number | null; items: string | null; geo: "ok" | "approx" | "none" | "todo";   // approx = 只找到邮区
++  company?: string | null; source?: "manual" | "do" | "profile" | null;
++  lines?: Line[] | null; remark?: string | null; dnote?: string | null;   // 完整货品、AutoCount DO 备注、给司机的备注
++}
++export interface Driver { kind: "staff" | "ext"; id: number; name: string; phone: string; store: string | null; active?: boolean }
++export interface Depot { address: string; lat: number; lng: number }
++export interface DlvMeta {
++  level: DlvLevel; me_id: number; companies: string[]; depot: Record<string, Depot>; drivers: Driver[]; synced: string | null;
++}
++/** photos = 照片路径（路径里有连结代码，所以连结有效时只给可编辑的人与司机；其他人只有 photo_count） */
++export interface Pod { stop_key: string; doc_no: string | null; status: "delivered" | "failed"; note: string | null; photos: string[]; photo_count: number; created_at: string }
++export interface Run {
++  id: number; run_date: string; store: string | null; company: string | null; driver_name: string | null; driver_phone: string | null;
++  driver_staff_id: number | null; stops: Stop[]; created_by: string | null; created_at: string;
++  has_link: boolean; link_valid: boolean; token: string | null; pods: Pod[];
++}
++
++/** 分店 ↔ 门市代号（排单与出发点用 HQ / JB） */
++export const STORE: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB" };
++
++async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
++  const { data, error } = await supabase.rpc(fn, args);
++  if (error) throw new Error(error.message);
++  return data as T;
++}
++
++export const dlv = {
++  meta: () => rpc<DlvMeta>("ops_dlv_meta"),
++  lookupMany: (company: string, queries: string[]) => rpc<Hit[]>("ops_dlv_lookup_many", { p_company: company, p_queries: queries }),
++  lookup: (company: string, q: string) => rpc<Hit[]>("ops_dlv_lookup", { p_company: company, p_query: q }),
++  docs: (company: string, date: string) => rpc<Hit[]>("ops_dlv_docs", { p_company: company, p_date: date }),
++  setAddress: (company: string, docNo: string, address: string) =>
++    rpc<void>("ops_dlv_doc_set_address", { p_company: company, p_doc_no: docNo, p_address: address }),
++  setNote: (company: string, docNo: string, note: string) =>
++    rpc<void>("ops_dlv_doc_set_note", { p_company: company, p_doc_no: docNo, p_note: note }),
++  setCustomerAddress: (member: string, address: string) =>
++    rpc<void>("ops_dlv_customer_set_address", { p_member: member, p_address: address }),
++  setGeo: (address: string, lat: number, lng: number) => rpc<void>("ops_dlv_geo_set", { p_address: address, p_lat: lat, p_lng: lng }),
++  saveRun: (p: { company: string; driver_kind: string | null; driver_id: number | null; stops: Stop[]; token: string }) =>
++    rpc<{ id: number }>("ops_dlv_run_save", { p }),
++  runs: (company: string, days = 14) => rpc<Run[]>("ops_dlv_runs", { p_company: company, p_days: days }),
++  myRuns: () => rpc<Run[]>("ops_dlv_my_runs"),
++  home: () => rpc<{ my_stops_left: number; stops_open_today: number | null }>("ops_dlv_home"),
++  setDepot: (company: string, address: string, lat: number, lng: number) =>
++    rpc<void>("ops_dlv_set_depot", { p_company: company, p_address: address, p_lat: lat, p_lng: lng }),
++  saveDriver: (p: { id?: number | null; name: string; phone: string; company: string; active?: boolean }) =>
++    rpc<Driver>("ops_dlv_driver_save", { p }),
++  /** 签收照片（私有 bucket）：1 小时有效的网址 */
++  async photoUrls(paths: string[]): Promise<Record<string, string>> {
++    if (!paths.length) return {};
++    const { data, error } = await supabase.storage.from("delivery-pod").createSignedUrls(paths, 3600);
++    if (error) throw new Error(error.message);
++    return Object.fromEntries((data ?? []).filter((x) => x.signedUrl).map((x) => [x.path ?? "", x.signedUrl as string]));
++  },
++};
++
++// ------------------------------------------------------------ 纯函数
++
++/** 司机签收连结的代码：24 个网址安全的随机字元，排单时在前端产生，WhatsApp 讯息里就带得到连结 */
++export function newToken(): string {
++  const b = crypto.getRandomValues(new Uint8Array(18));
++  return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
++}
++/** 营运系统里的司机签收页（不用登入） */
++export function driverLink(token: string, base: string = location.origin + location.pathname): string {
++  return `${base}#/driver?t=${token}`;
++}
++
++export function phoneOf(member: string | null): string {
++  return member && /^[0-9]+$/.test(member) ? member : "";
++}
++
++/** 60123456789 → 012-345 6789 */
++export function fmtPhone(p: string | null | undefined): string {
++  if (!p) return "";
++  if (p.startsWith("65") && p.length === 10) return `+65 ${p.slice(2, 6)} ${p.slice(6)}`;
++  if (p.startsWith("60")) {
++    const d = "0" + p.slice(2);
++    return d.startsWith("01") ? `${d.slice(0, 3)}-${d.slice(3, d.length - 4)} ${d.slice(-4)}` : d;
++  }
++  return p;
++}
++
++/** 两点直线距离（公里） */
++export function km(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
++  const r = (x: number) => (x * Math.PI) / 180;
++  const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
++  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
++  return 6371 * 2 * Math.asin(Math.sqrt(h));
++}
++
++type Pt = { lat: number; lng: number };
++/** 排最短顺序：从出发点开始找最近的下一站，再用 2-opt 把交叉的路段拉直。没坐标的排在最后。 */
++export function orderStops(stops: Stop[], start: Pt | null): Stop[] {
++  const geo = stops.filter((s) => s.lat != null && s.lng != null) as (Stop & Pt)[];
++  const rest = stops.filter((s) => s.lat == null || s.lng == null);
++  if (geo.length < 2) return [...geo, ...rest];
++  const left = [...geo];
++  const path: (Stop & Pt)[] = [];
++  let cur: Pt = start ?? left[0];
++  while (left.length) {
++    let bi = 0;
++    for (let i = 1; i < left.length; i++) if (km(cur, left[i]) < km(cur, left[bi])) bi = i;
++    cur = left.splice(bi, 1)[0];
++    path.push(cur as Stop & Pt);
++  }
++  const pts: Pt[] = start ? [start, ...path] : [...path];
++  const off = start ? 1 : 0;
++  let improved = true;
++  for (let guard = 0; improved && guard < 50; guard++) {
++    improved = false;
++    for (let i = off; i < pts.length - 1; i++) {
++      for (let j = i + 1; j < pts.length; j++) {
++        const a = pts[i - 1] ?? null, b = pts[i], c = pts[j], d = pts[j + 1] ?? null;   // 最后一站后面没有路段
++        const before = (a ? km(a, b) : 0) + (d ? km(c, d) : 0);
++        const after = (a ? km(a, c) : 0) + (d ? km(b, d) : 0);
++        if (after + 1e-9 < before) {
++          pts.splice(i, j - i + 1, ...pts.slice(i, j + 1).reverse());
++          improved = true;
++        }
++      }
++    }
++  }
++  return [...(pts.slice(off) as Stop[]), ...rest];
++}
++
++export function routeKm(stops: Stop[], start: Pt | null): number {
++  let total = 0;
++  let prev: Pt | null = start;
++  for (const s of stops) {
++    if (s.lat == null || s.lng == null) continue;
++    if (prev) total += km(prev, { lat: s.lat, lng: s.lng });
++    prev = { lat: s.lat, lng: s.lng };
++  }
++  return total;
++}
++
++export function wazeLink(s: { lat: number | null; lng: number | null; address: string | null; geo?: string }): string {
++  return s.lat != null && s.lng != null && !(s.geo === "approx" && s.address)       // 只找到邮区：导航用地址，不用邮区中心
++    ? `https://waze.com/ul?ll=${s.lat},${s.lng}&navigate=yes`
++    : `https://waze.com/ul?q=${encodeURIComponent(s.address ?? "")}&navigate=yes`;
++}
++
++function gmapPoint(p: { lat?: number | null; lng?: number | null; address?: string; geo?: string }): string {
++  return p.lat != null && p.lng != null && !(p.geo === "approx" && p.address) ? `${p.lat},${p.lng}` : encodeURIComponent(p.address ?? "");
++}
++
++/** Google Maps 全程连结；一条最多 9 个中途站，超过就分段 */
++export function gmapRoutes(stops: Stop[], depot: Depot | null): string[] {
++  const pts: { lat?: number | null; lng?: number | null; address?: string; geo?: string }[] = [...(depot ? [depot] : []), ...stops];
++  const out: string[] = [];
++  for (let i = 0; i < pts.length - 1; i += 10) {
++    const seg = pts.slice(i, Math.min(i + 11, pts.length));
++    if (seg.length < 2) break;
++    const mid = seg.slice(1, -1).map(gmapPoint).join("%7C");
++    out.push(`https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${gmapPoint(seg[0])}`
++      + `&destination=${gmapPoint(seg[seg.length - 1])}${mid ? `&waypoints=${mid}` : ""}`);
++  }
++  return out;
++}
++
++/** 「HEMOS TAP × 2 UNIT」；数量是整数就不印小数 */
++export function fmtLine(l: Line): string {
++  const q = Number(l.q) || 0;
++  const qty = Number.isInteger(q) ? String(q) : String(Math.round(q * 1000) / 1000);
++  return `${l.d} × ${qty}${l.u ? ` ${l.u}` : ""}`;
++}
++
++/** 给司机的 WhatsApp 清单（中文；司机签收页另有中 / 英 / 马来文） */
++export function driverMessage(stops: Stop[], opt: { date: string; driver: string; store: string; depot: Depot | null; link?: string }): string {
++  const total = routeKm(stops, opt.depot);
++  const lines = [
++    `🚚 HomeWorks 送货单 ${opt.date}`,
++    `司机：${opt.driver} · 共 ${stops.length} 站${total ? `（直线约 ${total.toFixed(0)} km）` : ""}`,
++    `出发：${opt.store}${opt.depot?.address ? ` ${opt.depot.address}` : ""}`,
++    "",
++  ];
++  if (opt.link) lines.splice(3, 0, "📲 每送完一站，开这个连结按「已送达」并拍照：", opt.link);
++  stops.forEach((s, i) => {
++    lines.push(`${i + 1}. ${s.doc_no ?? "（没有 DO 单号）"}`);
++    lines.push(`👤 ${[s.name, fmtPhone(s.phone)].filter(Boolean).join(" · ") || "-"}`);
++    lines.push(`📍 ${s.address || "（没有地址，请先打电话问顾客）"}`);
++    if (s.dnote) lines.push(`⚠️ 备注：${s.dnote}`);
++    if (s.remark) lines.push(`📝 单据备注：${s.remark}`);
++    if (s.lines?.length) {
++      lines.push(`🧾 货品（${s.lines.length} 项）：`);
++      s.lines.forEach((l) => lines.push(`   • ${fmtLine(l)}`));
++    } else if (s.items) lines.push(`🧾 ${s.items}`);
++    if (s.address || s.lat != null) lines.push(`🧭 ${wazeLink(s)}`);
++    lines.push("");
++  });
++  const routes = gmapRoutes(stops, opt.depot);
++  if (routes.length) {
++    lines.push("🗺️ 全程路线（Google Maps）：");
++    routes.forEach((r, i) => lines.push(routes.length > 1 ? `第 ${i + 1} 段：${r}` : r));
++  }
++  return lines.join("\n");
++}
++
++/** 「1.5321, 103.6612」或 Google Maps 连结（…@1.53,103.66… / …q=1.53,103.66…）→ 坐标 */
++export function parseCoords(text: string): Pt | null {
++  const m = text.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
++  if (!m) return null;
++  const lat = Number(m[1]), lng = Number(m[2]);
++  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
++}
++
++// OpenStreetMap 规定每秒最多 1 次：每一次请求前都等到离上一次 1.1 秒（找到 / 找不到都一样）
++let lastGeo = 0;
++async function geoGap(): Promise<void> {
++  const at = Math.max(Date.now(), lastGeo + 1100);   // 先占好自己的时段，两个地方同时找也不会挤在一起
++  lastGeo = at;
++  const wait = at - Date.now();
++  if (wait > 0) await new Promise((res) => setTimeout(res, wait));
++}
++
++/** 地址 → 坐标（OpenStreetMap，免费）。先整段地址，找不到再用 5 位邮编（只是邮区的大概位置，approx = true）。
++ *  网路出错 / 被限流就直接回 null，不拿邮编乱猜。 */
++export async function geocode(address: string): Promise<(Pt & { approx?: boolean }) | null> {
++  const post = address.match(/\b\d{5}\b/)?.[0];
++  const tries: [string, boolean][] = [[`q=${encodeURIComponent(address)}&countrycodes=my,sg`, false],
++    ...(post ? [[`postalcode=${post}&countrycodes=my`, true] as [string, boolean]] : [])];
++  for (const [q, approx] of tries) {
++    await geoGap();
++    try {
++      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&${q}`, { headers: { "Accept-Language": "en" } });
++      if (!r.ok) return null;
++      const j = (await r.json()) as { lat: string; lon: string }[];
++      if (!Array.isArray(j)) return null;
++      if (j.length) return { lat: Number(j[0].lat), lng: Number(j[0].lon), approx };
++    } catch {
++      return null;
++    }
++  }
++  return null;
++}
++
++/** window.confirm 不在画面上，DOM 翻译层翻不到：英文模式时自己先翻 */
++export function ui(s: string): string {
++  return getLang() === "en" ? tr(s) : s;
++}
++
++export function toStop(h: Hit): Stop {
++  return {
++    key: h.doc_no ?? `M:${h.member_id}`, doc_no: h.doc_no, member_id: h.member_id,
++    // 门市散客的单据名称多是「CASH（电话）」：去掉电话后只剩 CASH 就不显示，司机看电话就好
++    name: (h.name ?? h.debtor_name ?? "").replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, " ").replace(/[()（）]/g, " ")
++      .replace(/\s+/g, " ").trim().replace(/^CASH$/i, ""),
++    phone: phoneOf(h.member_id), address: h.address ?? "", lat: h.lat, lng: h.lng, items: h.items,
++    lines: h.lines ?? null, remark: h.do_remark ?? null, dnote: h.delivery_note ?? null,
++    geo: h.lat != null && h.lng != null ? "ok" : "todo", company: h.company, source: h.address_source ?? null,
++  };
++}
++
++/** 马来西亚今天的日期 YYYY-MM-DD */
++export function todayKL(): string {
++  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
++}
++
++/** 店员整串贴上的单号 → 一个个单号（空白、换行、逗号、分号都可以分开） */
++export function splitDocNos(text: string): string[] {
++  const out: string[] = [];
++  for (const x of text.split(/[\s,，;；、]+/)) {
++    const v = x.trim().toUpperCase();
++    if (v.length >= 3 && !out.includes(v)) out.push(v);
++  }
++  return out;
++}
++
++const klTime = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit" });
++/** 签收时间（UTC）→ 马来西亚时间 14:05 */
++export function hhmmKL(ts: string): string {
++  return klTime.format(new Date(ts));
++}
+diff --git a/portal/src/dlv.css b/portal/src/dlv.css
+new file mode 100644
+index 0000000..5dfaba8
+--- /dev/null
++++ b/portal/src/dlv.css
+@@ -0,0 +1,77 @@
++/* 送货安装模块（2026-10-08） */
++.dlv-issues { margin: 10px 0 0; padding-left: 20px; color: var(--amber); }
++.dlv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
++.dlv-hit { align-items: center; }
++.dlv-hit button { flex-shrink: 0; }
++table.dlv-stops td { vertical-align: top; }
++.dlv-cust { min-width: 220px; }
++.dlv-addr { min-width: 220px; }
++.dlv-addr textarea, .dlv-note { font-size: .88rem; margin-top: 4px; }
++.dlv-geo { min-width: 120px; }
++.dlv-coords { display: flex; gap: 4px; margin-top: 4px; }
++.dlv-coords input { font-size: .85rem; padding: 4px 6px; }
++.dlv-lines { font-size: .85rem; margin-top: 4px; }
++.dlv-lines ul { margin: 4px 0 0; padding-left: 18px; }
++.dlv-send select { width: auto; max-width: 100%; }
++.dlv-pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 8px; font-size: .85rem; max-height: 360px; overflow: auto; }
++.tag.ok-tag { background: var(--green-soft); color: var(--green); }
++.tag.late { background: var(--red-soft); color: var(--red); }
++.dlv-run summary { color: var(--text); }
++.dlv-run summary b { color: var(--text); }
++.dlv-run .table-wrap { box-shadow: none; }
++.dlv-photos { display: flex; gap: 4px; flex-wrap: wrap; }
++.dlv-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
++
++/* 司机签收（#/driver 不用登入的页面与「我的送货」共用） */
++.dv-page { max-width: 560px; margin: 0 auto; padding: 16px 12px 40px; }
++.dv { max-width: 560px; }
++.dv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
++.dv-top h1 { margin: 0; }
++.dv-lang { display: flex; gap: 4px; }
++.dv-lang button { background: var(--card); color: var(--text); border: 1px solid var(--line); padding: 4px 10px; font-weight: 500; }
++.dv-lang button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
++.dv-head { font-size: .9rem; color: var(--muted); margin-bottom: 12px; }
++.dv-head b { color: var(--text); font-size: 1rem; }
++.dv-bar { height: 8px; border-radius: 4px; background: var(--line); margin: 6px 0; overflow: hidden; }
++.dv-bar span { display: block; height: 100%; background: var(--green); }
++.dv-stop { padding: 14px; border: 1px solid var(--line); }
++.dv-stop.dv-delivered { border-color: var(--green); }
++.dv-stop.dv-failed { border-color: var(--red); }
++.dv-title { display: flex; gap: 10px; align-items: center; cursor: pointer; }
++.dv-no { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 600; }
++.dv-main { flex: 1; min-width: 0; }
++.dv-caret { color: var(--muted); }
++.dv-tag { display: inline-block; margin-left: 6px; font-size: .75rem; padding: 1px 8px; border-radius: 10px; color: #fff; }
++.dv-tag-delivered { background: var(--green); }
++.dv-tag-failed { background: var(--red); }
++.dv-addr { margin: 10px 0 6px; }
++.dv-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
++.dv a.dv-btn { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--bg); font-size: .9rem; }
++.dv-warn { background: var(--amber-soft); color: var(--amber); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-weight: 600; }
++.dv-muted { color: var(--muted); font-size: .9rem; margin: 6px 0; }
++.dv-goods { margin: 8px 0; }
++.dv label.dv-line { color: var(--text); font-size: .95rem; margin-top: 6px; }
++.dv label.dv-line input { width: 20px; height: 20px; flex: none; }
++.dv label.dv-photo { display: block; text-align: center; margin-top: 12px; padding: 14px; border: 2px dashed var(--blue); border-radius: 10px; color: var(--blue); font-weight: 600; cursor: pointer; }
++.dv-photo input { display: none; }
++.dv-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
++.dv-thumb { position: relative; }
++.dv-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
++.dv-thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; padding: 0; background: var(--red); font-size: .75rem; }
++.dv label.dv-note { margin-top: 10px; }
++.dv .dv-actions button { flex: 1; padding: 12px; font-size: 1rem; }
++.dv .dv-actions button.dv-ok { background: var(--green); }
++.dv .dv-actions button.dv-no-btn { background: var(--red); flex: 0 0 auto; padding: 12px 16px; }
++.dv-redo { margin-top: 8px; }
++
++/* 手机：排单表改成一站一张卡（表格横向太挤） */
++@media (max-width: 700px) {
++  table.dlv-stops thead { display: none; }
++  table.dlv-stops, table.dlv-stops tbody, table.dlv-stops tr, table.dlv-stops td { display: block; width: 100%; }
++  table.dlv-stops tr { position: relative; padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
++  table.dlv-stops tr:last-child { border-bottom: 0; }
++  table.dlv-stops td { border: 0; padding: 3px 0; min-width: 0; }
++  table.dlv-stops td:first-child { position: absolute; top: 10px; right: 0; width: auto; color: var(--muted); }
++  table.dlv-stops td:nth-child(2) { font-weight: 600; }
++  table.dlv-stops td:last-child { display: flex; gap: 6px; }
++}
+diff --git a/portal/src/dlv/DriverSign.tsx b/portal/src/dlv/DriverSign.tsx
+new file mode 100644
+index 0000000..5ce8b48
+--- /dev/null
++++ b/portal/src/dlv/DriverSign.tsx
+@@ -0,0 +1,261 @@
++// 司机签收：每站导航、打电话、逐项打勾对货、拍照、按「已送达 / 送不成」。
++// 两种用法：外包司机打开 WhatsApp 里的连结 #/driver?t=<代码>（不用登入，DriverPage）；员工司机登入后在「我的送货」（inApp）。
++// 都凭排单时产生的连结代码呼叫 anon 可用的 bi_driver_run / bi_driver_pod；照片先压缩（最长边 1280px、JPEG），
++// 上传到 Storage 私有 bucket delivery-pod 的 <代码>/ 资料夹。
++// 司机多讲马来文：这页自己带中 / 英 / 马来文，整块标 translate="no"，营运系统的英文翻译层不会再翻一次。
++import { useEffect, useMemo, useState } from "react";
++import { supabase } from "../supabase";
++import { fmtLine, fmtPhone, Line, wazeLink } from "../dlv-api";
++
++type L = "zh" | "en" | "ms";
++const TXT: Record<string, Record<L, string>> = {
++  title: { zh: "送货签收", en: "Delivery sign-off", ms: "Pengesahan penghantaran" },
++  progress: { zh: "已完成 {d} / {n} 站", en: "{d} of {n} stops done", ms: "{d} / {n} hentian selesai" },
++  nav: { zh: "导航", en: "Navigate", ms: "Navigasi" },
++  call: { zh: "打电话", en: "Call", ms: "Telefon" },
++  goods: { zh: "货品（打勾对货）", en: "Goods (tick to check)", ms: "Barang (tanda untuk semak)" },
++  note: { zh: "备注", en: "Note", ms: "Nota" },
++  docNote: { zh: "单据备注", en: "DO remark", ms: "Catatan DO" },
++  photo: { zh: "📷 拍照（顾客签名的单 + 货）", en: "📷 Photo (signed DO + goods)", ms: "📷 Foto (DO bertandatangan + barang)" },
++  more: { zh: "再拍一张", en: "Add photo", ms: "Tambah foto" },
++  driverNote: { zh: "备注（选填；送不成要写原因）", en: "Note (optional; give a reason if not delivered)", ms: "Nota (pilihan; beri sebab jika gagal)" },
++  done: { zh: "✓ 已送达", en: "✓ Delivered", ms: "✓ Dihantar" },
++  fail: { zh: "✗ 送不成", en: "✗ Not delivered", ms: "✗ Tidak dihantar" },
++  sending: { zh: "上传中…", en: "Uploading…", ms: "Memuat naik…" },
++  needReason: { zh: "送不成请写原因（例：顾客不在、地址不对）", en: "Please give a reason (e.g. nobody home, wrong address)", ms: "Sila beri sebab (cth. tiada orang, alamat salah)" },
++  noPhoto: { zh: "还没拍照，确定不拍就送出吗？", en: "No photo yet. Send without a photo?", ms: "Tiada foto. Hantar tanpa foto?" },
++  delivered: { zh: "已送达", en: "Delivered", ms: "Dihantar" },
++  failed: { zh: "送不成", en: "Not delivered", ms: "Tidak dihantar" },
++  redo: { zh: "重新签收", en: "Redo", ms: "Buat semula" },
++  photos: { zh: "{n} 张照片", en: "{n} photo(s)", ms: "{n} foto" },
++  allDone: { zh: "全部完成，辛苦了！", en: "All done. Thank you!", ms: "Semua selesai. Terima kasih!" },
++  bad: { zh: "打不开：", en: "Cannot open: ", ms: "Tidak dapat dibuka: " },
++  failSend: { zh: "送出失败：", en: "Could not send: ", ms: "Gagal dihantar: " },
++  noAddr: { zh: "（没有地址，请打电话问顾客）", en: "(no address, please call the customer)", ms: "(tiada alamat, sila telefon pelanggan)" },
++  loading: { zh: "载入中…", en: "Loading…", ms: "Memuatkan…" },
++  noLink: { zh: "这个连结不完整，请向店里要新的。", en: "This link is incomplete — ask the shop for a new one.", ms: "Pautan ini tidak lengkap — minta pautan baharu dari kedai." },
++  // bi_driver_run / bi_driver_pod 的错误讯息（资料库只有中文）
++  expired: { zh: "这个连结已失效，请向店里要新的", en: "This link has expired — ask the shop for a new one.", ms: "Pautan ini telah tamat tempoh — minta pautan baharu dari kedai." },
++  noStop: { zh: "这趟没有这一站", en: "This stop is not in this run.", ms: "Hentian ini tiada dalam perjalanan ini." },
++  badPhoto: { zh: "照片不对", en: "Photo upload problem — try again.", ms: "Masalah muat naik foto — cuba lagi." },
++  tooMany: { zh: "这趟的纪录太多了，请联络店里", en: "Too many records for this run — contact the shop.", ms: "Terlalu banyak rekod untuk perjalanan ini — hubungi kedai." },
++};
++const KNOWN_ERR: Record<string, string> = {
++  "这个连结已失效，请向店里要新的": "expired", "这趟没有这一站": "noStop", "照片不对": "badPhoto", "这趟的纪录太多了，请联络店里": "tooMany",
++};
++
++type SignStop = {
++  key: string; doc_no: string | null; name: string | null; phone: string | null; address: string | null;
++  lat: number | null; lng: number | null; lines: Line[] | null; items: string | null; remark: string | null; dnote: string | null;
++  geo?: string | null;   // approx = 坐标只是邮区中心，导航改用地址（bi_driver_run 2026-10-08 起回传）
++};
++type SignPod = { stop_key: string; status: "delivered" | "failed"; note: string | null; photos: number; at: string };
++type SignRun = { run_date: string; store: string | null; driver_name: string | null; stops: SignStop[]; pods: SignPod[] };
++type Tf = (k: string, v?: Record<string, string | number>) => string;
++
++/** 语言：司机自己选过的 → 营运系统切过的（员工司机）→ 手机语言（马来文 / 英文）→ 中文 */
++function initialLang(): L {
++  try {
++    const saved = localStorage.getItem("hw-drv-lang");
++    if (saved === "zh" || saved === "en" || saved === "ms") return saved;
++    const portal = localStorage.getItem("hw-lang");
++    if (portal === "zh" || portal === "en") return portal;
++  } catch { /* 无痕模式 */ }
++  const n = (navigator.language || "").toLowerCase();
++  if (n.startsWith("ms") || n.startsWith("id")) return "ms";
++  return n.startsWith("en") ? "en" : "zh";
++}
++
++/** 手机照片很大（3～8 MB）：缩到最长边 1280px、JPEG 0.7，约 150～300 KB，省流量也省空间 */
++export async function compress(file: File, max = 1280, quality = 0.7): Promise<Blob> {
++  const url = URL.createObjectURL(file);
++  try {
++    const img = await new Promise<HTMLImageElement>((ok, bad) => {
++      const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url;
++    });
++    const k = Math.min(1, max / Math.max(img.width, img.height));
++    const c = document.createElement("canvas");
++    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
++    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
++    return await new Promise<Blob>((ok, bad) => c.toBlob((b) => (b ? ok(b) : bad(new Error("toBlob"))), "image/jpeg", quality));
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++}
++
++/** 签收地点（选用）：司机没回应定位权限的询问时 getCurrentPosition 会一直等，所以自己 4 秒就放弃 */
++function here(): Promise<{ lat: number; lng: number } | null> {
++  return new Promise((ok) => {
++    if (!navigator.geolocation) { ok(null); return; }
++    setTimeout(() => ok(null), 4000);
++    navigator.geolocation.getCurrentPosition((p) => ok({ lat: p.coords.latitude, lng: p.coords.longitude }), () => ok(null),
++                                             { timeout: 5000, maximumAge: 60000 });
++  });
++}
++
++/** 不用登入的签收页：#/driver?t=<代码> */
++export function DriverPage() {
++  const token = new URLSearchParams(window.location.hash.split("?")[1] || "").get("t") || "";
++  return <div className="dv-page"><DriverSign token={token} /></div>;
++}
++
++export function DriverSign({ token, inApp = false }: { token: string; inApp?: boolean }) {
++  const [lang, setLang] = useState<L>(initialLang);   // 每次重新整理都照 initialLang（选过的语言存在 hw-drv-lang）
++  const t: Tf = (k, v = {}) => Object.entries(v).reduce((s, [a, b]) => s.replace(`{${a}}`, String(b)), TXT[k][lang]);
++  const tErr = (m: string) => (KNOWN_ERR[m] ? t(KNOWN_ERR[m]) : m);
++  const [run, setRun] = useState<SignRun | null>(null);
++  const [err, setErr] = useState<{ key?: string; raw?: string } | null>(null);   // 存原文，换语言时重新翻
++
++  async function load() {
++    if (token.length < 20) { setErr({ key: "noLink" }); return; }
++    const r = await supabase.rpc("bi_driver_run", { p_token: token });
++    if (r.error) { setErr({ raw: r.error.message }); return; }
++    setErr(null);
++    setRun(r.data as SignRun);
++  }
++  useEffect(() => { setRun(null); load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
++  function pick(l: L) { setLang(l); try { localStorage.setItem("hw-drv-lang", l); } catch { /* 无痕模式 */ } }
++
++  const podOf = (k: string) => run?.pods.find((p) => p.stop_key === k) ?? null;
++  const doneN = run ? run.stops.filter((s) => podOf(s.key)).length : 0;
++
++  return (
++    <div className="dv" translate="no">
++      <div className="dv-top">
++        {inApp ? <span /> : <h1>{t("title")}</h1>}
++        <div className="dv-lang">
++          {(["zh", "en", "ms"] as L[]).map((l) => (
++            <button key={l} className={lang === l ? "on" : ""} onClick={() => pick(l)}>{l === "zh" ? "中" : l.toUpperCase()}</button>
++          ))}
++        </div>
++      </div>
++      {err && <div className="card"><div className="error">{t("bad")}{err.key ? t(err.key) : tErr(err.raw ?? "")}</div></div>}
++      {!run && !err && <p className="muted">{t("loading")}</p>}
++      {run && (
++        <>
++          <div className="dv-head">
++            {run.run_date} · {run.store} · {run.driver_name}
++            <div className="dv-bar"><span style={{ width: `${run.stops.length ? (100 * doneN) / run.stops.length : 0}%` }} /></div>
++            <b>{doneN === run.stops.length ? t("allDone") : t("progress", { d: doneN, n: run.stops.length })}</b>
++          </div>
++          {run.stops.map((s, i) => (
++            <StopCard key={s.key} s={s} i={i} pod={podOf(s.key)} token={token} t={t} tErr={tErr} onSaved={load} />
++          ))}
++        </>
++      )}
++    </div>
++  );
++}
++
++function Thumb({ file, onRemove }: { file: File; onRemove: () => void }) {
++  const url = useMemo(() => URL.createObjectURL(file), [file]);
++  useEffect(() => () => URL.revokeObjectURL(url), [url]);
++  return (
++    <span className="dv-thumb">
++      <img src={url} alt="" />
++      <button type="button" onClick={onRemove}>✕</button>
++    </span>
++  );
++}
++
++function StopCard({ s, i, pod, token, t, tErr, onSaved }: {
++  s: SignStop; i: number; pod: SignPod | null; token: string; t: Tf; tErr: (m: string) => string; onSaved: () => void;
++}) {
++  const [open, setOpen] = useState(!pod);
++  const [ticks, setTicks] = useState<boolean[]>([]);
++  const [files, setFiles] = useState<File[]>([]);
++  const [note, setNote] = useState("");
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<{ key?: string; raw?: string } | null>(null);   // 存原文，换语言时重新翻
++  useEffect(() => { if (pod) setOpen(false); }, [pod?.at]);
++
++  async function send(status: "delivered" | "failed") {
++    setErr(null);
++    if (status === "failed" && !note.trim()) { setErr({ key: "needReason" }); return; }
++    if (status === "delivered" && !files.length && !window.confirm(t("noPhoto"))) return;
++    setBusy(true);
++    try {
++      const where = here();
++      const paths: string[] = [];
++      const safe = (s.doc_no ?? s.key).replace(/[^A-Za-z0-9_-]/g, "_");
++      for (const [k, f] of files.entries()) {
++        const path = `${token}/${safe}-${Date.now()}-${k}.jpg`;
++        const up = await supabase.storage.from("delivery-pod").upload(path, await compress(f), { contentType: "image/jpeg" });
++        if (up.error) {
++          // 连结过期后 Storage 的权限会挡上传（英文的 row-level security 讯息）：照「连结已失效」说
++          if (/row-level security|unauthorized|403/i.test(up.error.message)) { setErr({ key: "expired" }); return; }
++          throw up.error;
++        }
++        paths.push(path);
++      }
++      const g = await where;
++      const r = await supabase.rpc("bi_driver_pod", {
++        p_token: token, p_key: s.key, p_status: status, p_note: note, p_photos: paths, p_lat: g?.lat ?? null, p_lng: g?.lng ?? null,
++      });
++      if (r.error) throw r.error;
++      setFiles([]); setNote("");
++      onSaved();
++    } catch (e) {
++      setErr({ raw: (e as Error).message || String(e) });
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  const phone = s.phone ? (s.phone.startsWith("60") ? "0" + s.phone.slice(2) : "+" + s.phone) : "";
++  return (
++    <div className={`card dv-stop ${pod ? `dv-${pod.status}` : ""}`}>
++      <div className="dv-title" onClick={() => setOpen(!open)}>
++        <span className="dv-no">{i + 1}</span>
++        <span className="dv-main">
++          <b>{s.doc_no ?? "–"}</b> {s.name}
++          {pod && <span className={`dv-tag dv-tag-${pod.status}`}>{t(pod.status)}{pod.photos ? ` · ${t("photos", { n: pod.photos })}` : ""}</span>}
++        </span>
++        <span className="dv-caret">{open ? "▾" : "▸"}</span>
++      </div>
++      {open && (
++        <>
++          <div className="dv-addr">📍 {s.address || t("noAddr")}</div>
++          <div className="dv-actions">
++            {(s.address || s.lat != null) && (
++              <a className="dv-btn" href={wazeLink({ lat: s.lat, lng: s.lng, address: s.address, geo: s.geo ?? undefined })} target="_blank" rel="noopener">🧭 {t("nav")}</a>
++            )}
++            {phone && <a className="dv-btn" href={`tel:${phone}`}>📞 {t("call")} {fmtPhone(s.phone)}</a>}
++          </div>
++          {s.dnote && <div className="dv-warn">⚠️ {t("note")}：{s.dnote}</div>}
++          {s.remark && <div className="dv-muted">📝 {t("docNote")}：{s.remark}</div>}
++          {s.lines?.length ? (
++            <div className="dv-goods">
++              <div className="dv-muted">{t("goods")}</div>
++              {s.lines.map((l, k) => (
++                <label key={k} className="check dv-line">
++                  <input type="checkbox" checked={!!ticks[k]} onChange={(e) => { const x = [...ticks]; x[k] = e.target.checked; setTicks(x); }} />
++                  <span>{fmtLine(l)}</span>
++                </label>
++              ))}
++            </div>
++          ) : s.items && <div className="dv-muted">🧾 {s.items}</div>}
++          <label className="dv-photo">
++            <input type="file" accept="image/*" capture="environment" multiple
++                   onChange={(e) => { setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 6)); e.target.value = ""; }} />
++            <span>{files.length ? t("more") : t("photo")}</span>
++          </label>
++          {files.length > 0 && (
++            <div className="dv-thumbs">
++              {files.map((f, k) => <Thumb key={`${f.name}-${f.lastModified}-${k}`} file={f} onRemove={() => setFiles(files.filter((_, j) => j !== k))} />)}
++            </div>
++          )}
++          <label className="dv-note">{t("driverNote")}
++            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
++          </label>
++          {err && <div className="error">{err.key ? t(err.key) : t("failSend") + tErr(err.raw ?? "")}</div>}
++          <div className="dv-actions">
++            <button className="dv-ok" disabled={busy} onClick={() => send("delivered")}>{busy ? t("sending") : t("done")}</button>
++            <button className="dv-no-btn" disabled={busy} onClick={() => send("failed")}>{t("fail")}</button>
++          </div>
++        </>
++      )}
++      {!open && pod && <button className="ghost small dv-redo" onClick={() => setOpen(true)}>{t("redo")}</button>}
++    </div>
++  );
++}
+diff --git a/portal/src/dlv/HomeCard.tsx b/portal/src/dlv/HomeCard.tsx
+new file mode 100644
+index 0000000..d6ec111
+--- /dev/null
++++ b/portal/src/dlv/HomeCard.tsx
+@@ -0,0 +1,27 @@
++// 首页的送货提醒：我是司机还有几站没签收；可编辑的人看今天这间分店还有几站没签收（重复排的同一站只算一次）
++import { useEffect, useState } from "react";
++import { can, Me } from "../api";
++import { dlv } from "../dlv-api";
++
++export function DeliveryHomeCard({ me }: { me: Me }) {
++  const [h, setH] = useState<{ my_stops_left: number; stops_open_today: number | null } | null>(null);
++  const show = can(me, "delivery", "view");
++  useEffect(() => { if (show) dlv.home().then(setH).catch(() => { /* 首页不因这张卡出错 */ }); }, [show]);
++  if (!h) return null;
++  return (
++    <>
++      {h.my_stops_left > 0 && (
++        <a className="card att-home warn" href="#/delivery/mine">
++          <span><b>🚚 我的送货</b><br /><span className="late">{`还有 ${h.my_stops_left} 站要送`}</span></span>
++          <span className="go">去签收 →</span>
++        </a>
++      )}
++      {!!h.stops_open_today && (
++        <a className="card att-home" href="#/delivery/runs">
++          <span><b>🚚 今天的送货</b><br /><span className="muted">{`今天还有 ${h.stops_open_today} 站没签收`}</span></span>
++          <span className="go">看进度 →</span>
++        </a>
++      )}
++    </>
++  );
++}
+diff --git a/portal/src/dlv/Mine.tsx b/portal/src/dlv/Mine.tsx
+new file mode 100644
+index 0000000..8d7fc74
+--- /dev/null
++++ b/portal/src/dlv/Mine.tsx
+@@ -0,0 +1,28 @@
++// 送货安装 · 我的送货：员工司机登入就看得到派给自己、连结还有效的排单，直接签收（不用点 WhatsApp 里的连结）。
++import { useEffect, useState } from "react";
++import { dlv, Run } from "../dlv-api";
++import { Empty, ErrorBox } from "../ui";
++import { DriverSign } from "./DriverSign";
++
++export function MineTab() {
++  const [runs, setRuns] = useState<Run[] | null>(null);
++  const [pick, setPick] = useState<number | null>(null);
++  const [error, setError] = useState("");
++  useEffect(() => { dlv.myRuns().then((r) => { setRuns(r); if (r.length) setPick(r[0].id); }).catch((e: Error) => setError(e.message)); }, []);
++  if (error) return <ErrorBox error={error} />;
++  if (!runs) return <p className="muted">载入中…</p>;
++  if (!runs.length) return <Empty>现在没有派给你的送货。店里排好单、选你当司机后就会出现在这里。</Empty>;
++  const run = runs.find((r) => r.id === pick) ?? runs[0];
++  return (
++    <>
++      {runs.length > 1 && (
++        <div className="toolbar">
++          <select value={run.id} onChange={(e) => setPick(Number(e.target.value))}>
++            {runs.map((r) => <option key={r.id} value={r.id}>{`${r.run_date} · ${r.stops.length} 站`}</option>)}
++          </select>
++        </div>
++      )}
++      {run.token && <DriverSign key={run.id} token={run.token} inApp />}
++    </>
++  );
++}
+diff --git a/portal/src/dlv/Plan.tsx b/portal/src/dlv/Plan.tsx
+new file mode 100644
+index 0000000..679c67c
+--- /dev/null
++++ b/portal/src/dlv/Plan.tsx
+@@ -0,0 +1,407 @@
++// 送货安装 · 排单：整串 DO 单号 → 顾客与送货地址 → 找坐标、排最短路线 → 选司机 → WhatsApp 整张清单（含签收连结）。
++// 只看的人（门市）用同一页查 DO 与地址，但不能改、不能排单。
++import { useEffect, useRef, useState } from "react";
++import {
++  dlv, DlvMeta, driverLink, driverMessage, fmtLine, fmtPhone, geocode, Hit, newToken, orderStops, parseCoords, phoneOf,
++  routeKm, splitDocNos, Stop, STORE, todayKL, toStop, ui,
++} from "../dlv-api";
++import { ErrorBox } from "../ui";
++
++export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed }: {
++  meta: DlvMeta; company: string; readOnly: boolean; onSent: () => void;
++  seed?: Stop[] | null; onSeedUsed?: () => void;      // 从「排单纪录」载入一趟旧的排单
++}) {
++  const store = STORE[company];
++  const depot = meta.depot[store] ?? null;
++  const drivers = meta.drivers.filter((d) => !d.store || d.store === store);
++  const [bulk, setBulk] = useState("");
++  const [issues, setIssues] = useState<string[]>([]);
++  const [query, setQuery] = useState("");
++  const [hits, setHits] = useState<Hit[] | null>(null);
++  const [day, setDay] = useState(todayKL());
++  const [dayDocs, setDayDocs] = useState<Hit[] | null>(null);
++  const [stops, setStops] = useState<Stop[]>([]);
++  const [driverKey, setDriverKey] = useState("");
++  const [busy, setBusy] = useState("");
++  const [info, setInfo] = useState("");
++  const [error, setError] = useState("");
++  // 已传出去的那一趟：同样的站与司机再按一次 WhatsApp / 复制，沿用同一个签收连结、不另存一趟（避免重复排单）
++  const [sent, setSent] = useState<{ token: string; sig: string } | null>(null);
++  const gen = useRef(0);   // 找位置要好几秒；中途换分店 / 清空 / 再排一次，旧的结果就丢掉
++  const stopsRef = useRef<Stop[]>(stops);   // 「现在」画面上的清单（找完位置要合并回去）
++  stopsRef.current = stops;
++
++  // 换分店：清掉这次的排单（DO 属于某一间分店）
++  useEffect(() => {
++    gen.current++;
++    setStops([]); setHits(null); setDayDocs(null); setIssues([]); setDriverKey(""); setSent(null); setBusy("");
++  }, [company]);
++  // 载入旧排单（放在换分店之后，才不会被清掉）
++  useEffect(() => {
++    if (!seed) return;
++    gen.current++;
++    setBusy("");   // 还在找位置的那一次作废，按钮要能按
++    setStops(seed.map((s) => ({ ...s, geo: s.lat == null ? "todo" : s.geo === "approx" ? "approx" : "ok" })));
++    setSent(null); setIssues([]);
++    say(`已载入 ${seed.length} 站。可以改司机、增减站，再传一次。`);
++    onSeedUsed?.();
++  }, [seed]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const say = (m: string) => { setInfo(m); setError(""); };
++  const fail = (e: unknown) => { setError(e instanceof Error ? e.message : String(e)); setInfo(""); };
++
++  function addStops(list: Hit[]): number {
++    const add = list.filter((h) => !h.cancelled).map(toStop).filter((s) => !stops.some((x) => x.key === s.key));
++    setStops((cur) => [...cur, ...add.filter((s) => !cur.some((x) => x.key === s.key))]);
++    return add.length;
++  }
++
++  async function lookup() {
++    if (!query.trim()) return;
++    setBusy("lookup"); setError("");
++    const my = gen.current;
++    try {
++      const list = await dlv.lookup(company, query);
++      if (gen.current !== my) return;     // 中途换了分店
++      if (!list.length) { say(`找不到 ${query.trim()}。DO 每 15 分钟从 AutoCount 同步一次，刚开的单请稍后再查。`); setHits(null); return; }
++      if (list.length === 1 && !list[0].cancelled && !readOnly) { addStops(list); setQuery(""); setHits(null); return; }
++      setHits(list);
++    } catch (e) { fail(e); } finally { setBusy(""); }
++  }
++
++  async function loadDay() {
++    setBusy("day"); setError("");
++    const my = gen.current;
++    try { const d = await dlv.docs(company, day); if (gen.current === my) setDayDocs(d); } catch (e) { fail(e); } finally { setBusy(""); }
++  }
++
++  function update(key: string, patch: Partial<Stop>) {
++    setStops((cur) => cur.map((s) => (s.key === key ? { ...s, ...patch } : s)));
++  }
++
++  /** 改地址：有 DO 就只改这张 DO（同步不会盖掉）；没有 DO 或地址本来来自顾客资料，也存进顾客资料。
++   *  有 DO 的站清空 = 取消手动地址，改回 DO / 顾客资料的地址（从资料库重新读）。 */
++  async function saveAddress(s: Stop, address: string) {
++    try {
++      if (s.doc_no && !address.trim()) {
++        await dlv.setAddress(company, s.doc_no, "");
++        const h = (await dlv.lookup(company, s.doc_no)).find((x) => x.doc_no === s.doc_no);
++        if (h) setStops((cur) => cur.map((x) => (x.key === s.key ? { ...toStop(h), dnote: x.dnote } : x)));
++        say("已取消手动地址，改回 DO 的送货地址。");
++        return;
++      }
++      if (s.doc_no) await dlv.setAddress(company, s.doc_no, address);
++      if (s.member_id && (!s.doc_no || s.source === "profile" || !s.source)) await dlv.setCustomerAddress(s.member_id, address);
++      update(s.key, { address, lat: null, lng: null, geo: "todo", source: s.doc_no ? "manual" : "profile" });
++      say("地址已储存。按「排最短路线」会重新找位置。");
++    } catch (e) { fail(e); }
++  }
++
++  /** 给司机的备注：有 DO 就存在那张 DO（下次查同一张单还在）；用电话加的站只留在这次排单 */
++  async function saveNote(s: Stop, note: string) {
++    try {
++      if (s.doc_no) await dlv.setNote(company, s.doc_no, note);
++      update(s.key, { dnote: note.trim() || null });
++    } catch (e) { fail(e); }
++  }
++
++  async function saveCoords(s: Stop, text: string) {
++    const c = parseCoords(text);
++    if (!c) { setError("看不懂坐标。请贴 Google Maps 的连结，或像 1.5321, 103.6612 这样的数字。"); return; }
++    try {
++      if (s.address) await dlv.setGeo(s.address, c.lat, c.lng);
++      update(s.key, { ...c, geo: "ok" });
++      say("位置已储存。按「排最短路线」重新排顺序。");
++    } catch (e) { fail(e); }
++  }
++
++  /** 一键排单：整串单号 → 查 DO 与顾客资料 → 找坐标 → 排最短顺序 */
++  async function bulkPlan() {
++    const nos = splitDocNos(bulk);
++    if (!nos.length) { setError("请先输入今天要送的 DO 单号。"); return; }
++    setBusy("bulk"); say(`查询 ${nos.length} 张单…`); setIssues([]);
++    const my = gen.current;
++    try {
++      const rows = await dlv.lookupMany(company, nos);
++      if (gen.current !== my) return;     // 中途换了分店 / 清空
++      const out: string[] = [];
++      const merged = [...stopsRef.current];
++      for (const h of rows) {
++        if (!h.found) { out.push(`${h.query}：找不到（刚开的单约 15 分钟后才查得到）`); continue; }
++        if (h.cancelled) { out.push(`${h.doc_no ?? h.query}：这张 DO 已取消`); continue; }
++        const st = toStop(h);
++        if (!merged.some((x) => x.key === st.key)) merged.push(st);
++      }
++      const noAddr = merged.filter((x) => !x.address).map((x) => x.doc_no ?? x.name);
++      if (noAddr.length) out.push(`没有地址，请在下面那格补上再按一次「排最短路线」：${noAddr.join(", ")}`);
++      setIssues(out);
++      setBulk("");
++      await plan(merged);
++    } catch (e) { fail(e); setBusy(""); }
++  }
++
++  /** 找坐标、排顺序。找位置要好几秒：结果按站 key 合并回「现在」的清单，中途改的地址、加减的站都不会被盖掉 */
++  async function plan(list?: Stop[]) {
++    const my = ++gen.current;
++    if (list) { stopsRef.current = list; setStops(list); }
++    setBusy("plan"); setError("");
++    const todo = stopsRef.current.filter((s) => s.lat == null && s.address);
++    const found = new Map<string, { address: string; lat: number | null; lng: number | null; geo: Stop["geo"] }>();
++    for (let i = 0; i < todo.length; i++) {
++      const s = todo[i];
++      say(`找位置中… ${i + 1} / ${todo.length}`);
++      const c = await geocode(s.address);
++      if (gen.current !== my) return;          // 换了分店 / 清空 / 又按了一次
++      found.set(s.key, c ? { address: s.address, lat: c.lat, lng: c.lng, geo: c.approx ? "approx" : "ok" }
++                         : { address: s.address, lat: null, lng: null, geo: "none" });
++      if (c && !c.approx) dlv.setGeo(s.address, c.lat, c.lng).catch(() => { /* 存不进去下次再找 */ });
++    }
++    const merged = stopsRef.current.map((s) => {
++      const f = found.get(s.key);
++      return f && f.address === s.address && s.lat == null ? { ...s, lat: f.lat, lng: f.lng, geo: f.geo } : s;
++    });
++    const result = orderStops(merged, depot);
++    stopsRef.current = result;
++    setStops(result);
++    setBusy("");
++    const missing = result.filter((s) => s.lat == null).length;
++    const approx = result.filter((s) => s.geo === "approx").length;
++    say(missing
++      ? `已排好。${missing} 站找不到位置（排在最后），请贴 Google Maps 坐标或改地址后再按一次。`
++      : approx
++        ? `已排好。${approx} 站只找到邮区的大概位置，最好按「改位置」贴准确的 Google Maps 坐标。`
++        : `已排好最短顺序（直线距离约 ${routeKm(result, depot).toFixed(0)} km）。可以用 ↑ ↓ 微调。`);
++  }
++
++  function move(i: number, d: number) {
++    const j = i + d;
++    if (j < 0 || j >= stops.length) return;
++    const cur = [...stops];
++    [cur[i], cur[j]] = [cur[j], cur[i]];
++    setStops(cur);
++  }
++
++  const driver = drivers.find((d) => `${d.kind}:${d.id}` === driverKey) ?? null;
++  const preview = driverMessage(stops, { date: todayKL(), driver: driver?.name ?? "-", store, depot });
++
++  /** 传 WhatsApp / 复制：先产生签收连结放进讯息，再存进排单纪录。同样的站与司机再按一次就沿用同一个连结、不重复存。 */
++  async function send(how: "wa" | "copy") {
++    if (busy) return;
++    if (how === "wa" && !driver && !window.confirm(ui("还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？"))) {
++      setError("请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。");
++      return;
++    }
++    const missing = stops.filter((s) => !s.address).length;
++    if (missing && !window.confirm(ui(`有 ${missing} 站没有地址，还是要传给司机吗？`))) return;
++    const sig = JSON.stringify([driverKey, stops.map((s) => [s.key, s.address, s.lat, s.lng, s.dnote])]);
++    const again = sent?.sig === sig;
++    const token = again ? sent!.token : newToken();
++    const text = driverMessage(stops, { date: todayKL(), driver: driver?.name ?? "-", store, depot, link: driverLink(token) });
++    if (how === "wa") {
++      // 要在按钮当下打开（之后才 await），浏览器才不会挡弹出视窗
++      window.open(`https://wa.me/${driver ? driver.phone : ""}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
++    } else {
++      try { await navigator.clipboard.writeText(text); }
++      catch { setError("浏览器不让复制，请用「WhatsApp 传给司机」。"); return; }
++    }
++    if (again) {
++      say(how === "wa" ? "已再打开 WhatsApp（同一趟、同一个签收连结，没有另存一趟）。" : "清单已复制（同一趟、同一个签收连结）。");
++      return;
++    }
++    setBusy("send");
++    try {
++      await dlv.saveRun({ company, driver_kind: driver?.kind ?? null, driver_id: driver?.id ?? null, stops, token });
++      setSent({ token, sig });
++      say(how === "wa" ? "已打开 WhatsApp，并存进排单纪录。司机按连结签收后，在「排单纪录」看进度和照片。"
++                       : "清单已复制（含签收连结），可以贴到任何地方；也已存进排单纪录。");
++      onSent();
++    } catch (e) { fail(e); } finally { setBusy(""); }
++  }
++
++  return (
++    <>
++      {!readOnly && (
++        <section className="card">
++          <h2>今天要送的 DO 单号</h2>
++          <textarea rows={4} value={bulk} onChange={(e) => setBulk(e.target.value)}
++                    placeholder="一行一张，或用空格分开；只打数字也可以。例：DO-017707 17708 17709" />
++          <div className="actions left">
++            <button disabled={!!busy} onClick={bulkPlan}>一键排单</button>
++            <span className="muted small">自动找出顾客资料与送货地址，排好最短路线；再选司机按 WhatsApp 就传出去。</span>
++          </div>
++          {issues.length > 0 && <ul className="dlv-issues">{issues.map((x) => <li key={x}>{x}</li>)}</ul>}
++        </section>
++      )}
++
++      <div className="toolbar">
++        <input placeholder="DO 单号或顾客电话" value={query} onChange={(e) => setQuery(e.target.value)}
++               onKeyDown={(e) => { if (e.key === "Enter") lookup(); }} />
++        <button disabled={busy === "lookup"} onClick={lookup}>{readOnly ? "查询" : "查询并加入"}</button>
++        <input type="date" value={day} onChange={(e) => setDay(e.target.value)} />
++        <button className="ghost" disabled={busy === "day"} onClick={loadDay}>列出这天的 DO</button>
++      </div>
++      <ErrorBox error={error} />
++      {info && <p className="ok">{info}</p>}
++
++      {hits && (
++        <section className="card">
++          <div className="dlv-head"><b>{`找到 ${hits.length} 笔`}</b><button className="ghost small" onClick={() => setHits(null)}>关闭</button></div>
++          <ul className="list">
++            {hits.map((h, i) => (
++              <li key={i} className="dlv-hit">
++                <span>
++                  <b>{h.doc_no ?? "（顾客）"}</b> {toStop(h).name || h.debtor_name} <span className="muted">{fmtPhone(phoneOf(h.member_id))}</span>
++                  <br /><span className="muted small">{h.address || "没有地址"}</span>
++                  {h.delivery_note && <><br /><span className="small">⚠️ {h.delivery_note}</span></>}
++                </span>
++                {h.cancelled ? <span className="tag">已取消</span>
++                  : !readOnly && <button className="small" onClick={() => addStops([h])}>加入</button>}
++              </li>
++            ))}
++          </ul>
++        </section>
++      )}
++
++      {dayDocs && (
++        <section className="card">
++          <div className="dlv-head">
++            <b>{`${day} 的 DO（${dayDocs.length} 张）`}</b>
++            <span>
++              {!readOnly && dayDocs.length > 0 && (
++                <button className="small" onClick={() => say(`加入 ${addStops(dayDocs)} 张。`)}>全部加入</button>
++              )} <button className="ghost small" onClick={() => setDayDocs(null)}>关闭</button>
++            </span>
++          </div>
++          {dayDocs.length === 0 ? <p className="muted">这天没有 DO（或还没同步）。</p> : (
++            <ul className="list">
++              {dayDocs.map((h) => (
++                <li key={h.doc_no!} className="dlv-hit">
++                  <span><b>{h.doc_no}</b> {toStop(h).name || h.debtor_name}<br /><span className="muted small">{h.address || "没有地址"}</span></span>
++                  {readOnly ? null : stops.some((s) => s.key === h.doc_no) ? <span className="muted small">已加入</span>
++                    : <button className="small" onClick={() => addStops([h])}>加入</button>}
++                </li>
++              ))}
++            </ul>
++          )}
++        </section>
++      )}
++
++      {stops.length > 0 && (
++        <section className="card">
++          <div className="table-wrap">
++            <table className="dlv-stops">
++              <thead><tr><th>#</th><th>单号</th><th>顾客 / 货品 / 备注</th><th>送货地址</th><th>位置</th><th /></tr></thead>
++              <tbody>
++                {stops.map((s, i) => (
++                  <StopRow key={s.key} s={s} i={i} n={stops.length} readOnly={readOnly}
++                           onMove={(d) => move(i, d)} onRemove={() => setStops(stops.filter((x) => x.key !== s.key))}
++                           onAddress={(a) => saveAddress(s, a)} onNote={(x) => saveNote(s, x)} onCoords={(c) => saveCoords(s, c)} />
++                ))}
++              </tbody>
++            </table>
++          </div>
++          {!readOnly && (
++            <>
++              <div className="actions left dlv-send">
++                <button className="ghost" disabled={!!busy} onClick={() => plan()}>排最短路线</button>
++                <select value={driverKey} onChange={(e) => setDriverKey(e.target.value)}>
++                  <option value="">选司机</option>
++                  {drivers.map((d) => (
++                    <option key={`${d.kind}:${d.id}`} value={`${d.kind}:${d.id}`}>
++                      {`${d.name} · ${fmtPhone(d.phone)}${d.kind === "ext" ? "（外包）" : ""}`}
++                    </option>
++                  ))}
++                </select>
++                <button disabled={!stops.length || !!busy} onClick={() => send("wa")}>WhatsApp 传给司机</button>
++                <button className="ghost" disabled={!!busy} onClick={() => send("copy")}>复制清单</button>
++                <button className="ghost" onClick={() => {
++                  if (window.confirm(ui("清空这次的排单？"))) { gen.current++; setStops([]); setSent(null); setIssues([]); setBusy(""); }
++                }}>清空</button>
++              </div>
++              {drivers.length === 0 && (
++                <p className="muted small">还没有司机：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。</p>
++              )}
++              <p className="muted small">
++                {`${stops.length} 站`}{routeKm(stops, depot) ? " · " : ""}{routeKm(stops, depot) ? `直线约 ${routeKm(stops, depot).toFixed(0)} km` : ""}
++                {!depot && " · "}{!depot && "还没设出发点（在「设定」分页），路线从第一站开始排。"}
++              </p>
++              <details>
++                <summary>预览给司机的讯息</summary>
++                <pre className="dlv-pre">{preview}</pre>
++              </details>
++            </>
++          )}
++        </section>
++      )}
++    </>
++  );
++}
++
++function StopRow({ s, i, n, readOnly, onMove, onRemove, onAddress, onNote, onCoords }: {
++  s: Stop; i: number; n: number; readOnly: boolean; onMove: (d: number) => void; onRemove: () => void;
++  onAddress: (a: string) => void; onNote: (x: string) => void; onCoords: (c: string) => void;
++}) {
++  const [addr, setAddr] = useState(s.address);
++  const [note, setNote] = useState(s.dnote ?? "");
++  const [coords, setCoords] = useState("");
++  const [fix, setFix] = useState(false);
++  useEffect(() => { setAddr(s.address); }, [s.address]);
++  useEffect(() => { setFix(false); setCoords(""); }, [s.lat, s.lng]);
++  useEffect(() => { setNote(s.dnote ?? ""); }, [s.dnote]);
++  const src = s.source === "do" ? "地址来自 AutoCount 的 DO" : s.source === "manual" ? "已手动修改（只改这张 DO）"
++    : s.source === "profile" ? "地址来自顾客资料" : "";
++  return (
++    <tr>
++      <td>{i + 1}</td>
++      <td className="nowrap">{s.doc_no ?? "–"}</td>
++      <td className="dlv-cust">
++        <b>{s.name || "–"}</b> <span className="muted small">{fmtPhone(s.phone)}</span>
++        {s.lines?.length ? (
++          <details className="dlv-lines">
++            <summary>{`货品 ${s.lines.length} 项`}</summary>
++            <ul>{s.lines.map((l, k) => <li key={k}>{fmtLine(l)}</li>)}</ul>
++          </details>
++        ) : s.items ? <div className="muted small">{s.items}</div> : null}
++        {s.remark && <div className="muted small">📝 {s.remark}</div>}
++        {readOnly ? (s.dnote && <div className="small">⚠️ {s.dnote}</div>) : (
++          <>
++            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} className="dlv-note"
++                      placeholder="给司机的备注：时间、地点、下货位置…" />
++            {note.trim() !== (s.dnote ?? "") && <button className="small" onClick={() => onNote(note)}>储存备注</button>}
++          </>
++        )}
++      </td>
++      <td className="dlv-addr">
++        {readOnly ? <span>{s.address || "没有地址"}</span> : (
++          <>
++            <textarea rows={2} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="没有地址，请填上" />
++            {addr !== s.address && (addr.trim() || s.doc_no) && (
++              <button className="small" onClick={() => onAddress(addr)}>{addr.trim() ? "储存地址" : "改回 DO 的地址"}</button>
++            )}
++          </>
++        )}
++        {src && addr === s.address && <div className="muted small">{src}</div>}
++      </td>
++      <td className="dlv-geo">
++        {s.lat != null ? (s.geo === "approx" ? <span className="tag late">大概位置（邮区）</span> : <span className="tag ok-tag">✓ 有位置</span>)
++          : s.geo === "none" ? <span className="tag late">找不到</span> : <span className="muted small">未找</span>}
++        {s.lat != null && !readOnly && !fix && <button className="ghost small" onClick={() => setFix(true)}>改位置</button>}
++        {(s.lat == null || fix) && !readOnly && (
++          <div className="dlv-coords">
++            <input placeholder="贴 Google Maps 坐标" value={coords} onChange={(e) => setCoords(e.target.value)} />
++            <button className="small" onClick={() => onCoords(coords)}>OK</button>
++          </div>
++        )}
++      </td>
++      <td className="nowrap">
++        {!readOnly && (
++          <>
++            <button className="ghost small" disabled={i === 0} onClick={() => onMove(-1)} aria-label="上移">↑</button>
++            <button className="ghost small" disabled={i === n - 1} onClick={() => onMove(1)} aria-label="下移">↓</button>
++          </>
++        )}
++        <button className="ghost small" onClick={onRemove} aria-label="移除">✕</button>
++      </td>
++    </tr>
++  );
++}
+diff --git a/portal/src/dlv/Runs.tsx b/portal/src/dlv/Runs.tsx
+new file mode 100644
+index 0000000..d498d36
+--- /dev/null
++++ b/portal/src/dlv/Runs.tsx
+@@ -0,0 +1,106 @@
++// 送货安装 · 排单纪录：近 14 天每一趟、每站签收状态、司机备注与照片（照片用 1 小时有效的网址）。
++import { useEffect, useState } from "react";
++import { dlv, driverLink, fmtPhone, hhmmKL, Run, Stop } from "../dlv-api";
++import { Empty, ErrorBox } from "../ui";
++
++export function RunsTab({ company, canEdit, reloadKey, onLoad }: {
++  company: string; canEdit: boolean; reloadKey: number; onLoad?: (stops: Stop[]) => void;
++}) {
++  const [runs, setRuns] = useState<Run[] | null>(null);
++  const [error, setError] = useState("");
++  const load = () => { setError(""); dlv.runs(company, 14).then(setRuns).catch((e: Error) => setError(e.message)); };
++  useEffect(() => { setRuns(null); load(); }, [company, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  return (
++    <>
++      <div className="actions left">
++        <button className="ghost small" onClick={load}>重新整理</button>
++        <span className="muted small">司机每签收一站，这里就看得到（按「重新整理」）。</span>
++      </div>
++      <ErrorBox error={error} />
++      {runs === null ? <p className="muted">载入中…</p>
++        : runs.length === 0 ? <Empty>最近 14 天没有排单。</Empty>
++        : runs.map((r) => <RunCard key={r.id} r={r} canEdit={canEdit} onLoad={onLoad} />)}
++    </>
++  );
++}
++
++export function RunCard({ r, canEdit, onLoad }: { r: Run; canEdit: boolean; onLoad?: (stops: Stop[]) => void }) {
++  const [urls, setUrls] = useState<Record<string, string>>({});
++  const [isOpen, setIsOpen] = useState(false);
++  const [msg, setMsg] = useState("");
++  const podOf = (k: string) => r.pods.find((p) => p.stop_key === k);
++  const done = r.stops.filter((s) => podOf(s.key)?.status === "delivered").length;
++  const failed = r.stops.filter((s) => podOf(s.key)?.status === "failed").length;
++
++  // 打开时（以及按「重新整理」有新照片时）只要还没有网址的照片
++  const paths = r.pods.flatMap((p) => p.photos);
++  const pathKey = paths.join("|");
++  useEffect(() => {
++    if (!isOpen) return;
++    const missing = paths.filter((p) => !urls[p]);
++    if (!missing.length) return;
++    dlv.photoUrls(missing).then((m) => setUrls((u) => ({ ...u, ...m }))).catch((err: Error) => setMsg(err.message));
++  }, [isOpen, pathKey]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  async function copyLink() {
++    if (!r.token) return;
++    try { await navigator.clipboard.writeText(driverLink(r.token)); setMsg("司机签收连结已复制（排单后 3 天内有效）。"); }
++    catch { setMsg(driverLink(r.token)); }
++  }
++
++  return (
++    <details className="card dlv-run" onToggle={(e) => setIsOpen(e.currentTarget.open)}>
++      <summary>
++        <b>{r.run_date}</b> · {r.driver_name ?? "（没选司机）"} · <span>{`${r.stops.length} 站`}</span>
++        {r.has_link && <> · <span className={"tag" + (done === r.stops.length ? " ok-tag" : "")}>{`已送达 ${done} / ${r.stops.length}`}</span></>}
++        {failed > 0 && <> <span className="tag late">{`送不成 ${failed}`}</span></>}
++      </summary>
++      <p className="muted small">
++        {`排单：${r.created_by ?? "—"}`}{r.driver_phone ? ` · ${fmtPhone(r.driver_phone)}` : ""}
++        {r.has_link && !r.link_valid && " · "}{r.has_link && !r.link_valid && "签收连结已过期"}
++      </p>
++      {canEdit && (
++        <div className="actions left">
++          {onLoad && <button className="ghost small" onClick={() => onLoad(r.stops)}>载入到排单</button>}
++          {r.token && r.link_valid && <button className="ghost small" onClick={copyLink}>复制司机签收连结</button>}
++          {r.token && r.link_valid && <a className="small" href={`#/driver?t=${r.token}`} target="_blank" rel="noopener">打开签收页</a>}
++        </div>
++      )}
++      {msg && <p className="muted small">{msg}</p>}
++      <div className="table-wrap">
++        <table>
++          <tbody>
++            {r.stops.map((s, i) => {
++              const p = podOf(s.key);
++              return (
++                <tr key={s.key}>
++                  <td>{i + 1}</td>
++                  <td className="nowrap">{s.doc_no ?? "–"}</td>
++                  <td>{s.name || fmtPhone(s.phone) || "–"}</td>
++                  <td>
++                    {!p ? <span className="muted small">{r.has_link ? "还没签收" : "这趟没有签收连结"}</span>
++                      : <span className={"tag " + (p.status === "delivered" ? "ok-tag" : "late")}>
++                          {p.status === "delivered" ? "已送达" : "送不成"}
++                        </span>}
++                    {p && <span className="muted small"> {hhmmKL(p.created_at)}</span>}
++                    {p?.note && <div className="muted small">{p.note}</div>}
++                  </td>
++                  <td>
++                    <div className="dlv-photos">
++                      {p?.photos.map((ph) => urls[ph]
++                        ? <a key={ph} href={urls[ph]} target="_blank" rel="noopener"><img src={urls[ph]} alt="" /></a>
++                        : <span key={ph} className="muted">📷</span>)}
++                      {/* 只看的人：连结还有效时看不到照片（路径里有连结代码），只显示张数 */}
++                      {p && !p.photos.length && p.photo_count > 0 && <span className="muted small">{`📷 ${p.photo_count} 张`}</span>}
++                    </div>
++                  </td>
++                </tr>
++              );
++            })}
++          </tbody>
++        </table>
++      </div>
++    </details>
++  );
++}
+diff --git a/portal/src/dlv/Setup.tsx b/portal/src/dlv/Setup.tsx
+new file mode 100644
+index 0000000..5109fd0
+--- /dev/null
++++ b/portal/src/dlv/Setup.tsx
+@@ -0,0 +1,104 @@
++// 送货安装 · 设定（可审批）：出发点（排路线从这里开始）、外包司机。员工司机在「员工与权限」管理。
++import { useEffect, useState } from "react";
++import { BRANCH_LABEL } from "../api";
++import { dlv, DlvMeta, fmtPhone, geocode, parseCoords, STORE, ui } from "../dlv-api";
++import { ErrorBox } from "../ui";
++
++export function SetupTab({ meta, company, onChanged }: { meta: DlvMeta; company: string; onChanged: () => void }) {
++  const store = STORE[company];
++  const depot = meta.depot[store] ?? null;
++  const [addr, setAddr] = useState(depot?.address ?? "");
++  const [coords, setCoords] = useState(depot ? `${depot.lat}, ${depot.lng}` : "");
++  const [dname, setDname] = useState("");
++  const [dphone, setDphone] = useState("");
++  const [busy, setBusy] = useState(false);
++  const [info, setInfo] = useState("");
++  const [error, setError] = useState("");
++  useEffect(() => { setAddr(depot?.address ?? ""); setCoords(depot ? `${depot.lat}, ${depot.lng}` : ""); }, [depot, store]);
++
++  const staffDrivers = meta.drivers.filter((d) => d.kind === "staff" && (!d.store || d.store === store));
++  const extDrivers = meta.drivers.filter((d) => d.kind === "ext" && (!d.store || d.store === store));
++
++  async function run(f: () => Promise<unknown>, ok: string): Promise<boolean> {
++    setBusy(true); setError(""); setInfo("");
++    try { await f(); setInfo(ok); onChanged(); return true; }
++    catch (e) { setError(e instanceof Error ? e.message : String(e)); return false; }
++    finally { setBusy(false); }
++  }
++
++  async function saveDepot() {
++    let c: { lat: number; lng: number; approx?: boolean } | null = parseCoords(coords);
++    if (!c && addr.trim()) {
++      setBusy(true); setError(""); setInfo("找出发点的位置中…");
++      try { c = await geocode(addr); } finally { setBusy(false); }
++    }
++    if (!c) { setError("找不到出发点的位置，请贴 Google Maps 坐标（在 Google Maps 长按那个地点就看得到）。"); setInfo(""); return; }
++    if (c.approx) {
++      // 只找到邮区中心：出发点要准，不自动存；把大概坐标放进去，请他贴准确的
++      setCoords(`${c.lat}, ${c.lng}`); setInfo("");
++      setError("只找到邮区的大概位置。请在 Google Maps 长按店的位置，把坐标贴进「坐标」再储存。");
++      return;
++    }
++    const at = c;
++    await run(() => dlv.setDepot(company, addr, at.lat, at.lng), "出发点已储存。");
++  }
++
++  function addDriver() {
++    if (!dname.trim()) { setError("请填司机名字。"); return; }
++    if (dphone.replace(/\D/g, "").length < 8) { setError("请填司机的手机号码（例：0123456789），WhatsApp 要用。"); return; }   // 细的检查在资料库（马来西亚 / 新加坡手机）
++    run(() => dlv.saveDriver({ name: dname, phone: dphone, company }), "已新增外包司机，在「排单」的「选司机」就选得到。")
++      .then((ok) => { if (ok) { setDname(""); setDphone(""); } });
++  }
++
++  return (
++    <>
++      <ErrorBox error={error} />
++      {info && <p className="ok">{info}</p>}
++      <section className="card">
++        <h2>{`出发点（${BRANCH_LABEL[company] ?? company}）`}</h2>
++        <p className="muted small">排最短路线从这里开始算；WhatsApp 清单的 Google Maps 全程路线也从这里出发。</p>
++        <div className="form">
++          <label>地址<input value={addr} onChange={(e) => {
++            setAddr(e.target.value);
++            // 改了地址：原本带入的坐标是旧地点的，清掉让它照新地址找（自己贴的坐标不动）
++            if (depot && coords === `${depot.lat}, ${depot.lng}`) setCoords("");
++          }} /></label>
++          <label>坐标（选填；找不到时贴 Google Maps 的位置）
++            <input value={coords} onChange={(e) => setCoords(e.target.value)} placeholder="1.5321, 103.6612" />
++          </label>
++        </div>
++        <div className="actions left"><button disabled={busy} onClick={saveDepot}>储存出发点</button></div>
++      </section>
++
++      <section className="card">
++        <h2>司机</h2>
++        <h3>员工司机</h3>
++        <p className="muted small">「送货安装」部门、有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。</p>
++        {staffDrivers.length === 0 ? <p className="muted">还没有。</p> : (
++          <ul className="list">{staffDrivers.map((d) => <li key={d.id}><span>{d.name}</span><span className="muted">{fmtPhone(d.phone)}</span></li>)}</ul>
++        )}
++        <h3>外包司机</h3>
++        <p className="muted small">不是员工的司机：他们收到 WhatsApp 后用里面的签收连结，不用登入。</p>
++        {extDrivers.length > 0 && (
++          <ul className="list">
++            {extDrivers.map((d) => (
++              <li key={d.id}>
++                <span>{d.name} <span className="muted">{fmtPhone(d.phone)}</span></span>
++                <button className="ghost small" disabled={busy}
++                        onClick={() => window.confirm(ui(`不再列出司机 ${d.name}？`))
++                          && run(() => dlv.saveDriver({ id: d.id, name: d.name, phone: d.phone, company, active: false }), "已移除。")}>
++                  移除
++                </button>
++              </li>
++            ))}
++          </ul>
++        )}
++        <div className="toolbar">
++          <input placeholder="名字" value={dname} onChange={(e) => setDname(e.target.value)} />
++          <input placeholder="手机号码" value={dphone} onChange={(e) => setDphone(e.target.value)} inputMode="tel" />
++          <button disabled={busy} onClick={addDriver}>新增外包司机</button>
++        </div>
++      </section>
++    </>
++  );
++}
+diff --git a/portal/src/i18n-dict-dlv.ts b/portal/src/i18n-dict-dlv.ts
+new file mode 100644
+index 0000000..0b547ca
+--- /dev/null
++++ b/portal/src/i18n-dict-dlv.ts
+@@ -0,0 +1,181 @@
++// 介面用语（八）：送货安装（含资料库错误讯息）。键 = 画面上整段中文（去头尾空白）。
++// 司机签收页（dlv/DriverSign.tsx）自己带中 / 英 / 马来文，不在这里；给司机的 WhatsApp 清单固定中文。
++type T = (s: string) => string;
++
++export const DICT_DLV: Record<string, string> = {
++  // 分页
++  "排单": "Plan",
++  "查单": "Look up",
++  "AutoCount DO 更新：": "AutoCount DOs updated: ",
++  "排单纪录": "Runs",
++  "我的送货": "My deliveries",
++  "设定": "Settings",
++  "（营业时间每 15 分钟同步一次，刚开的 DO 稍等再查）": "(synced every 15 minutes during business hours; a DO you just created may take a moment)",
++  "送货排单（DO 单号 → 最短路线 → WhatsApp 司机）、司机签收拍照、送货纪录":
++    "Delivery planning (DO numbers → shortest route → WhatsApp the driver), driver sign-off with photos, delivery history",
++  // 排单
++  "今天要送的 DO 单号": "DO numbers to deliver today",
++  "一行一张，或用空格分开；只打数字也可以。例：DO-017707 17708 17709":
++    "One per line or separated by spaces; digits only is fine. e.g. DO-017707 17708 17709",
++  "一键排单": "Plan in one click",
++  "自动找出顾客资料与送货地址，排好最短路线；再选司机按 WhatsApp 就传出去。":
++    "Finds the customers and delivery addresses and orders the shortest route; then pick a driver and tap WhatsApp.",
++  "DO 单号或顾客电话": "DO number or customer phone",
++  "查询": "Search",
++  "查询并加入": "Search & add",
++  "列出这天的 DO": "List DOs for this day",
++  "关闭": "Close",
++  "（顾客）": "(customer)",
++  "没有地址": "No address",
++  "已取消": "Cancelled",
++  "加入": "Add",
++  "全部加入": "Add all",
++  "已加入": "Added",
++  "这天没有 DO（或还没同步）。": "No DOs on this day (or not synced yet).",
++  "单号": "DO no.",
++  "顾客 / 货品 / 备注": "Customer / goods / note",
++  "送货地址": "Delivery address",
++  "位置": "Location",
++  "排最短路线": "Order shortest route",
++  "选司机": "Choose driver",
++  "WhatsApp 传给司机": "WhatsApp to driver",
++  "复制清单": "Copy list",
++  "清空": "Clear",
++  "清空这次的排单？": "Clear this plan?",
++  "预览给司机的讯息": "Preview the driver's message",
++  "还没有司机：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。":
++    "No drivers yet: for staff drivers, ask an admin to set their department to \"Delivery & install\" and fill in a mobile number in Staff & access; add outside drivers in the Settings tab.",
++  "还没设出发点（在「设定」分页），路线从第一站开始排。": "No starting point set (Settings tab) — the route starts from the first stop.",
++  "给司机的备注：时间、地点、下货位置…": "Note for the driver: time, place, where to unload…",
++  "储存备注": "Save note",
++  "没有地址，请填上": "No address — please fill in",
++  "储存地址": "Save address",
++  "地址来自 AutoCount 的 DO": "Address from the AutoCount DO",
++  "已手动修改（只改这张 DO）": "Edited by hand (this DO only)",
++  "地址来自顾客资料": "Address from customer records",
++  "✓ 有位置": "✓ Located",
++  "找不到": "Not found",
++  "未找": "Not looked up",
++  "贴 Google Maps 坐标": "Paste Google Maps coordinates",
++  "改位置": "Fix location",
++  "大概位置（邮区）": "Approx. (postcode area)",
++  "改回 DO 的地址": "Revert to DO address",
++  "已取消手动地址，改回 DO 的送货地址。": "Manual address removed — back to the DO's delivery address.",
++  "位置已储存。按「排最短路线」重新排顺序。": "Location saved. Tap \"Order shortest route\" to re-order.",
++  "已再打开 WhatsApp（同一趟、同一个签收连结，没有另存一趟）。": "WhatsApp opened again (same run and sign-off link — no duplicate run saved).",
++  "清单已复制（同一趟、同一个签收连结）。": "List copied (same run and sign-off link).",
++  "载入到排单": "Load into Plan",
++  "上移": "Move up",
++  "下移": "Move down",
++  "移除": "Remove",
++  "地址已储存。按「排最短路线」会重新找位置。": "Address saved. \"Order shortest route\" will look up the location again.",
++  "看不懂坐标。请贴 Google Maps 的连结，或像 1.5321, 103.6612 这样的数字。":
++    "Can't read the coordinates. Paste a Google Maps link, or numbers like 1.5321, 103.6612.",
++  "请先输入今天要送的 DO 单号。": "Enter today's DO numbers first.",
++  "还没选司机。要直接打开 WhatsApp，自己挑要传给谁吗？": "No driver chosen. Open WhatsApp anyway and pick the contact yourself?",
++  "请先在「选司机」选一位。没有司机的话：员工司机请管理员在「员工与权限」设成「送货安装」部门并填手机；外包司机在「设定」分页新增。":
++    "Choose a driver first. If there are none: for staff drivers, ask an admin to set their department to \"Delivery & install\" with a mobile number; add outside drivers in Settings.",
++  "浏览器不让复制，请用「WhatsApp 传给司机」。": "The browser won't allow copying — use \"WhatsApp to driver\".",
++  "已打开 WhatsApp，并存进排单纪录。司机按连结签收后，在「排单纪录」看进度和照片。":
++    "WhatsApp opened and the run saved. When the driver signs off via the link, see progress and photos in Runs.",
++  "清单已复制（含签收连结），可以贴到任何地方；也已存进排单纪录。": "List copied (with the sign-off link) — paste it anywhere. The run was saved too.",
++  // 排单纪录
++  "重新整理": "Refresh",
++  "司机每签收一站，这里就看得到（按「重新整理」）。": "Each stop the driver signs off shows up here (tap Refresh).",
++  "最近 14 天没有排单。": "No runs in the last 14 days.",
++  "（没选司机）": "(no driver)",
++  "签收连结已过期": "Sign-off link expired",
++  "复制司机签收连结": "Copy driver link",
++  "打开签收页": "Open sign-off page",
++  "司机签收连结已复制（排单后 3 天内有效）。": "Driver link copied (valid for 3 days after planning).",
++  "还没签收": "Not signed off yet",
++  "这趟没有签收连结": "No sign-off link for this run",
++  "已送达": "Delivered",
++  "送不成": "Not delivered",
++  // 我的送货、首页
++  "现在没有派给你的送货。店里排好单、选你当司机后就会出现在这里。": "No deliveries assigned to you. They appear here once the shop plans a run with you as driver.",
++  "🚚 我的送货": "🚚 My deliveries",
++  "去签收 →": "Sign off →",
++  "🚚 今天的送货": "🚚 Today's deliveries",
++  "看进度 →": "See progress →",
++  // 设定
++  "排最短路线从这里开始算；WhatsApp 清单的 Google Maps 全程路线也从这里出发。":
++    "Routes are ordered from here, and the Google Maps route in the WhatsApp list starts here too.",
++  "地址": "Address",
++  "坐标（选填；找不到时贴 Google Maps 的位置）": "Coordinates (optional; paste from Google Maps if the address isn't found)",
++  "储存出发点": "Save starting point",
++  "找出发点的位置中…": "Looking up the starting point…",
++  "找不到出发点的位置，请贴 Google Maps 坐标（在 Google Maps 长按那个地点就看得到）。":
++    "Can't find the starting point — paste Google Maps coordinates (long-press the place in Google Maps to see them).",
++  "出发点已储存。": "Starting point saved.",
++  "只找到邮区的大概位置。请在 Google Maps 长按店的位置，把坐标贴进「坐标」再储存。":
++    "Only the postcode area was found. Long-press the shop in Google Maps, paste the coordinates into Coordinates and save again.",
++  "司机": "Drivers",
++  "员工司机": "Staff drivers",
++  "「送货安装」部门、有填手机号码的在职员工会自动列出；他们登入营运系统，在「我的送货」直接签收。要新增请到「员工与权限」。":
++    "Active staff in the \"Delivery & install\" department with a mobile number are listed automatically; they sign off in My deliveries after logging in. Add them in Staff & access.",
++  "还没有。": "None yet.",
++  "外包司机": "Outside drivers",
++  "不是员工的司机：他们收到 WhatsApp 后用里面的签收连结，不用登入。": "Drivers who aren't staff: they use the sign-off link in the WhatsApp message — no login needed.",
++  "名字": "Name",
++  "手机号码": "Mobile number",
++  "新增外包司机": "Add outside driver",
++  "请填司机名字。": "Please enter the driver's name.",
++  "请填司机的手机号码（例：0123456789），WhatsApp 要用。": "Please enter the driver's mobile number (e.g. 0123456789) — WhatsApp needs it.",
++  "已新增外包司机，在「排单」的「选司机」就选得到。": "Outside driver added — choose them under \"Choose driver\" in Plan.",
++  "已移除。": "Removed.",
++  // 资料库错误讯息（ops_dlv_*）
++  "你没有这间分店的送货权限。": "You don't have delivery access for this branch.",
++  "一次最多 100 张单。": "At most 100 DOs at a time.",
++  "请输入 DO 单号（或顾客电话）。": "Enter a DO number (or customer phone).",
++  "地址太长（最多 300 字）。": "Address too long (max 300 characters).",
++  "备注太长（最多 500 字）。": "Note too long (max 500 characters).",
++  "看不出顾客的电话号码。": "Can't tell the customer's phone number.",
++  "地址或坐标不对。": "Address or coordinates are not valid.",
++  "还没有要送的单。": "No DOs to deliver yet.",
++  "一趟最多 100 站。": "At most 100 stops per run.",
++  "排单资料不完整，请重新整理页面再排一次。": "The plan is incomplete — refresh the page and plan again.",
++  "连结代码不对，请重新整理页面再按一次。": "Link code is invalid — refresh the page and try again.",
++  "这位司机不在「送货安装」部门、没有手机号码、已停用，或不属于这间分店。":
++    "This driver isn't in the \"Delivery & install\" department, has no mobile number, is inactive, or belongs to another branch.",
++  "找不到这位司机，或他不属于这间分店。": "Driver not found, or belongs to another branch.",
++  "出发点要有坐标。": "The starting point needs coordinates.",
++  "司机要有名字和完整手机号码。": "A driver needs a name and a full mobile number.",
++};
++
++export const PATTERNS_DLV: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
++  [/^找不到 (.+)。DO 每 15 分钟从 AutoCount 同步一次，刚开的单请稍后再查。$/,
++    (m) => `${m[1]} not found. DOs sync from AutoCount every 15 minutes — try again shortly for a new DO.`],
++  [/^找到 (\d+) 笔$/, (m) => `Found ${m[1]}`],
++  [/^(\S+) 的 DO（(\d+) 张）$/, (m) => `DOs on ${m[1]} (${m[2]})`],
++  [/^加入 (\d+) 张。$/, (m) => `Added ${m[1]}.`],
++  [/^查询 (\d+) 张单…$/, (m) => `Looking up ${m[1]} DOs…`],
++  [/^(.+)：找不到（刚开的单约 15 分钟后才查得到）$/, (m) => `${m[1]}: not found (a new DO shows up after about 15 minutes)`],
++  [/^(.+)：这张 DO 已取消$/, (m) => `${m[1]}: this DO is cancelled`],
++  [/^没有地址，请在下面那格补上再按一次「排最短路线」：(.+)$/, (m) => `No address — fill it in below, then tap "Order shortest route" again: ${m[1]}`],
++  [/^找位置中… (\d+) \/ (\d+)$/, (m) => `Looking up locations… ${m[1]} / ${m[2]}`],
++  [/^已排好。(\d+) 站找不到位置（排在最后），请贴 Google Maps 坐标或改地址后再按一次。$/,
++    (m) => `Done. ${m[1]} stop(s) couldn't be located (put last) — paste Google Maps coordinates or fix the address, then try again.`],
++  [/^已排好最短顺序（直线距离约 (\d+) km）。可以用 ↑ ↓ 微调。$/,
++    (m) => `Shortest order ready (about ${m[1]} km in straight lines). Fine-tune with ↑ ↓.`],
++  [/^有 (\d+) 站没有地址，还是要传给司机吗？$/, (m) => `${m[1]} stop(s) have no address. Send to the driver anyway?`],
++  [/^(.+)（外包）$/, (m) => `${m[1]} (outside)`],
++  [/^(\d+) 站$/, (m) => `${m[1]} stop(s)`],
++  [/^直线约 (\d+) km$/, (m) => `about ${m[1]} km`],
++  [/^货品 (\d+) 项$/, (m) => `${m[1]} item(s)`],
++  [/^已送达 (\d+) \/ (\d+)$/, (m) => `Delivered ${m[1]} / ${m[2]}`],
++  [/^送不成 (\d+)$/, (m) => `Not delivered ${m[1]}`],
++  [/^排单：(.+)$/, (m) => `Planned by ${m[1]}`],
++  [/^(\S+) · (\d+) 站$/, (m) => `${m[1]} · ${m[2]} stop(s)`],
++  [/^还有 (\d+) 站要送$/, (m) => `${m[1]} stop(s) left`],
++  [/^今天还有 (\d+) 站没签收$/, (m) => `${m[1]} stop(s) not signed off today`],
++  [/^已载入 (\d+) 站。可以改司机、增减站，再传一次。$/, (m) => `Loaded ${m[1]} stop(s). Change the driver or stops, then send again.`],
++  [/^已排好。(\d+) 站只找到邮区的大概位置，最好按「改位置」贴准确的 Google Maps 坐标。$/,
++    (m) => `Done. ${m[1]} stop(s) only matched a postcode area — tap "Fix location" and paste exact Google Maps coordinates.`],
++  [/^📷 (\d+) 张$/, (m) => `📷 ${m[1]}`],
++  [/^出发点（(.+)）$/, (m, t) => `Starting point (${t(m[1])})`],
++  [/^不再列出司机 (.+)？$/, (m) => `Stop listing driver ${m[1]}?`],
++  [/^找不到 DO (.+)。$/, (m) => `DO ${m[1]} not found.`],
++  [/^找不到司机 #(\d+)。$/, (m) => `Driver #${m[1]} not found.`],
++  [/^未知的司机种类：(.+)$/, (m) => `Unknown driver type: ${m[1]}`],
++];
+diff --git a/portal/src/i18n.ts b/portal/src/i18n.ts
+index fda7b47..2650a60 100644
+--- a/portal/src/i18n.ts
++++ b/portal/src/i18n.ts
+@@ -17,6 +17,7 @@ import { DICT_LEAVE, PATTERNS_LEAVE } from "./i18n-dict-leave";
+ import { DICT_WH, PATTERNS_WH } from "./i18n-dict-wh";
+ import { DICT_PAY, PATTERNS_PAY } from "./i18n-dict-pay";
+ import { DICT_MORE, PATTERNS_MORE } from "./i18n-dict-more";
++import { DICT_DLV, PATTERNS_DLV } from "./i18n-dict-dlv";
+ 
+ export type Lang = "zh" | "en";
+ const KEY = "hw-lang";
+@@ -34,8 +35,8 @@ export function setLang(l: Lang): void {
+   window.location.reload();
+ }
+ 
+-const DICT: Record<string, string> = { ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
+-const ALL_PATTERNS = [...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
++const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH };
++const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH];
+ const CJK = /[㐀-鿿＀-￯　-〿]/;
+ 
+ /** 翻一段文字；不认识就原样返回。前后空白保留。 */
+@@ -62,6 +63,9 @@ export function tr(text: string): string {
+ const ATTRS = ["placeholder", "title", "aria-label"];
+ 
+ function translateNode(node: Node): void {
++  // translate="no" 的区块（例：司机签收页自己带中 / 英 / 马来文）不翻
++  const host = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
++  if (host?.closest?.('[translate="no"]')) return;
+   if (node.nodeType === Node.TEXT_NODE) {
+     const v = node.nodeValue ?? "";
+     const t = tr(v);
+diff --git a/portal/src/pages/Delivery.tsx b/portal/src/pages/Delivery.tsx
+new file mode 100644
+index 0000000..87fc812
+--- /dev/null
++++ b/portal/src/pages/Delivery.tsx
+@@ -0,0 +1,66 @@
++// 送货安装：排单（DO 单号 → 最短路线 → WhatsApp 司机）、排单纪录（签收进度与照片）、我的送货（员工司机签收）、设定。
++// 路由 #/delivery/<分页>；司机不用登入的签收页是 #/driver?t=<代码>（App.tsx 在登入前处理）。
++// 资料与 BI 顾客资料页的旧送货排单共用（bi.delivery_*），SERVER 每 15 分钟从 AutoCount 只读推 DO 进来。
++import { useCallback, useEffect, useState } from "react";
++import { BRANCH_LABEL, Me } from "../api";
++import { go } from "../router";
++import { fmtAgo } from "../sync";
++import { ErrorBox, Tabs } from "../ui";
++import { dlv, DlvMeta, Stop } from "../dlv-api";
++import { PlanTab } from "../dlv/Plan";
++import { RunsTab } from "../dlv/Runs";
++import { MineTab } from "../dlv/Mine";
++import { SetupTab } from "../dlv/Setup";
++import "../att.css";
++import "../dlv.css";
++
++type Tab = "plan" | "runs" | "mine" | "setup";
++const COMPANY_KEY = "hw-dlv-company";
++
++export default function Delivery({ me, sub }: { me: Me; sub?: string }) {
++  const [meta, setMeta] = useState<DlvMeta | null>(null);
++  const [error, setError] = useState("");
++  const [reload, setReload] = useState(0);
++  const [seed, setSeed] = useState<Stop[] | null>(null);   // 从排单纪录载入一趟
++  const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
++  const loadMeta = useCallback(() => { dlv.meta().then(setMeta).catch((e: Error) => setError(e.message)); }, []);
++  useEffect(loadMeta, [loadMeta]);
++  if (!meta) return error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>;
++
++  const co = meta.companies.includes(company) ? company : meta.companies[0];
++  const canEdit = meta.level !== "view";
++  const isDriver = meta.drivers.some((d) => d.kind === "staff" && d.id === me.staff.id);
++  const tabs: [Tab, string][] = [["plan", canEdit ? "排单" : "查单"], ["runs", "排单纪录"]];
++  if (isDriver) tabs.push(["mine", "我的送货"]);
++  if (meta.level === "approve") tabs.push(["setup", "设定"]);
++  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : isDriver && !sub ? "mine" : "plan";
++  const pick = (c: string) => { setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ } };
++
++  return (
++    <>
++      <div className="page-head">
++        <h1>送货安装</h1>
++        {meta.companies.length > 1 && tab !== "mine" && (
++          <select value={co} onChange={(e) => pick(e.target.value)} className="narrow-select">
++            {meta.companies.map((c) => <option key={c} value={c}>{BRANCH_LABEL[c] || c}</option>)}
++          </select>
++        )}
++      </div>
++      <p className="muted small sync">
++        {"AutoCount DO 更新："}{fmtAgo(meta.synced)}{"（营业时间每 15 分钟同步一次，刚开的 DO 稍等再查）"}
++      </p>
++      <div className="filters"><Tabs value={tab} options={tabs} onChange={(k) => go(`/delivery/${k}`)} /></div>
++      {/* 排单一直挂着、只是藏起来：去「设定」加司机 / 出发点再回来，排到一半的单还在 */}
++      <div hidden={tab !== "plan"}>
++        <PlanTab meta={meta} company={co} readOnly={!canEdit} onSent={() => setReload((n) => n + 1)}
++                 seed={seed} onSeedUsed={() => setSeed(null)} />
++      </div>
++      {tab === "runs" && (
++        <RunsTab company={co} canEdit={canEdit} reloadKey={reload}
++                 onLoad={(stops) => { setSeed(stops); go("/delivery/plan"); }} />
++      )}
++      {tab === "mine" && <MineTab />}
++      {tab === "setup" && <SetupTab meta={meta} company={co} onChanged={loadMeta} />}
++    </>
++  );
++}
+diff --git a/portal/src/pages/Home.tsx b/portal/src/pages/Home.tsx
+index 2f4a661..c2a551c 100644
+--- a/portal/src/pages/Home.tsx
++++ b/portal/src/pages/Home.tsx
+@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
+ import { api, can, Home, Me, moduleHref, Task } from "../api";
+ import { hhmm } from "../att-api";
+ import { ErrorBox } from "../ui";
++import { DeliveryHomeCard } from "../dlv/HomeCard";
+ import "../extra.css";
+ import "../att.css";
+ import { canPromptInstall, dismissHint, hintDismissed, isIos, isStandalone, onInstallChange, promptInstall } from "../install";
+@@ -110,6 +111,7 @@ export default function HomePage({ me }: { me: Me }) {
+       <ErrorBox error={error} />
+       <InstallHint />
+       {home?.att && <AttCard a={home.att} />}
++      <DeliveryHomeCard me={me} />
+       {home && <Todo h={home} />}
+       <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
+       {home && (
+diff --git a/portal/supabase/migrations/20261008b_ops_delivery.sql b/portal/supabase/migrations/20261008b_ops_delivery.sql
+new file mode 100644
+index 0000000..d4773f4
+--- /dev/null
++++ b/portal/supabase/migrations/20261008b_ops_delivery.sql
+@@ -0,0 +1,526 @@
++-- 送货安装模块（第一版，2026-10-08）：把 BI 顾客资料页里的「送货排单 + 司机签收拍照」搬进营运系统，
++-- 使用者要「跟员工多部门功能连在一起，不要分成两个地方」。
++--
++-- 资料**不搬家**：DO、地址、备注、排单、签收照片都还在 BI 那边的 bi.delivery_* 表（SERVER 的 quote_push.py 每 15 分钟
++-- 只读推 AutoCount 的 DO 进来），这里只加一层 public.ops_dlv_* 函数，改用营运系统的员工名单与模块权限：
++--   只看（销售 / 门市）  = 查 DO 与地址、看排单纪录与签收进度
++--   可编辑（送货、仓库）  = 排单、改这张 DO 的地址 / 给司机的备注、存坐标、传 WhatsApp 给司机
++--   可审批（主管、管理层）= 设定出发点、管理外包司机
++-- 分店：HOMEWORKSSB = 门市 HQ、HOMEWORKSSOUTHERN = JB；只属一间分店的员工只看得到自己分店的 DO 与排单。
++-- 司机 = 送货部门、有手机号的在职员工（在「员工与权限」管理）+ 外包司机（bi.delivery_driver，这里的「设定」分页管理）。
++-- 员工司机登入营运系统就在「我的送货」签收；外包司机照旧用 WhatsApp 里的连结（#/driver?t=…，不用登入，3 天有效）。
++-- 司机签收页沿用 BI 的 anon 函数 bi_driver_run / bi_driver_pod 与 Storage 私有 bucket delivery-pod（migration delivery_pod）。
++--
++-- 对 AutoCount 仍只读。可以重复套用（create or replace / if not exists）。
++-- 模块上线开关（ops.module.ready）放在 20261008c_ops_delivery_ready.sql，等前端部署好才套。
++-- 正式环境分三次套：ops_delivery（第一版）+ ops_delivery_review_fixes（多人审查后的修正：照片路径与连结代码同样只给可编辑 / 司机、
++-- 查 DO 不回内部备注与金额、备注与坐标移动记 audit_log、首页计数不重复算同一站）+ ops_delivery_fixes2（排单的站不存 / 不回传内部备注 note）。
++-- 合起来 = 这个档。另外 BI 的 bi_driver_run 加回传每站的 geo（migration driver_run_geo，BI 那边留底在 docs/bi_web/delivery.sql）。
++
++-- ------------------------------------------------------------ 资料：排单记下哪一位员工是司机
++alter table bi.delivery_run add column if not exists driver_staff_id bigint;
++create index if not exists delivery_run_driver_staff_idx on bi.delivery_run (driver_staff_id, run_date);
++
++-- ------------------------------------------------------------ 小工具
++-- 分店代号 ↔ 门市代号（bi.delivery_run.store 与出发点 depot 用 HQ / JB）
++create or replace function ops.dlv_store(p_company text) returns text
++language sql immutable set search_path = '' as $$
++  select case p_company when 'HOMEWORKSSB' then 'HQ' when 'HOMEWORKSSOUTHERN' then 'JB' end
++$$;
++create or replace function ops.dlv_company(p_store text) returns text
++language sql immutable set search_path = '' as $$
++  select case p_store when 'HQ' then 'HOMEWORKSSB' when 'JB' then 'HOMEWORKSSOUTHERN' end
++$$;
++
++-- 这次要看哪间分店：没指定就用自己的（ALL 的人预设总部）；看不到就挡
++create or replace function ops.dlv_check_company(p_me ops.staff, p_company text) returns text
++language plpgsql stable set search_path = '' as $$
++declare
++  c text := coalesce(nullif(p_company, ''), case when p_me.branch = 'ALL' then 'HOMEWORKSSB' else p_me.branch end);
++begin
++  if c not in ('HOMEWORKSSB', 'HOMEWORKSSOUTHERN') or not ops.sees_company(p_me, c) then
++    raise exception '你没有这间分店的送货权限。' using errcode = '42501';
++  end if;
++  return c;
++end $$;
++
++-- 这张排单我看得到吗：有送货模块权限且同分店，或我就是这趟的司机
++create or replace function ops.dlv_run_visible(p_me ops.staff, r bi.delivery_run) returns boolean
++language sql stable security definer set search_path = '' as $$
++  select coalesce(
++    (r.driver_staff_id is not null and r.driver_staff_id = p_me.id)
++    or (ops.level_rank(ops.module_level(p_me, 'delivery')) >= 1
++        and ops.sees_company(p_me, ops.dlv_company(r.store))),
++    false)
++$$;
++
++-- 看得到连结代码（以及路径里含代码的照片）：可编辑的人、这趟的司机；连结过期后（代码不能再签收）只看的人也看得到照片。
++-- 照片路径是 <代码>/…（BI 的 bi_driver_pod 规定），只看的人拿到路径就等于拿到代码、可以假签收，所以路径要跟代码一起挡。
++create or replace function ops.dlv_full_access(p_me ops.staff, r bi.delivery_run) returns boolean
++language sql stable security definer set search_path = '' as $$
++  select coalesce(
++    ops.level_rank(ops.module_level(p_me, 'delivery')) >= 2
++    or (r.driver_staff_id is not null and r.driver_staff_id = p_me.id)
++    or r.token_expires < now(),
++    false)
++$$;
++
++-- 一趟排单 → 前端要的 json（每站最新一笔签收；连结代码只给可编辑的人与这趟的司机；照片路径照 dlv_full_access）
++create or replace function ops.dlv_run_json(p_me ops.staff, r bi.delivery_run) returns jsonb
++language sql stable security definer set search_path = '' as $$
++  select jsonb_build_object(
++    'id', r.id, 'run_date', r.run_date, 'store', r.store, 'company', ops.dlv_company(r.store),
++    'driver_name', r.driver_name, 'driver_phone', r.driver_phone, 'driver_staff_id', r.driver_staff_id,
++    -- BI 旧版存的站带顾客资料的内部备注 note：不回传
++    'stops', coalesce((select jsonb_agg(s - 'note' order by o) from jsonb_array_elements(r.stops) with ordinality t(s, o)), '[]'::jsonb),
++    'created_by', r.created_by, 'created_at', r.created_at,
++    'has_link', r.token is not null,
++    'link_valid', r.token is not null and coalesce(r.token_expires, now()) >= now(),
++    'token', case when coalesce(ops.level_rank(ops.module_level(p_me, 'delivery')) >= 2
++                                or r.driver_staff_id = p_me.id, false) then r.token end,
++    'pods', coalesce((
++      select jsonb_agg(jsonb_build_object('stop_key', p.stop_key, 'doc_no', p.doc_no, 'status', p.status, 'note', p.note,
++                                          'photos', case when ops.dlv_full_access(p_me, r) then to_jsonb(p.photos) else '[]'::jsonb end,
++                                          'photo_count', cardinality(p.photos), 'created_at', p.created_at) order by p.created_at)
++        from (select distinct on (x.stop_key) x.* from bi.delivery_pod x
++               where x.run_id = r.id order by x.stop_key, x.created_at desc) p), '[]'::jsonb))
++$$;
++
++-- 可以选的司机：送货部门、有手机号的在职员工（kind = staff）+ 外包司机（kind = ext）。只列看得到的分店。
++create or replace function ops.dlv_drivers(p_me ops.staff) returns jsonb
++language sql stable security definer set search_path = '' as $$
++  select coalesce(jsonb_agg(d order by d ->> 'kind' desc, d ->> 'name'), '[]'::jsonb) from (
++    select jsonb_build_object('kind', 'staff', 'id', s.id, 'name', s.name, 'phone', bi.customer_phone(s.phone),
++                              'store', ops.dlv_store(s.branch)) d
++      from ops.staff s
++     where s.active and s.department = 'delivery' and bi.customer_phone(s.phone) is not null
++       and (s.branch = 'ALL' or ops.sees_company(p_me, s.branch))
++    union all
++    select jsonb_build_object('kind', 'ext', 'id', x.id, 'name', x.name, 'phone', x.phone, 'store', x.store)
++      from bi.delivery_driver x
++     where x.active and (x.store is null or ops.sees_company(p_me, ops.dlv_company(x.store)))
++  ) q
++$$;
++
++-- ------------------------------------------------------------ 设定、权限
++create or replace function public.ops_dlv_meta() returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  v_depot jsonb := coalesce((select s.depot from bi.customer_settings s where s.id = 1), '{}'::jsonb);
++begin
++  me := ops.require_level('delivery', 'view');
++  return jsonb_build_object(
++    'level', ops.module_level(me, 'delivery'),
++    'me_id', me.id,
++    'companies', (select jsonb_agg(c order by c) from unnest(array['HOMEWORKSSB', 'HOMEWORKSSOUTHERN']) c
++                  where ops.sees_company(me, c)),
++    'depot', (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) from jsonb_each(v_depot) e
++              where ops.sees_company(me, ops.dlv_company(e.key))),
++    'drivers', ops.dlv_drivers(me),
++    'synced', (select max(d.synced_at) from bi.delivery_doc d where ops.sees_company(me, d.company)));
++end $$;
++
++-- ------------------------------------------------------------ 查 DO
++-- 回传时拿掉排单用不到的栏位：顾客资料的内部备注（note）、DO 金额、业务员、客户代号（送货 / 仓库员工不该看到 BI 的财务数字）
++-- 一键排单：整串单号（可只打数字尾码），每个单号回一笔；找不到 found = false。最多 100 张。
++create or replace function public.ops_dlv_lookup_many(p_company text, p_queries text[]) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v_out jsonb;
++begin
++  me := ops.require_level('delivery', 'view');
++  c := ops.dlv_check_company(me, p_company);
++  if coalesce(array_length(p_queries, 1), 0) > 100 then
++    raise exception '一次最多 100 张单。';
++  end if;
++  with q as (
++    select distinct on (v) v, ord
++      from (select upper(regexp_replace(x, '\s', '', 'g')) as v, o as ord
++              from unnest(p_queries) with ordinality as t(x, o)) s
++     where length(v) >= 3
++     order by v, ord
++  ), m as (
++    select q.v, f.*,
++           row_number() over (partition by q.v order by (upper(f.doc_no) = q.v) desc, f.doc_date desc, f.doc_no desc) as rn
++      from q
++      join bi.delivery_doc_full f on f.company = c and (upper(f.doc_no) = q.v or upper(f.doc_no) like '%' || q.v)
++  )
++  select coalesce(jsonb_agg(
++           jsonb_build_object('query', q.v, 'found', m.doc_no is not null)
++           || coalesce(to_jsonb(m) - 'v' - 'rn' - 'note' - 'amount' - 'sales_agent' - 'debtor_code' - 'do_address', '{}'::jsonb)
++           order by q.ord), '[]'::jsonb)
++    into v_out
++    from q left join m on m.v = q.v and m.rn = 1;
++  return v_out;
++end $$;
++
++-- 单号（最多 10 张尾码相同的）或顾客电话（回顾客资料的地址）
++create or replace function public.ops_dlv_lookup(p_company text, p_query text) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v_q text := upper(regexp_replace(coalesce(p_query, ''), '\s', '', 'g'));
++  v_phone text;
++  v_out jsonb;
++begin
++  me := ops.require_level('delivery', 'view');
++  c := ops.dlv_check_company(me, p_company);
++  if length(v_q) < 3 then
++    raise exception '请输入 DO 单号（或顾客电话）。';
++  end if;
++  if v_q ~ '^\+?[0-9-]+$' and length(regexp_replace(v_q, '\D', '', 'g')) >= 9 then
++    v_phone := bi.customer_key(p_query);
++  end if;
++  if v_phone is not null then
++    select coalesce(jsonb_agg(jsonb_build_object(
++             'doc_no', null, 'company', c, 'cancelled', false, 'member_id', v_phone, 'name', p.name,
++             'address', p.address, 'address_source', case when p.address is not null then 'profile' end,
++             'lat', coalesce(g.lat, p.lat), 'lng', coalesce(g.lng, p.lng))), '[]'::jsonb)
++      into v_out
++      from (select v_phone as m) x
++      left join bi.customer_profile p on p.member_id = x.m
++      left join bi.geo_cache g on g.addr = bi.addr_key(p.address);
++    return v_out;
++  end if;
++  select coalesce(jsonb_agg(to_jsonb(f) - 'note' - 'amount' - 'sales_agent' - 'debtor_code' - 'do_address' order by f.doc_date desc, f.doc_no desc), '[]'::jsonb) into v_out
++    from (select * from bi.delivery_doc_full f
++           where f.company = c and (upper(f.doc_no) = v_q or upper(f.doc_no) like '%' || v_q)
++           order by f.doc_date desc, f.doc_no desc limit 10) f;
++  return v_out;
++end $$;
++
++-- 某天没取消的 DO（预设今天，马来西亚时间）
++create or replace function public.ops_dlv_docs(p_company text, p_date date) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++begin
++  me := ops.require_level('delivery', 'view');
++  c := ops.dlv_check_company(me, p_company);
++  return (select coalesce(jsonb_agg(to_jsonb(f) - 'note' - 'amount' - 'sales_agent' - 'debtor_code' - 'do_address' order by f.doc_no), '[]'::jsonb)
++            from bi.delivery_doc_full f
++           where f.company = c and not f.cancelled
++             and f.doc_date = coalesce(p_date, (now() at time zone 'Asia/Kuala_Lumpur')::date));
++end $$;
++
++-- ------------------------------------------------------------ 改地址、备注、坐标（可编辑）
++-- 只改这张 DO 的送货地址（同步不会盖掉）；空白 = 还原成 DO / 顾客资料的地址
++create or replace function public.ops_dlv_doc_set_address(p_company text, p_doc_no text, p_address text) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v text := nullif(trim(coalesce(p_address, '')), '');
++begin
++  me := ops.require_level('delivery', 'edit');
++  c := ops.dlv_check_company(me, p_company);
++  if length(coalesce(v, '')) > 300 then
++    raise exception '地址太长（最多 300 字）。';
++  end if;
++  update bi.delivery_doc d set address_override = v, override_by = me.email, override_at = now()
++   where d.company = c and d.doc_no = p_doc_no;
++  if not found then
++    raise exception '找不到 DO %。', p_doc_no;
++  end if;
++  perform ops.log(me.id, 'dlv_address', 'delivery_doc', null, jsonb_build_object('company', c, 'doc_no', p_doc_no, 'address', v));
++  return jsonb_build_object('doc_no', p_doc_no, 'address', v);
++end $$;
++
++-- 给司机的备注（时间、地点、下货位置…）；存在那张 DO 上，同步不会盖掉
++create or replace function public.ops_dlv_doc_set_note(p_company text, p_doc_no text, p_note text) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v text := nullif(trim(coalesce(p_note, '')), '');
++begin
++  me := ops.require_level('delivery', 'edit');
++  c := ops.dlv_check_company(me, p_company);
++  if length(coalesce(v, '')) > 500 then
++    raise exception '备注太长（最多 500 字）。';
++  end if;
++  update bi.delivery_doc d set delivery_note = v, note_by = me.email, note_at = now()
++   where d.company = c and d.doc_no = p_doc_no;
++  if not found then
++    raise exception '找不到 DO %。', p_doc_no;
++  end if;
++  perform ops.log(me.id, 'dlv_note', 'delivery_doc', null, jsonb_build_object('company', c, 'doc_no', p_doc_no, 'note', v));
++  return jsonb_build_object('doc_no', p_doc_no, 'delivery_note', v);
++end $$;
++
++-- 用电话加的站（没有 DO）或顾客资料本来没地址：存进顾客资料（BI 顾客资料页看得到，修改纪录会记是谁改的）
++create or replace function public.ops_dlv_customer_set_address(p_member text, p_address text) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  v_key text := bi.customer_key(p_member);
++  v_addr text := nullif(trim(coalesce(p_address, '')), '');
++begin
++  me := ops.require_level('delivery', 'edit');
++  if v_key is null or v_key like 'A:%' and not ops.sees_company(me, split_part(v_key, ':', 2)) then
++    raise exception '看不出顾客的电话号码。';
++  end if;
++  if length(coalesce(v_addr, '')) > 300 then
++    raise exception '地址太长（最多 300 字）。';
++  end if;
++  insert into bi.customer_profile as p (member_id, address, created_by, updated_by)
++  values (v_key, v_addr, me.email, me.email)
++  on conflict (member_id) do update
++     set address = excluded.address,
++         lat = case when p.address is distinct from excluded.address then null else p.lat end,
++         lng = case when p.address is distinct from excluded.address then null else p.lng end,
++         geo_query = case when p.address is distinct from excluded.address then null else p.geo_query end,
++         updated_at = now(), updated_by = me.email;
++  return jsonb_build_object('member_id', v_key, 'address', v_addr);
++end $$;
++
++-- 地址 → 坐标（OpenStreetMap 找到的，或员工贴的 Google Maps 坐标）；同一个地址下次不用再找
++create or replace function public.ops_dlv_geo_set(p_address text, p_lat numeric, p_lng numeric) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  v_key text := bi.addr_key(p_address);
++  v_old_lat numeric;
++  v_old_lng numeric;
++begin
++  me := ops.require_level('delivery', 'edit');
++  if v_key is null or p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then
++    raise exception '地址或坐标不对。';
++  end if;
++  select g.lat, g.lng into v_old_lat, v_old_lng from bi.geo_cache g where g.addr = v_key;
++  if v_old_lat is not null and (v_old_lat, v_old_lng) is distinct from (p_lat, p_lng) then
++    -- 已有的点被移动才记（第一次自动找到的坐标太多，不记）；geo_cache 两间分店共用
++    perform ops.log(me.id, 'dlv_geo', 'geo_cache', null, jsonb_build_object('address', p_address, 'from', jsonb_build_array(v_old_lat, v_old_lng),
++                                                                         'to', jsonb_build_array(p_lat, p_lng)));
++  end if;
++  insert into bi.geo_cache as g (addr, address, lat, lng, updated_by)
++  values (v_key, left(trim(p_address), 300), p_lat, p_lng, me.email)
++  on conflict (addr) do update set lat = excluded.lat, lng = excluded.lng, updated_at = now(), updated_by = excluded.updated_by;
++  return jsonb_build_object('address', p_address, 'lat', p_lat, 'lng', p_lng);
++end $$;
++
++-- ------------------------------------------------------------ 排单
++-- p: company, driver_kind ('staff' / 'ext' / 空), driver_id, stops (jsonb 阵列), token（前端产生，WhatsApp 讯息里已带连结）
++create or replace function public.ops_dlv_run_save(p jsonb) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v_stops jsonb := p -> 'stops';
++  v_token text := nullif(p ->> 'token', '');
++  v_kind text := nullif(p ->> 'driver_kind', '');
++  v_driver bigint := nullif(p ->> 'driver_id', '')::bigint;
++  v_name text;
++  v_phone text;
++  v_staff bigint;
++  v_id bigint;
++begin
++  me := ops.require_level('delivery', 'edit');
++  c := ops.dlv_check_company(me, p ->> 'company');
++  if jsonb_typeof(v_stops) is distinct from 'array' or jsonb_array_length(v_stops) = 0 then
++    raise exception '还没有要送的单。';
++  end if;
++  if jsonb_array_length(v_stops) > 100 then
++    raise exception '一趟最多 100 站。';
++  end if;
++  if exists (select 1 from jsonb_array_elements(v_stops) s where nullif(s ->> 'key', '') is null) then
++    raise exception '排单资料不完整，请重新整理页面再排一次。';
++  end if;
++  if v_token is null or length(v_token) < 20 or v_token !~ '^[A-Za-z0-9_-]+$' then
++    raise exception '连结代码不对，请重新整理页面再按一次。';
++  end if;
++  v_stops := (select jsonb_agg(s - 'note' order by o) from jsonb_array_elements(v_stops) with ordinality t(s, o));   -- 不存内部备注
++  if v_kind = 'staff' then
++    select s.name, bi.customer_phone(s.phone), s.id into v_name, v_phone, v_staff
++      from ops.staff s
++     where s.id = v_driver and s.active and s.department = 'delivery' and bi.customer_phone(s.phone) is not null
++       and (s.branch = 'ALL' or s.branch = c);
++    if v_staff is null then
++      raise exception '这位司机不在「送货安装」部门、没有手机号码、已停用，或不属于这间分店。';
++    end if;
++  elsif v_kind = 'ext' then
++    select x.name, x.phone into v_name, v_phone
++      from bi.delivery_driver x
++     where x.id = v_driver and x.active and (x.store is null or x.store = ops.dlv_store(c));
++    if v_name is null then
++      raise exception '找不到这位司机，或他不属于这间分店。';
++    end if;
++  elsif v_kind is not null then
++    raise exception '未知的司机种类：%', v_kind;
++  end if;
++  insert into bi.delivery_run (store, driver_name, driver_phone, driver_staff_id, stops, created_by, token, token_expires)
++  values (ops.dlv_store(c), v_name, v_phone, v_staff, v_stops, me.email, v_token, now() + interval '3 days')
++  returning id into v_id;
++  perform ops.log(me.id, 'dlv_run', 'delivery_run', v_id,
++                  jsonb_build_object('company', c, 'stops', jsonb_array_length(v_stops), 'driver', v_name));
++  return jsonb_build_object('id', v_id);
++end $$;
++
++-- 排单纪录（近 N 天，最多 50 趟）与每站签收进度
++create or replace function public.ops_dlv_runs(p_company text, p_days int) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++begin
++  me := ops.require_level('delivery', 'view');
++  c := ops.dlv_check_company(me, p_company);
++  return (select coalesce(jsonb_agg(ops.dlv_run_json(me, r) order by r.created_at desc), '[]'::jsonb)
++            from (select * from bi.delivery_run r
++                   where r.store = ops.dlv_store(c)
++                     and r.run_date >= (now() at time zone 'Asia/Kuala_Lumpur')::date
++                                       - greatest(1, least(coalesce(p_days, 14), 90))
++                   order by r.created_at desc limit 50) r);
++end $$;
++
++-- 我的送货：我是司机、连结还有效的排单（员工司机登入就能签收，不用点 WhatsApp 连结）。不需要送货模块权限。
++create or replace function public.ops_dlv_my_runs() returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++begin
++  me := ops.require_staff();
++  return (select coalesce(jsonb_agg(ops.dlv_run_json(me, r) order by r.created_at desc), '[]'::jsonb)
++            from bi.delivery_run r
++           where r.driver_staff_id = me.id and r.token is not null and coalesce(r.token_expires, now()) >= now());
++end $$;
++
++-- 这一站（同一天、同一门市）有没有人签收过：同一批单常被重复排（按了两次 WhatsApp / 复制），任何一趟签了就算
++create or replace function ops.dlv_stop_signed(p_store text, p_date date, p_key text) returns boolean
++language sql stable security definer set search_path = '' as $$
++  select exists (select 1 from bi.delivery_pod p join bi.delivery_run r2 on r2.id = p.run_id
++                  where r2.store = p_store and r2.run_date = p_date and p.stop_key = p_key)
++$$;
++
++-- 首页：我还没签收的站（我是司机、连结有效）、今天这间分店还没签收的站（可编辑的人）；重复排的同一站只算一次
++create or replace function public.ops_dlv_home() returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  v_today date := (now() at time zone 'Asia/Kuala_Lumpur')::date;
++begin
++  me := ops.require_staff();
++  return jsonb_build_object(
++    'my_stops_left', (
++      select count(distinct (r.store, r.run_date, s ->> 'key'))
++        from bi.delivery_run r, jsonb_array_elements(r.stops) s
++       where r.driver_staff_id = me.id and r.token is not null and coalesce(r.token_expires, now()) >= now()
++         and not ops.dlv_stop_signed(r.store, r.run_date, s ->> 'key')),
++    'stops_open_today', case when ops.level_rank(ops.module_level(me, 'delivery')) >= 2 then (
++      select count(distinct (r.store, s ->> 'key'))
++        from bi.delivery_run r, jsonb_array_elements(r.stops) s
++       where r.run_date = v_today and r.token is not null and ops.sees_company(me, ops.dlv_company(r.store))
++         and not ops.dlv_stop_signed(r.store, r.run_date, s ->> 'key'))
++    end);
++end $$;
++
++-- ------------------------------------------------------------ 设定（可审批）
++create or replace function public.ops_dlv_set_depot(p_company text, p_address text, p_lat numeric, p_lng numeric) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++begin
++  me := ops.require_level('delivery', 'approve');
++  c := ops.dlv_check_company(me, p_company);
++  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then
++    raise exception '出发点要有坐标。';
++  end if;
++  update bi.customer_settings s
++     set depot = coalesce(s.depot, '{}'::jsonb)
++                 || jsonb_build_object(ops.dlv_store(c), jsonb_build_object('address', left(trim(coalesce(p_address, '')), 300),
++                                                                         'lat', p_lat, 'lng', p_lng)),
++         updated_at = now(), updated_by = me.email
++   where s.id = 1;
++  perform ops.log(me.id, 'dlv_depot', 'customer_settings', 1, jsonb_build_object('company', c, 'address', p_address));
++  return jsonb_build_object('company', c, 'address', p_address, 'lat', p_lat, 'lng', p_lng);
++end $$;
++
++-- 外包司机（不是员工的）。p: id（空 = 新增）、name、phone、company、active
++create or replace function public.ops_dlv_driver_save(p jsonb) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  me ops.staff;
++  c text;
++  v_id bigint := nullif(p ->> 'id', '')::bigint;
++  v_name text := nullif(trim(coalesce(p ->> 'name', '')), '');
++  v_phone text := bi.customer_phone(p ->> 'phone');
++  v_old text;
++begin
++  me := ops.require_level('delivery', 'approve');
++  c := ops.dlv_check_company(me, p ->> 'company');
++  if v_name is null or v_phone is null then
++    raise exception '司机要有名字和完整手机号码。';
++  end if;
++  if v_id is null then
++    insert into bi.delivery_driver (name, phone, store, active, updated_by)
++    values (v_name, v_phone, ops.dlv_store(c), coalesce((p ->> 'active')::boolean, true), me.email)
++    returning id into v_id;
++  else
++    select x.store into v_old from bi.delivery_driver x where x.id = v_id;
++    if not found then
++      raise exception '找不到司机 #%。', v_id;
++    end if;
++    if v_old is not null and not ops.sees_company(me, ops.dlv_company(v_old)) then
++      raise exception '你没有这间分店的送货权限。' using errcode = '42501';
++    end if;
++    update bi.delivery_driver
++       set name = v_name, phone = v_phone, store = ops.dlv_store(c), active = coalesce((p ->> 'active')::boolean, true),
++           updated_at = now(), updated_by = me.email
++     where id = v_id;
++  end if;
++  perform ops.log(me.id, 'dlv_driver', 'delivery_driver', v_id, jsonb_build_object('name', v_name, 'company', c));
++  return (select jsonb_build_object('kind', 'ext', 'id', x.id, 'name', x.name, 'phone', x.phone, 'store', x.store, 'active', x.active)
++            from bi.delivery_driver x where x.id = v_id);
++end $$;
++
++-- ------------------------------------------------------------ 签收照片：营运系统的员工也看得到
++-- （BI 的 policy「delivery-pod staff read」只认 BI 名单；Storage 的多条 policy 是「任一条过就可以」）
++create or replace function public.ops_dlv_photo_ok(p_token text) returns boolean
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  me ops.staff := ops.current_staff();
++  r bi.delivery_run;
++begin
++  if me.id is null or length(coalesce(p_token, '')) < 20 then
++    return false;
++  end if;
++  select * into r from bi.delivery_run x where x.token = p_token;
++  if r.id is null then
++    return false;
++  end if;
++  return ops.dlv_run_visible(me, r) and ops.dlv_full_access(me, r);
++end $$;
++
++do $$ begin
++  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
++                                             and policyname = 'delivery-pod ops read') then
++    create policy "delivery-pod ops read" on storage.objects for select to authenticated
++      using (bucket_id = 'delivery-pod' and public.ops_dlv_photo_ok((storage.foldername(name))[1]));
++  end if;
++end $$;
++
++-- ------------------------------------------------------------ 权限
++do $$
++declare f text;
++begin
++  foreach f in array array[
++    'ops_dlv_meta()', 'ops_dlv_lookup_many(text,text[])', 'ops_dlv_lookup(text,text)', 'ops_dlv_docs(text,date)',
++    'ops_dlv_doc_set_address(text,text,text)', 'ops_dlv_doc_set_note(text,text,text)',
++    'ops_dlv_customer_set_address(text,text)', 'ops_dlv_geo_set(text,numeric,numeric)', 'ops_dlv_run_save(jsonb)',
++    'ops_dlv_runs(text,int)', 'ops_dlv_my_runs()', 'ops_dlv_home()', 'ops_dlv_set_depot(text,text,numeric,numeric)',
++    'ops_dlv_driver_save(jsonb)', 'ops_dlv_photo_ok(text)'
++  ] loop
++    execute format('revoke all on function public.%s from public, anon', f);
++    execute format('grant execute on function public.%s to authenticated', f);
++  end loop;
++end $$;
++revoke all on function ops.dlv_full_access(ops.staff, bi.delivery_run), ops.dlv_stop_signed(text, date, text),
++  ops.dlv_store(text), ops.dlv_company(text), ops.dlv_check_company(ops.staff, text),
++  ops.dlv_run_visible(ops.staff, bi.delivery_run), ops.dlv_run_json(ops.staff, bi.delivery_run), ops.dlv_drivers(ops.staff)
++  from public, anon, authenticated;
+diff --git a/portal/supabase/migrations/20261008c_ops_delivery_ready.sql b/portal/supabase/migrations/20261008c_ops_delivery_ready.sql
+new file mode 100644
+index 0000000..39f6ef3
+--- /dev/null
++++ b/portal/supabase/migrations/20261008c_ops_delivery_ready.sql
+@@ -0,0 +1,6 @@
++-- 送货安装模块上线开关（2026-10-08）：前端（src/pages/Delivery.tsx 等）部署到 homeworks-ops 之后再套这个档。
++-- 先套的话，侧栏「送货安装」会连到 #/delivery，但旧版前端没有这一页（显示「没有权限」）。
++update ops.module
++   set ready = true,
++       description = '送货排单（DO 单号 → 最短路线 → WhatsApp 司机）、司机签收拍照、送货纪录'
++ where key = 'delivery';
+diff --git a/portal/supabase/tests/dlv_test.sql b/portal/supabase/tests/dlv_test.sql
+new file mode 100644
+index 0000000..75b55ae
+--- /dev/null
++++ b/portal/supabase/tests/dlv_test.sql
+@@ -0,0 +1,205 @@
++-- 送货安装测试（接在 join_test.sql 之后跑）。BI 的送货表在 stub_supabase.sql。
++\set ON_ERROR_STOP 1
++create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
++begin
++  perform set_config('request.jwt.claims', json_build_object('email', p_email)::text, false);
++end $$;
++create or replace function pg_temp.expect_error(p_sql text, p_like text) returns void language plpgsql as $$
++begin
++  execute p_sql;
++  raise exception 'expected error "%" from: %', p_like, p_sql;
++exception when others then
++  if sqlerrm like 'expected error%' or sqlerrm not like '%' || p_like || '%' then
++    raise;
++  end if;
++end $$;
++grant execute on all functions in schema pg_temp to authenticated;
++
++-- 资料：HQ 两张 DO（一张有送货地址）、一张取消的；JB 一张
++insert into bi.delivery_doc (company, doc_no, doc_date, debtor_code, debtor_name, items, address, lines, do_remark) values
++  ('HOMEWORKSSB', 'DO-017707', (now() at time zone 'Asia/Kuala_Lumpur')::date, '300-F001', 'FEI PLUMBING', 'TAP x2',
++   '12 Jalan Seraya, 81300 Skudai', '[{"d":"TAP","q":2,"u":"UNIT"}]', 'Call first'),
++  ('HOMEWORKSSB', 'DO-017708', (now() at time zone 'Asia/Kuala_Lumpur')::date, '300-C001', 'CASH (012-345 6789)', 'BASIN x1',
++   null, null, null),
++  ('HOMEWORKSSB', 'DO-017709', (now() at time zone 'Asia/Kuala_Lumpur')::date - 1, '300-C001', 'X', 'Y', null, null, null),
++  ('HOMEWORKSSOUTHERN', 'DO-000501', (now() at time zone 'Asia/Kuala_Lumpur')::date, '300-J001', 'JB CO', 'Z', 'Taman JB', null, null);
++update bi.delivery_doc set cancelled = true where doc_no = 'DO-017709';
++insert into bi.delivery_driver (name, phone, store) values ('外包阿明', '60137145782', 'HQ'), ('JB 外包', '60120000009', 'JB');
++select set_config('dlv.jb_driver', (select id::text from bi.delivery_driver where name = 'JB 外包'), false);
++
++-- 员工：送货部司机（有手机）、送货部主管、门市（只看）、JB 门市
++set role authenticated;
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save('{"email":"driver@example.com","name":"司机阿强","department":"delivery","branch":"HOMEWORKSSB","phone":"012-777 8888"}');
++select public.ops_staff_save('{"email":"dlvmgr@example.com","name":"送货主管","department":"delivery","branch":"HOMEWORKSSB","role":"manager"}');
++select public.ops_staff_save('{"email":"jbsales2@example.com","name":"JB 门市","department":"sales","branch":"HOMEWORKSSOUTHERN"}');
++
++-- 1. 权限与分店
++select pg_temp.as_user('hqsales@example.com');      -- 门市（ops_test.sql 建的）：只看
++do $$ declare m jsonb := public.ops_dlv_meta(); r jsonb; begin
++  assert m->>'level' = 'view' and m->'companies' = '["HOMEWORKSSB"]'::jsonb, 'meta: ' || m::text;
++  assert (select count(*) from jsonb_array_elements(m->'drivers') d where d->>'kind' = 'staff' and d->>'name' = '司机阿强'
++            and d->>'phone' = '60127778888') = 1, 'staff driver listed: ' || (m->'drivers')::text;
++  assert not exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'name' = 'JB 外包'), 'JB driver hidden';
++  r := public.ops_dlv_lookup_many('', array['17707', 'nope', 'DO-017709']);
++  assert jsonb_array_length(r) = 3 and r->0->>'doc_no' = 'DO-017707' and (r->0->>'found')::boolean
++     and r->0->>'address' = '12 Jalan Seraya, 81300 Skudai' and r->0->'lines'->0->>'d' = 'TAP', 'many: ' || r::text;
++  assert not (r->1->>'found')::boolean and (r->2->>'cancelled')::boolean, 'not found / cancelled: ' || r::text;
++  r := public.ops_dlv_docs('', null);
++  assert jsonb_array_length(r) = 2, 'today HQ docs (cancelled & JB excluded): ' || r::text;
++  r := public.ops_dlv_lookup('', '17708');
++  assert r->0->>'member_id' = '60123456789', 'phone from debtor name: ' || r::text;
++  -- 内部备注、金额、业务员、客户代号不回传
++  r := public.ops_dlv_lookup('', '17707');
++  assert not (r->0 ? 'note') and not (r->0 ? 'amount') and not (r->0 ? 'sales_agent') and not (r->0 ? 'debtor_code'),
++    'internal fields stripped (lookup): ' || r::text;
++  r := public.ops_dlv_lookup_many('', array['17707']);
++  assert not (r->0 ? 'note') and not (r->0 ? 'amount'), 'internal fields stripped (many): ' || r::text;
++  r := public.ops_dlv_docs('', null);
++  assert not (r->0 ? 'note') and not (r->0 ? 'amount'), 'internal fields stripped (docs): ' || r::text;
++end $$;
++select pg_temp.expect_error($q$select public.ops_dlv_docs('HOMEWORKSSOUTHERN', null)$q$, '分店');
++select pg_temp.expect_error($q$select public.ops_dlv_lookup_many('HOMEWORKSSOUTHERN', array['501'])$q$, '分店');
++select pg_temp.expect_error($q$select public.ops_dlv_doc_set_note('', 'DO-017707', 'x')$q$, '编辑');
++select pg_temp.expect_error($q$select public.ops_dlv_run_save('{"company":"","stops":[{"key":"DO-017707"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$, '编辑');
++select pg_temp.as_user('jbsales2@example.com');
++do $$ begin
++  assert jsonb_array_length(public.ops_dlv_docs('', null)) = 1, 'JB sees own docs';
++  assert public.ops_dlv_meta()->'companies' = '["HOMEWORKSSOUTHERN"]'::jsonb, 'JB company';
++end $$;
++-- 采购部没有送货模块
++select pg_temp.as_user('hr@example.com');
++select pg_temp.expect_error($q$select public.ops_dlv_meta()$q$, '送货安装');
++
++-- 2. 司机（送货部可编辑）：改地址、备注、存坐标、排单
++select pg_temp.as_user('driver@example.com');
++do $$ declare r jsonb; begin
++  assert public.ops_dlv_meta()->>'level' = 'edit', 'delivery dept edit';
++  perform public.ops_dlv_doc_set_address('', 'DO-017708', '  5 Jalan Mawar, 81300  ');
++  perform public.ops_dlv_doc_set_note('', 'DO-017708', '下午 2 点后');
++  perform public.ops_dlv_geo_set('5 Jalan Mawar, 81300', 1.55, 103.7);
++  r := public.ops_dlv_lookup_many('', array['17708']);
++  assert r->0->>'address' = '5 Jalan Mawar, 81300' and r->0->>'address_source' = 'manual'
++     and r->0->>'delivery_note' = '下午 2 点后' and (r->0->>'lat')::numeric = 1.55, 'override + note + geo: ' || r::text;
++  r := public.ops_dlv_customer_set_address('012-345 6789', '5 Jalan Mawar');
++  assert r->>'member_id' = '60123456789', 'profile address: ' || r::text;
++end $$;
++reset role;
++do $$ begin
++  assert (select override_by from bi.delivery_doc where doc_no = 'DO-017708') = 'driver@example.com', 'override_by';
++  assert (select address || '|' || updated_by from bi.customer_profile where member_id = '60123456789') = '5 Jalan Mawar|driver@example.com',
++    'profile address saved';
++end $$;
++set role authenticated;
++select pg_temp.expect_error($q$select public.ops_dlv_doc_set_address('', 'DO-NOPE', 'x')$q$, '找不到');
++select pg_temp.expect_error($q$select public.ops_dlv_doc_set_note('HOMEWORKSSOUTHERN', 'DO-000501', 'x')$q$, '分店');
++select pg_temp.expect_error($q$select public.ops_dlv_geo_set('x', 95, 1)$q$, '坐标');
++select pg_temp.expect_error($q$select public.ops_dlv_set_depot('', 'HQ', 1.5, 103.7)$q$, '审批');
++select pg_temp.expect_error($q$select public.ops_dlv_run_save('{"company":"","stops":[],"token":"abcdefghijklmnopqrstuvwx"}')$q$, '还没有');
++select pg_temp.expect_error($q$select public.ops_dlv_run_save('{"company":"","stops":[{"key":"A"}],"token":"short"}')$q$, '连结代码');
++select pg_temp.expect_error($q$select public.ops_dlv_run_save('{"company":"","stops":[{"doc_no":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$, '不完整');
++select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"ext","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
++  current_setting('dlv.jb_driver')), '不属于');
++do $$ declare r jsonb; me_id bigint; begin
++  me_id := (public.ops_dlv_meta()->>'me_id')::bigint;
++  r := public.ops_dlv_run_save(jsonb_build_object('company', '', 'driver_kind', 'staff', 'driver_id', me_id,
++         'stops', '[{"key":"DO-017707","doc_no":"DO-017707","note":"内部：欠款多"},{"key":"DO-017708","doc_no":"DO-017708"}]'::jsonb,
++         'token', 'TOKEN_driver_run_000000001'));
++  perform set_config('dlv.run_id', r->>'id', false);
++  perform set_config('dlv.me_id', me_id::text, false);
++end $$;
++reset role;
++do $$ declare v_id bigint := current_setting('dlv.run_id')::bigint; begin
++  assert (select driver_staff_id = current_setting('dlv.me_id')::bigint and driver_phone = '60127778888' and store = 'HQ'
++                 and token_expires > now() + interval '2 days' and created_by = 'driver@example.com'
++            from bi.delivery_run where id = v_id), 'run saved with staff driver';
++  assert (select not (stops->0 ? 'note') from bi.delivery_run where id = v_id), 'internal note not stored';
++  -- BI 旧版存进去的站带 note：回传时也拿掉
++  update bi.delivery_run set stops = jsonb_set(stops, '{1,note}', '"内部"') where id = v_id;
++  -- 司机签了第一站（正式环境由 anon 的 bi_driver_pod 写入）
++  insert into bi.delivery_pod (run_id, stop_key, doc_no, status, photos) values (v_id, 'DO-017707', 'DO-017707', 'delivered',
++    array['TOKEN_driver_run_000000001/a.jpg']);
++end $$;
++set role authenticated;
++do $$ declare r jsonb; begin
++  r := public.ops_dlv_my_runs();
++  assert jsonb_array_length(r) = 1 and r->0->>'token' = 'TOKEN_driver_run_000000001' and jsonb_array_length(r->0->'pods') = 1,
++    'my runs: ' || r::text;
++  assert not (r->0->'stops'->1 ? 'note') and r->0->'stops'->1->>'key' = 'DO-017708', 'note stripped on read: ' || (r->0->'stops')::text;
++  r := public.ops_dlv_home();
++  assert (r->>'my_stops_left')::int = 1 and (r->>'stops_open_today')::int = 1, 'home: ' || r::text;
++  assert public.ops_dlv_photo_ok('TOKEN_driver_run_000000001'), 'driver sees own photos';
++  -- 同一批单再排一次（按了两次 WhatsApp）：首页不重复算
++  perform public.ops_dlv_run_save(jsonb_build_object('company', '', 'driver_kind', 'staff', 'driver_id', (public.ops_dlv_meta()->>'me_id')::bigint,
++         'stops', '[{"key":"DO-017707","doc_no":"DO-017707"},{"key":"DO-017708","doc_no":"DO-017708"}]'::jsonb,
++         'token', 'TOKEN_driver_run_000000002'));
++  r := public.ops_dlv_home();
++  assert (r->>'my_stops_left')::int = 1 and (r->>'stops_open_today')::int = 1, 'home dedup: ' || r::text;
++  -- 改备注会记 audit_log
++  perform public.ops_dlv_doc_set_note('', 'DO-017707', '后门');
++end $$;
++reset role;
++do $$ begin
++  assert (select count(*) from ops.audit_log where action = 'dlv_note') = 2, 'notes audited (section 2 + here)';
++  assert (select count(*) from ops.audit_log where action = 'dlv_run') = 2, 'runs audited';
++end $$;
++set role authenticated;
++
++-- 3. 门市（只看）：看得到排单与进度，但拿不到签收连结代码
++select pg_temp.as_user('hqsales@example.com');
++do $$ declare r jsonb := public.ops_dlv_runs('', 14); v jsonb; begin
++  v := (select x from jsonb_array_elements(r) x where (x->>'id')::bigint = current_setting('dlv.run_id')::bigint);
++  assert jsonb_array_length(r) = 2 and v->>'token' is null and (v->>'has_link')::boolean
++     and v->'pods'->0->>'status' = 'delivered', 'viewer runs: ' || r::text;
++  -- 照片路径里有连结代码：连结还有效时只看的人拿不到路径（只给张数），也读不到照片
++  assert v->'pods'->0->'photos' = '[]'::jsonb and (v->'pods'->0->>'photo_count')::int = 1, 'viewer: no token-bearing paths: ' || v::text;
++  assert not public.ops_dlv_photo_ok('TOKEN_driver_run_000000001'), 'viewer cannot read photos while link is live';
++  assert (public.ops_dlv_home()->>'stops_open_today') is null, 'viewer: no open-stops count';
++  assert jsonb_array_length(public.ops_dlv_my_runs()) = 0, 'not a driver';
++end $$;
++-- 连结过期后，只看的人就看得到照片（代码已不能签收）
++reset role;
++update bi.delivery_run set token_expires = now() - interval '1 minute' where token = 'TOKEN_driver_run_000000001';
++set role authenticated;
++do $$ declare v jsonb; begin
++  v := (select x from jsonb_array_elements(public.ops_dlv_runs('', 14)) x where (x->>'id')::bigint = current_setting('dlv.run_id')::bigint);
++  assert v->'pods'->0->'photos' = '["TOKEN_driver_run_000000001/a.jpg"]'::jsonb, 'viewer sees paths after expiry: ' || v::text;
++  assert public.ops_dlv_photo_ok('TOKEN_driver_run_000000001'), 'viewer reads photos after expiry';
++end $$;
++-- JB 的人看不到 HQ 的照片；没在营运名单的人也看不到
++select pg_temp.as_user('jbsales2@example.com');
++do $$ begin
++  assert not public.ops_dlv_photo_ok('TOKEN_driver_run_000000001'), 'JB cannot see HQ photos';
++  assert jsonb_array_length(public.ops_dlv_runs('', 14)) = 0, 'JB runs empty';
++end $$;
++select pg_temp.as_user('stranger@example.com');
++do $$ begin assert not public.ops_dlv_photo_ok('TOKEN_driver_run_000000001'), 'stranger'; end $$;
++
++-- 4. 主管（manager → 可审批）：出发点、外包司机
++select pg_temp.as_user('dlvmgr@example.com');
++do $$ declare r jsonb; m jsonb; begin
++  assert public.ops_dlv_meta()->>'level' = 'approve', 'manager approve';
++  r := public.ops_dlv_runs('', 14);
++  assert exists (select 1 from jsonb_array_elements(r) x where x->>'token' = 'TOKEN_driver_run_000000002'), 'editor gets token to re-share';
++  -- 坐标：第一次存不记，已有的点被移动才记
++  perform public.ops_dlv_geo_set('5 Jalan Mawar, 81300', 1.56, 103.71);
++  perform public.ops_dlv_set_depot('', 'HomeWorks HQ', 1.5321, 103.6612);
++  r := public.ops_dlv_driver_save('{"name":"新外包","phone":"013-111 2222","company":""}');
++  assert r->>'store' = 'HQ' and r->>'phone' = '60131112222', 'ext driver: ' || r::text;
++  perform public.ops_dlv_driver_save(jsonb_build_object('id', r->>'id', 'name', '新外包', 'phone', '0131112222', 'company', '', 'active', false));
++  m := public.ops_dlv_meta();
++  assert m->'depot'->'HQ'->>'address' = 'HomeWorks HQ' and not (m->'depot' ? 'JB'), 'depot: ' || (m->'depot')::text;
++  assert not exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'name' = '新外包'), 'inactive driver hidden';
++end $$;
++reset role;
++do $$ begin assert (select count(*) from ops.audit_log where action = 'dlv_geo') = 1, 'moved pin audited'; end $$;
++set role authenticated;
++select pg_temp.expect_error($q$select public.ops_dlv_driver_save('{"name":"x","phone":"123","company":""}')$q$, '手机');
++select pg_temp.expect_error(format($q$select public.ops_dlv_driver_save('{"id":%s,"name":"x","phone":"0120000009","company":""}')$q$,
++  current_setting('dlv.jb_driver')), '分店');
++select pg_temp.expect_error($q$select public.ops_dlv_set_depot('HOMEWORKSSOUTHERN', 'JB', 1.5, 103.7)$q$, '分店');
++-- 送货部但没有手机号码的员工不能当司机（司机清单也不会列）
++select pg_temp.expect_error(format($q$select public.ops_dlv_run_save('{"company":"","driver_kind":"staff","driver_id":%s,"stops":[{"key":"A"}],"token":"abcdefghijklmnopqrstuvwx"}')$q$,
++  (select (public.ops_dlv_meta()->>'me_id'))), '送货安装');
++reset role;
++select 'dlv_test ok';
+diff --git a/portal/supabase/tests/run.sh b/portal/supabase/tests/run.sh
+index 1f22478..ca48d22 100644
+--- a/portal/supabase/tests/run.sh
++++ b/portal/supabase/tests/run.sh
+@@ -15,3 +15,4 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/wh_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/pay_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/todo_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/join_test.sql"
++psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/dlv_test.sql"
+diff --git a/portal/supabase/tests/stub_supabase.sql b/portal/supabase/tests/stub_supabase.sql
+index 3a8c737..b917613 100644
+--- a/portal/supabase/tests/stub_supabase.sql
++++ b/portal/supabase/tests/stub_supabase.sql
+@@ -93,3 +93,46 @@ insert into bi.fact_open_order (company, doc_no, dtl_key, doc_date, debtor_name,
+ create table bi.fact_item_aging (company text, item_code text, last_receipt_date date, on_hand numeric, stock_value numeric, sold_since numeric);
+ create table bi.mv_sales_item_month (company text, yr int, mth int, item_code text, item_key text, item_description text,
+   item_group text, qty numeric, net numeric, profit numeric);
++
++-- 送货安装（2026-10-08）：BI 那边的送货表与函数（正式环境由 BI 的 migration delivery_* 建立；这里只取用到的，view 简化）
++create function storage.foldername(name text) returns text[] language sql immutable as $$
++  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1]
++$$;
++create function bi.customer_phone(p_name text) returns text language sql immutable as $$
++  select case when d ~ '^01[0-9]{8,9}$' then '6' || d when d ~ '^601[0-9]{8,9}$' then d end
++    from (select regexp_replace(coalesce(p_name, ''), '\D', '', 'g') as d) x
++$$;
++create function bi.customer_key(p_input text) returns text language sql stable as $$
++  select case when p_input ~ '^A:' then p_input else bi.customer_phone(p_input) end
++$$;
++create function bi.addr_key(p text) returns text language sql immutable as $$
++  select nullif(lower(regexp_replace(trim(coalesce(p, '')), '[\s,]+', ' ', 'g')), '')
++$$;
++create table bi.customer_profile (member_id text primary key, name text, address text, note text, lat numeric, lng numeric,
++  geo_query text, created_by text, updated_by text, updated_at timestamptz default now());
++create table bi.customer_settings (id int primary key, depot jsonb default '{}'::jsonb, updated_at timestamptz, updated_by text);
++insert into bi.customer_settings (id) values (1);
++create table bi.geo_cache (addr text primary key, address text, lat numeric, lng numeric, updated_at timestamptz default now(),
++  updated_by text);
++create table bi.delivery_doc (company text, doc_no text, doc_date date, debtor_code text, debtor_name text, sales_agent text,
++  amount numeric, items text, cancelled boolean default false, synced_at timestamptz default now(), address text,
++  address_override text, override_by text, override_at timestamptz, lines jsonb, do_remark text, delivery_note text,
++  note_by text, note_at timestamptz, primary key (company, doc_no));
++create view bi.delivery_doc_full as
++  select d.company, d.doc_no, d.doc_date, d.debtor_code, d.debtor_name, d.sales_agent, d.amount, d.items, d.cancelled,
++         coalesce(bi.customer_phone(d.debtor_name), 'A:' || d.company || ':' || d.debtor_code) as member_id,
++         p.name, p.note,
++         coalesce(nullif(trim(d.address_override), ''), nullif(trim(d.address), '')) as address,
++         case when nullif(trim(d.address_override), '') is not null then 'manual'
++              when nullif(trim(d.address), '') is not null then 'do' end as address_source,
++         d.address as do_address, g.lat, g.lng, d.lines, d.do_remark, d.delivery_note
++    from bi.delivery_doc d
++    left join bi.customer_profile p on p.member_id = coalesce(bi.customer_phone(d.debtor_name), 'A:' || d.company || ':' || d.debtor_code)
++    left join bi.geo_cache g on g.addr = bi.addr_key(coalesce(nullif(trim(d.address_override), ''), d.address));
++create table bi.delivery_driver (id bigint generated always as identity primary key, name text, phone text, store text,
++  active boolean default true, updated_at timestamptz default now(), updated_by text);
++create table bi.delivery_run (id bigint generated always as identity primary key,
++  run_date date default (now() at time zone 'Asia/Kuala_Lumpur')::date, store text, driver_name text, driver_phone text,
++  stops jsonb, created_at timestamptz default now(), created_by text, token text unique, token_expires timestamptz);
++create table bi.delivery_pod (id bigint generated always as identity primary key, run_id bigint, stop_key text, doc_no text,
++  status text, note text, photos text[] default '{}', lat numeric, lng numeric, created_at timestamptz default now());
+-- 
+2.43.0
+
