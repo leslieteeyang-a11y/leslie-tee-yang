@@ -169,6 +169,14 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   存排单断线重按沿用同一个连结（`pending` ref，`duplicate key` 当成功）；OSM 标示 `OSM_CREDIT`；找不到的地址本次开网页不重问（`geoMiss`）。
   测试 `tests/dlv_test.sql`（BI 送货表的 stub 在 `stub_supabase.sql` 最后）。BI 那边的旧送货页（`/delivery.html`、`/driver.html`）先留着，
   两边资料相通；要不要关掉由使用者决定（BI 的 sales 角色在旧页仍拿得到签收连结，是 BI 原本的行为）。JB 没有 DO 资料 = JB 那台电脑没跑 `quote_push.py`。
+  物流部排单（2026-10-08，部署 `dpl_AtyAWUqGApCCqQxVeVF4r2tB2Qdw`）：司机兼排单的人点「送货」只在今天真的有站要送（`ops_dlv_home.my_stops_left`，
+  与 `ops_dlv_meta` 同时载入）才先开「我的送货」，不然开「排单」；可编辑的人看不到「设定」，提示改成请主管或管理层设定出发点 / 外包司机；
+  换分店会清空排到一半的单，先 confirm。**出发点 HQ / JB 正式环境都还没设**（`bi.customer_settings.depot` 是空的），要可审批的人在「送货 → 设定」设一次。
+  要让某位物流部同事管司机 / 出发点：给他个人例外「送货 = 可审批」，不要整个升主管（主管会把仓库、打卡等所有可编辑模块都升可审批）。
+- **PostgREST「JWT issued at future」（PGRST303）**（2026-10-08）：PostgREST 闲置后偶尔把刚签发的 token 判成未来时间，回 401；
+  同一个 token 几毫秒前才通过，不是员工装置时钟。这个 401 在执行 SQL 之前就挡下，所以 `portal/src/supabase.ts` 的 `global.fetch`
+  与 Edge Function `ops-account` v5 / `ops-join` v3 的 `fetchRetry` 都对它等 1.5 秒重送一次（只限 /rest/v1/、文字 body）。
+  根治要升级 PostgREST（Supabase Dashboard → Settings → Infrastructure，使用者决定）。BI 网页没有这个重送，遇到时重新整理即可。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。

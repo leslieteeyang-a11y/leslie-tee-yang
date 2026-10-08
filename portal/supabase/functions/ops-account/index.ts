@@ -16,9 +16,9 @@ function reply(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
-// PostgREST 偶尔把刚签发的 token 判成「JWT issued at future」（401 / PGRST303；2026-10-08 记录到一次就是这里的
-// ops_join_check，同一把金钥几毫秒前才通过 → 伺服器闲置后取时间的问题）。这个 401 在执行 SQL 之前就挡下，
-// 等一下再送一次是安全的（送出申请、批准都不会做两次）。只重送一次，只限 /rest/v1/ 的文字 body。
+// PostgREST 偶尔把刚签发的 token 判成「JWT issued at future」（401 / PGRST303；2026-10-08 记录到两次：BI 网页与
+// ops-join，同一个 token 几毫秒前才通过 → 伺服器闲置后取时间的问题）。这个 401 在执行 SQL 之前就挡下，
+// 等一下再送一次是安全的（查身分、查名单都只是读）。只重送一次，只限 /rest/v1/ 的文字 body。
 async function fetchRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const res = await fetch(input, init);
   if (res.status !== 401) return res;
