@@ -107,7 +107,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   时间一律 Asia/Kuala_Lumpur；测试用 `ops.fake_now`（只在有 `ops_test_marker` schema 的本机测试库生效）。
   测试：`portal/supabase/tests/att_test.sql`（run.sh 会接著 ops_test.sql 跑）。「HR」= 对 `hr` 模块可审批的人（管理层预设有）。
   AttendX 原始码只在对话上传的 zip 里，没有放进 repo；之后的请假、加班、薪资照同样方式逐模块搬。
-  **注意**：Supabase 资料库已 434 MB（免费方案上限 500 MB，主要是 BI 资料），照片放 Storage 不占资料库。
+  **注意**：组织是 **Pro 方案**（2026-10-09 使用者截图：Infrastructure 页 org 标 PRO、磁碟 2 GB 会自动扩到 8 GB、运算 Nano；
+  旧说法「免费方案上限 500 MB」不对）。资料库 518 MB（2026-10-09，主要是 BI 资料），照片放 Storage 不占资料库。
 - 已上线（请假，2026-10-03，参考 AttendX §7 简化）：模块 `leave`（所有部门可编辑 = 自己申请）+ `hr`「人事」页上线（请假审核 /
   纪录 / 假期余额 / 假别设定；打卡设定仍在打卡页）。`ops.leave_type`（年假、病假按劳工法 s.60E/60F 与年资：8/12/16、14/18/22，
   到职那年年假按月比例；住院 60、产假 98 日历天限女、陪产假 7 日历天限男且满 12 个月、婚假 3、丧假每次 3 日历天、无薪不设余额；
@@ -181,6 +182,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   不要用 pause/restore：会停更久，且自订角色密码不会还原）。事前已查：唯一自订登入角色 `bi_sync` 密码已是 scram-sha-256（升级不会让它登不进去），
   没有 replication slot。避开 04:05 UTC（12:05 KL）BI 同步与上班打卡时间。升好后验证：application_name ≥ PostgREST 14.18、
   `bi.delivery_*` / BI 同步时间照常更新、首页与打卡能用。没提供升级或版本仍 < 14.18 → 开 Supabase 支援单引用 PostgREST #5196。
+  2026-10-09 使用者截图确认：Infrastructure 页**没有** Service Versions / Upgrade project（= 目前没有可升级版本）→ 已给使用者英文支援单范本，等 Supabase 回覆。
   BI 网页没有这个重送，遇到时重新整理即可。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
