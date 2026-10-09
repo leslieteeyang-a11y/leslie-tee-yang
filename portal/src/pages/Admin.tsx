@@ -92,13 +92,16 @@ function StaffForm({ me, staff, onClose, onSaved }: {
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({ ...(staff?.overrides ?? {}) });
   // 最后上班日存在 ops_att_staff_set（要人事「可编辑」，和打卡设定同一个函数）；新增员工时不填。
-  // 自己那一行不显示：管理员不能设自己的最后上班日（和「不能停用自己」同理，资料库也挡）
-  const canLastDay = !!staff && staff.id !== me.staff.id && can(me, "hr", "edit");
+  // 自己那一行不显示：管理员不能设自己的最后上班日（和「不能停用自己」同理，资料库也挡）。
+  // 那个函数只收自己分店的员工：只管一间分店的管理员改别分店（或 ALL）的人时也不显示，免得别的栏位存了、日期却被拒绝
+  const canLastDay = !!staff && staff.id !== me.staff.id && can(me, "hr", "edit")
+    && (me.staff.branch === "ALL" || me.staff.branch === staff.branch);
   const [lastDay, setLastDay] = useState(staff?.last_day ?? "");
   const today = todayKL();
   const lastChanged = !!staff && (lastDay || "") !== (staff.last_day || "");
   const rehire = !!staff && f.active && !staff.active;           // 停用 → 在职：资料库会清掉已经到了 / 过了的最后上班日
-  const quitting = !!staff && !f.active && staff.active;         // 在职 → 停用：还没到的最后上班日资料库会改成今天
+  const quitting = !!staff && !f.active && staff.active;         // 在职 → 停用：还没到 / 没填的最后上班日资料库会改成今天
+  const quitToday = quitting && (staff?.last_day ? staff.last_day > today : !staff?.join_date || staff.join_date <= today);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -117,9 +120,12 @@ function StaffForm({ me, staff, onClose, onSaved }: {
     const ov: Record<string, string> = {};
     for (const k of new Set([...Object.keys(staff?.overrides ?? {}), ...Object.keys(overrides)])) ov[k] = overrides[k] ?? "";
     try {
+      // 复职又清空最后上班日（= 误按停用，其实没离职）：先清掉再复职，资料库才不会要求先做好离职那个月的薪资
+      const clearFirst = !!staff && canLastDay && lastChanged && rehire && !lastDay;
+      if (clearFirst) await att.setStaff({ id: staff!.id, last_day: "" });
       const saved = await api.saveStaff({ ...f, id: staff?.id, overrides: ov });
       // 复职 / 停用时资料库自己调整最后上班日；这里只在有改过才送（在 saveStaff 之后，复职又另外填新日期也对）
-      if (staff && canLastDay && lastChanged) await att.setStaff({ id: staff.id, last_day: lastDay || "" });
+      if (staff && canLastDay && lastChanged && !clearFirst) await att.setStaff({ id: staff.id, last_day: lastDay || "" });
       onSaved({ ...(saved as StaffAdmin), has_login: staff?.has_login ?? false, overrides: {} }, !staff);
     } catch (err) {
       setError((err as Error).message);
@@ -166,9 +172,9 @@ function StaffForm({ me, staff, onClose, onSaved }: {
             <div>
               <p className="muted small">过了这天（隔天 00:00 起）就进不了营运系统，系统也会自动停用；出勤、薪资照样算到这一天。</p>
               {rehire && !lastChanged && staff?.last_day && staff.last_day <= today && (
-                <p className="small late">复职后会清掉这个最后上班日。</p>
+                <p className="small late">复职后会清掉这个最后上班日。有薪资资料的人，要先做好离职那个月的薪资才能复职；如果只是误按停用（他其实没离职），把上面的日期清空再储存。</p>
               )}
-              {quitting && !lastChanged && staff?.last_day && staff.last_day > today && (
+              {quitToday && !lastChanged && (
                 <p className="small late">取消在职 = 今天起停用：最后上班日会改成今天。</p>
               )}
             </div>

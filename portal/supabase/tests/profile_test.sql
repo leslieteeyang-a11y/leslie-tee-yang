@@ -1,6 +1,7 @@
 -- 员工档案测试（接在 dlv_test.sql 之后跑，2026-10-09）：权限矩阵（本人 / HR 只看 / HR 可编辑 / 管薪资的人 / 其他员工 / anon）、
 -- 银行资料只给本人与管薪资的人、MyKad 整理与生日带入、各种格式错误、人事资料缺漏的新代号。
 -- 第 10 段：最后上班日的审查修正（管理员保护、BI 名单提醒、提早停用 / 同日复职、HR 替离职的人补卡请假）。
+-- 第 11 段：第二轮复核（离职主管的下属设定、不能改自己的最后上班日、手动停用补最后上班日、复职要先做好离职那个月的薪资）。
 \set ON_ERROR_STOP 1
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
 begin
@@ -238,13 +239,29 @@ select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_objec
   'last_day', '2026-12-31'))$q$, '至少要留一位');
 select pg_temp.expect_error($q$select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('boss@example.com'),
   'leave_date', '2026-11-30'))$q$, '至少要留一位');
+-- 有最后上班日的管理员不能自己清掉 / 延后（2026-10-10 复核）
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('admin2@example.com'),
+  'last_day', ''))$q$, '管理员不能设定自己');
+select pg_temp.expect_error($q$select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('admin2@example.com'),
+  'leave_date', '2099-12-31'))$q$, '管理员不能设定自己');
+-- 也不能把唯一一位没有最后上班日的管理员降级或停用（2026-10-10 复核）
+select pg_temp.expect_error($q$select public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('boss@example.com'),
+  'email', 'boss@example.com', 'role', 'staff'))$q$, '至少要留一位');
+select pg_temp.expect_error($q$select public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('boss@example.com'),
+  'email', 'boss@example.com', 'active', false))$q$, '至少要留一位');
+select pg_temp.as_user('boss@example.com');
+do $$ begin assert public.ops_me()->'staff'->>'role' = 'admin', 'boss still admin'; end $$;
 select pg_temp.as_user('gm@example.com');
--- 管理员已经有的日期原样送回可以；改日期不行；清掉（延长）可以
+-- 管理员已经有的日期原样送回可以；改日期、清掉（= 延长）都要另一位管理员
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('admin2@example.com'), 'last_day', '2026-12-31',
                                                    'geofence_exempt', true));
 select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('admin2@example.com'),
   'last_day', '2026-12-30'))$q$, '只有管理员可以设定管理员');
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('admin2@example.com'),
+  'last_day', ''))$q$, '只有管理员可以设定管理员');
+select pg_temp.as_user('boss@example.com');
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('admin2@example.com'), 'last_day', ''));
+select pg_temp.as_user('gm@example.com');
 -- 一般员工照常可以设（管理层替门市小美设一个还没到的日期，再清掉）
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'), 'last_day', '2026-12-31'));
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'), 'last_day', ''));
@@ -331,6 +348,103 @@ select pg_temp.expect_error($q$select public.ops_att_correction_create(jsonb_bui
   'attachment', pg_temp.photo('hr@example.com', 'proof/oops.jpg')))$q$, '已停用');
 select pg_temp.expect_error($q$select public.ops_leave_apply(jsonb_build_object('staff_id', pg_temp.sid('oops@example.com'),
   'type', 'unpaid', 'start_date', '2026-10-20'))$q$, '找不到这位员工');
+
+-- 11. 第二轮复核（2026-10-10）
+-- 11a. 直属主管离职被自动停用后，HR 照样能存他下属的打卡设定（表单整笔送回旧的 manager_id）；换成已停用的人照挡
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"mgrx@example.com","name":"主管甲","department":"sales","branch":"HOMEWORKSSB","role":"manager"}');
+select public.ops_staff_save('{"email":"rep@example.com","name":"下属乙","department":"sales","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('rep@example.com'), 'manager_id', pg_temp.sid('mgrx@example.com')));
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('mgrx@example.com'), 'last_day', '2026-10-21'));
+reset role;
+select pg_temp.at('2026-10-22 10:00:00+08');
+do $$ begin
+  perform ops.staff_offboard();
+  assert not (select active from ops.staff where email = 'mgrx@example.com'), 'manager offboarded';
+end $$;
+set role authenticated;
+select pg_temp.as_user('hr@example.com');
+do $$ declare r jsonb; begin
+  r := (select x from jsonb_array_elements(public.ops_att_settings()->'staff') x where x->>'name' = '下属乙');
+  assert (r->>'manager_id')::bigint = pg_temp.sid('mgrx@example.com'), 'still points at the old manager: ' || r::text;
+  perform public.ops_att_staff_set(r || '{"join_date":"2026-09-01"}');
+  assert (select x->>'join_date' from jsonb_array_elements(public.ops_att_settings()->'staff') x where x->>'name' = '下属乙')
+         = '2026-09-01', 'saved with the old manager';
+end $$;
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'),
+  'manager_id', pg_temp.sid('mgrx@example.com')))$q$, '已停用');
+
+-- 11b. 自己的最后上班日不能自己清掉或延后（人事小陈：hr@ 替他设了 10/24）；整笔送回同一个日期照常可以
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hrclerk@example.com'), 'last_day', '2026-10-24'));
+select pg_temp.as_user('hrclerk@example.com');
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hrclerk@example.com'),
+  'last_day', ''))$q$, '不能改自己的最后上班日');
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hrclerk@example.com'),
+  'last_day', '2026-12-31'))$q$, '不能改自己的最后上班日');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hrclerk@example.com'), 'last_day', '2026-10-24',
+                                                   'geofence_exempt', true));
+select pg_temp.at('2026-10-25 09:00:00+08');
+do $$ begin assert public.ops_me() is null, 'clerk locked out after the last day'; end $$;
+select pg_temp.at('2026-10-22 10:00:00+08');
+
+-- 11c. 手动停用、没填最后上班日 → 补今天：出勤月报 / 薪资照列那个月，HR 还能替他补卡；到职日还没到的不补
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"quit3@example.com","name":"走人三号","department":"sales","branch":"HOMEWORKSSB"}');
+select public.ops_staff_save('{"email":"future@example.com","name":"还没来","department":"sales","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('quit3@example.com'), 'join_date', '2026-10-01'));
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('future@example.com'), 'join_date', '2026-11-01'));
+select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('quit3@example.com'), 'base', 1500));
+select pg_temp.as_user('boss@example.com');
+do $$ declare s jsonb; begin
+  s := public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('quit3@example.com'), 'email', 'quit3@example.com', 'active', false));
+  assert s->>'last_day' = '2026-10-22', 'manual deactivation → last_day today: ' || s::text;
+  s := public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('future@example.com'), 'email', 'future@example.com', 'active', false));
+  assert s->'last_day' = 'null'::jsonb, 'not started yet → no last_day: ' || s::text;
+end $$;
+select pg_temp.as_user('hr@example.com');
+do $$ declare c jsonb; begin
+  assert exists (select 1 from jsonb_array_elements(public.ops_att_month('2026-10')) x where x->>'name' = '走人三号'),
+    'manual leaver in october attendance';
+  assert exists (select 1 from jsonb_array_elements(public.ops_pay_month(2026, 10)->'rows') x where x->>'name' = '走人三号'
+                 and x->>'leave_date' = '2026-10-22'), 'manual leaver in october payroll';
+  c := public.ops_att_correction_create(jsonb_build_object('staff_id', pg_temp.sid('quit3@example.com'), 'date', '2026-10-20',
+         'punch', 'clock_in', 'time', '08:55', 'reason', '离职前忘了打上班卡',
+         'attachment', pg_temp.photo('hr@example.com', 'proof/quit3-1020.jpg')));
+  assert c->>'status' = 'pending_hr', 'hr can still file for a manual leaver: ' || c::text;
+end $$;
+
+-- 11d. 复职：最后上班日已经过了、又有薪资资料的人，离职那个月要先有薪资纪录（复职会清掉最后上班日，
+--      之后那个月就不会只算到离职那天）；只是误按停用的话，先清空最后上班日再复职
+select pg_temp.at('2026-10-23 10:00:00+08');
+select pg_temp.as_user('boss@example.com');
+select pg_temp.expect_error($q$select public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('quit3@example.com'),
+  'email', 'quit3@example.com', 'active', true))$q$, '2026-10 的薪资还没做');
+select pg_temp.expect_error($q$select public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('leaver@example.com'),
+  'email', 'leaver@example.com', 'active', true))$q$, '2026-10 的薪资还没做');
+-- 误按停用：已停用的人可以清掉最后上班日，之后复职就不挡
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('quit3@example.com'), 'last_day', ''));
+select pg_temp.as_user('boss@example.com');
+do $$ declare s jsonb; begin
+  s := public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('quit3@example.com'), 'email', 'quit3@example.com', 'active', true));
+  assert (s->>'active')::boolean and s->'last_day' = 'null'::jsonb, 'mistaken deactivation undone: ' || s::text;
+end $$;
+-- 真的离职又回来：10 月薪资做好之后就能复职，10 月的薪资纪录照列
+select pg_temp.as_user('hr@example.com');
+select public.ops_pay_save(jsonb_build_object('year', 2026, 'month', 10, 'records', jsonb_build_array(
+  jsonb_build_object('staff_id', pg_temp.sid('leaver@example.com'), 'type', 'base', 'result', '{"net":700}'::jsonb, 'pay', 700))));
+select pg_temp.as_user('boss@example.com');
+do $$ declare s jsonb; begin
+  s := public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('leaver@example.com'), 'email', 'leaver@example.com', 'active', true));
+  assert (s->>'active')::boolean and s->'last_day' = 'null'::jsonb, 'rehired after the final payroll: ' || s::text;
+end $$;
+select pg_temp.as_user('hr@example.com');
+do $$ begin
+  assert exists (select 1 from jsonb_array_elements(public.ops_pay_month(2026, 10)->'rows') x where x->>'name' = '离职阿伟'
+                 and x->'records' ? 'base'), 'final payroll record kept';
+end $$;
 
 reset role;
 select 'profile_test ok';

@@ -350,9 +350,9 @@ select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@exa
                                                    'last_day', '2026-10-14'));
 select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@example.com'),
   'join_date', '2026-10-15'))$q$, '不能早于到职日');
--- HR 不能把自己锁在外面
+-- HR 不能改自己的最后上班日（锁自己、延后、清掉都不行；延后 / 清掉在 profile_test 第 11 段）
 select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hr@example.com'),
-  'last_day', '2026-10-12'))$q$, '不能把自己');
+  'last_day', '2026-10-12'))$q$, '不能改自己的最后上班日');
 -- 只带到职日（Excel 开账号那样）不会清掉直属主管（第 9 段设的 buyer）
 select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'), 'join_date', '2026-09-01'));
 do $$ declare s jsonb := public.ops_att_settings(); begin

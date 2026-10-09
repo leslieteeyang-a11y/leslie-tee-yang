@@ -1,6 +1,6 @@
 // 资料层：所有读写都走 public.ops_* 函数（权限在资料库里检查），这里只负责呼叫与型别。
 import { supabase } from "./supabase";
-import { tr } from "./i18n";
+import { getLang, tr } from "./i18n";
 
 export type Level = "none" | "view" | "edit" | "approve";
 export const LEVEL_RANK: Record<Level, number> = { none: 0, view: 1, edit: 2, approve: 3 };
@@ -121,7 +121,9 @@ export const todayKL = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/
 /** 存最后上班日之前：选了已经过了的日子（不是自己）→ 先确认，存了之后那个人马上进不了营运系统 */
 export function confirmPastLastDay(name: string, newDay: string | null | undefined, oldDay: string | null | undefined): boolean {
   if (!newDay || newDay === (oldDay || "") || newDay >= todayKL()) return true;
-  return window.confirm(tr(`${newDay} 已经过了：存了之后 ${name} 马上进不了营运系统，今晚会自动停用（只有管理员能在「员工与权限」复职）。确定？`));
+  const msg = `${newDay} 已经过了：存了之后 ${name} 马上进不了营运系统，今晚会自动停用（只有管理员能在「员工与权限」复职）。确定？`;
+  // confirm 对话框不经过 DOM 翻译层：只有英文模式才翻（tr 本身不看语言）
+  return window.confirm(getLang() === "en" ? tr(msg) : msg);
 }
 
 // 员工档案（ops.staff_profile）：本人看 / 改全部；HR 看 / 改同分店员工；银行两栏只有本人与管理薪资的人拿得到（没权限连 key 都没有）

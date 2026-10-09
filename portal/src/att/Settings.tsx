@@ -61,11 +61,11 @@ export default function Settings({ me }: { me: Me }) {
             <tbody>
               {s.staff.map((x) => (
                 <tr key={x.id}>
-                  <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div></td>
+                  <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div>
+                    {x.last_day && <div className="late small">{`最后上班日 ${x.last_day}`}</div>}</td>
                   <td>{shiftName(x.shift)}</td>
                   <td className="hide-sm">{nameOf(x.manager_id) || <span className="muted">部门主管</span>}</td>
-                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`, x.gender && (x.gender === "F" ? "女" : "男")].filter(Boolean).join(" · ")}
-                    {x.last_day && <div className="late">{`最后上班日 ${x.last_day}`}</div>}</td>
+                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`, x.gender && (x.gender === "F" ? "女" : "男")].filter(Boolean).join(" · ")}</td>
                   <td><a href="#" onClick={(e) => { e.preventDefault(); setStaff(x); }}>修改</a></td>
                 </tr>
               ))}
@@ -197,13 +197,16 @@ function FenceForm({ f, branches, onClose, onSaved }: { f: Partial<Fence>; branc
 function StaffForm({ me, x, s, onClose, onSaved }: { me: Me; x: AttStaff; s: AttSettings; onClose: () => void; onSaved: () => void }) {
   const [v, setV] = useState(x);
   const { error, busy, save } = useSave(onSaved);
-  // 管理员的最后上班日只有管理员能设，管理员也不能设自己的（资料库同样挡；避免没有人能进「员工与权限」复职）
-  const lastDayLocked = x.role === "admin" && (me.staff.role !== "admin" || x.id === me.staff.id);
+  // 自己的最后上班日不能自己改；管理员的只有另一位管理员能设（资料库同样挡；避免没有人能进「员工与权限」复职）
+  const selfLocked = x.id === me.staff.id;
+  const lastDayLocked = selfLocked || (x.role === "admin" && me.staff.role !== "admin");
+  // 原本的直属主管已离职 / 停用（清单只有在职的人）：照样列出来，选单才不会显示成「不指定」
+  const oldManagerGone = x.manager_id != null && !s.staff.some((p) => p.id === x.manager_id);
   return (
     <Modal title={`打卡设定：${x.name}`} onClose={onClose}>
       <form className="form" onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        if (x.id !== me.staff.id && !confirmPastLastDay(x.name, v.last_day, x.last_day)) return;
+        if (!selfLocked && !confirmPastLastDay(x.name, v.last_day, x.last_day)) return;
         save(() => att.setStaff({ ...v, join_date: v.join_date || "", gender: v.gender || "", last_day: v.last_day || "" }));
       }}>
         <label>班别
@@ -214,6 +217,7 @@ function StaffForm({ me, x, s, onClose, onSaved }: { me: Me; x: AttStaff; s: Att
         <label>直属主管（看得到他的出勤）
           <select value={v.manager_id ?? ""} onChange={(e) => setV({ ...v, manager_id: e.target.value ? Number(e.target.value) : null })}>
             <option value="">不指定：同部门的主管</option>
+            {oldManagerGone && <option value={x.manager_id!}>（已停用的员工）</option>}
             {s.staff.filter((p) => p.id !== x.id).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.department_name}</option>)}
           </select>
         </label>
@@ -229,7 +233,7 @@ function StaffForm({ me, x, s, onClose, onSaved }: { me: Me; x: AttStaff; s: Att
         </div>
         {/* 离职：最后上班日（和薪资资料的「离职日」是同一个日期） */}
         {lastDayLocked ? (
-          <p className="muted small">管理员的最后上班日只能由另一位管理员在「员工与权限」设定。</p>
+          <p className="muted small">{selfLocked ? "自己的最后上班日要请另一位 HR 或管理员设定。" : "管理员的最后上班日只能由另一位管理员在「员工与权限」设定。"}</p>
         ) : (
           <>
             <label>最后上班日（选填，要离职才填）

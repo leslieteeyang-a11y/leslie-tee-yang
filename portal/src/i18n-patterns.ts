@@ -35,6 +35,8 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^补卡日期不能晚于最后上班日（(.+)）。$/, (m) => `A correction can't be for a day after the last working day (${m[1]}).`],
   [/^这位员工已停用，最后上班日不能晚于今天（(.+)）。要复职请管理员在「员工与权限」勾「在职」。$/, (m) =>
     `This staff member is inactive, so the last working day can't be later than today (${m[1]}). To re-activate, an admin ticks "Active" in Staff & Access.`],
+  [/^(.+)（最后上班日 (\d{4}-\d\d-\d\d)）(\d{4}-\d\d) 的薪资还没做：复职会清掉最后上班日，那个月的薪资、出勤就不会只算到离职那天。请先在「薪资」做好那个月再复职；只是误按停用的话，先把最后上班日清空再复职。$/, (m) =>
+    `${m[1]} (last working day ${m[2]}): payroll for ${m[3]} hasn't been done. Re-activating clears the last working day, so that month's pay and attendance would no longer stop at the day they left. Do that month's payroll in Payroll first, then re-activate; if they were only deactivated by mistake, clear the last working day first, then re-activate.`],
   [/^(\d{4}-\d\d-\d\d) 已经过了：存了之后 (.+) 马上进不了营运系统，今晚会自动停用（只有管理员能在「员工与权限」复职）。确定？$/, (m) =>
     `${m[1]} has already passed: once saved, ${m[2]} is locked out of the operations system immediately and deactivated tonight (only an admin can re-activate them in Staff & Access). Continue?`],
   [/^「(.+)」太长了（最多 (\d+) 个字）。$/, (m, t) => `"${t(m[1])}" is too long (max ${m[2]} characters).`],

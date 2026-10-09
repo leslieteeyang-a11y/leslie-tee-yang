@@ -11,7 +11,10 @@ export const DICT_PROFILE: Record<string, string> = {
   "· 已停用": "· inactive",              // 薪资资料清单（原本漏翻）
   "过了这天（隔天 00:00 起）就进不了营运系统，系统也会自动停用；出勤、薪资照样算到这一天。":
     "After this day (from 00:00 the next day) they can't get into the operations system and are deactivated automatically; attendance and payroll still count up to that day.",
-  "复职后会清掉这个最后上班日。": "Re-activating clears this last working day.",
+  "复职后会清掉这个最后上班日。有薪资资料的人，要先做好离职那个月的薪资才能复职；如果只是误按停用（他其实没离职），把上面的日期清空再储存。":
+    "Re-activating clears this last working day. If they have pay details, the payroll for the month they left must be done before they can be re-activated; if they were only deactivated by mistake (they never left), clear the date above and save.",
+  "自己的最后上班日要请另一位 HR 或管理员设定。": "Your own last working day has to be set by another HR person or an admin.",
+  "（已停用的员工）": "(inactive staff member)",
   "取消在职 = 今天起停用：最后上班日会改成今天。": "Unticking \"Active\" deactivates them from today: the last working day becomes today.",
   "这个人也在 BI 名单：离职 / 停用只挡营运系统，BI 网页要另外从 BI 名单移除。":
     "This person is also on the BI list: leaving / deactivation only blocks the operations system, so remove them from the BI list separately.",

@@ -168,8 +168,11 @@ do $$ declare p jsonb; begin
      and (select x->'last_day' from jsonb_array_elements(public.ops_att_settings()->'staff') x where x->>'name' = '仓库阿强')
          = 'null'::jsonb, 'cleared both';
 end $$;
+-- 自己的离职日不能自己改（以前的日子、以后的日子都不行）
 select pg_temp.expect_error($q$select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('hr@example.com'),
-  'leave_date', '2026-11-01'))$q$, '不能把自己');
+  'leave_date', '2026-11-01'))$q$, '不能改自己的最后上班日');
+select pg_temp.expect_error($q$select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('hr@example.com'),
+  'leave_date', '2099-12-31'))$q$, '不能改自己的最后上班日');
 
 reset role;
 select 'ALL PAYROLL TESTS PASSED' as result;

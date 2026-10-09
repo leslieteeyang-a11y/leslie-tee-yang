@@ -101,8 +101,8 @@ export const DICT_DB: Record<string, string> = {
   "这位员工已停用，请先启用": "This staff member is inactive — activate them first",
   // 2026-10-10：最后上班日、补卡证明、假别月数、员工档案（20261010_ops_profile_offboard）
   "资料格式不对。": "Invalid data.",
-  "不能把自己的最后上班日设在今天以前（设了会马上进不了系统）。":
-    "You can't set your own last working day before today (you'd be locked out immediately).",
+  "不能改自己的最后上班日，请另一位 HR 或管理员设定。":
+    "You can't change your own last working day; ask another HR person or an admin to set it.",
   "补卡要附证明（例：WhatsApp 截图、送货单照片）。":
     "A correction needs evidence (e.g. a WhatsApp screenshot or a photo of the delivery order).",
   "「到职满几个月才能请」要是 0 – 120 的整数。": "\"Months of service\" must be a whole number from 0 to 120.",

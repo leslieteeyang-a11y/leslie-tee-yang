@@ -4,11 +4,11 @@
 --   * HR 在「打卡 → 设定」员工设定填（ops_att_staff_set，和到职日同一处）；薪资资料的「离职日」写的也是这一栏，
 --     ops.pay_profile.leave_date 只是同步的副本（触发器 staff_last_day_sync），薪资函数回传 coalesce(last_day, leave_date)。
 --   * 过了最后上班日（马来西亚时间隔天 00:00）ops.current_staff() 就找不到人 → 所有 ops_* 函数、ops_me、照片 policy 一起挡下。
---   * 每天 00:05（KL）pg_cron 跑 ops.staff_offboard() 把这些人 active 改 false（本机测试库没有 pg_cron，只在有装时排程）。
---   * 复职（停用 → 启用，员工与权限或加入申请批准）时，已经到了 / 过了的最后上班日自动清掉；提早停用时还没到的最后上班日
---     改成今天（触发器 staff_last_day_guard）。
---   * 管理员的最后上班日只有管理员能设、不能设自己的、至少留一位没有最后上班日的管理员（ops.check_last_day），
---     和 ops_staff_save「不能停用自己」同理：不然没有人能进「员工与权限」复职。
+--   * 每天 00:05（KL）pg_cron 跑 ops.staff_offboard() 把这些人 active 改 false（没装 pg_cron 会先装；本机测试库跳过）。
+--   * 复职（停用 → 启用，员工与权限或加入申请批准）时，已经到了 / 过了的最后上班日自动清掉（离职那个月有薪资资料
+--     却还没有薪资纪录的先挡）；停用时还没到 / 没填的最后上班日改成今天（触发器 staff_last_day_guard）。
+--   * 自己的最后上班日不能自己改；管理员的最后上班日只有另一位管理员能动；至少留一位没有最后上班日的在职管理员
+--     （ops.check_last_day + 触发器挡降级 / 停用），和 ops_staff_save「不能停用自己」同理：不然没有人能进「员工与权限」复职。
 --   * 只挡营运系统：同一个账号在 BI 名单的话 BI 照样能进，「员工与权限」会提醒另外移除（ops_staff_admin_list.in_bi）。
 --   * 报表保留离职的人做过的月份：出勤月报 / 当天看板 / 薪资带入出勤都算到最后上班日为止；之后的月份不再出现。
 --     首页「资料缺漏」、人事缺漏清单不再算过了最后上班日的人。HR 照样能替离职的人补最后上班日以前的卡、登记请假。
@@ -35,20 +35,41 @@ where p.staff_id = s.id and p.leave_date is not null and s.last_day is null
   and (s.join_date is null or p.leave_date >= s.join_date);
 
 -- 最后上班日与「在职」要一致（所有写入路径都经过这里）：
---   * 复职（停用 → 在职）：已经到了 / 过了的最后上班日清掉（含今天：不清的话今晚又会被自动停用）
---   * 提早停用（人先走了，管理员取消「在职」）：还没到的最后上班日改成今天，看板 / 月报 / 薪资不会一直算缺勤到原本的日期
+--   * 复职（停用 → 在职）：已经到了 / 过了的最后上班日清掉（含今天：不清的话今晚又会被自动停用）。
+--     报表只认一组到职日 / 最后上班日，清掉之后离职那段期间会被当成在职（出勤算缺勤、薪资不按离职日扣），
+--     所以最后上班日已经过了、又有薪资资料的人，离职那个月要先有薪资纪录才能复职；
+--     只是误按停用（其实没离职）就先把最后上班日清空再复职。
+--   * 停用（人先走了，管理员取消「在职」）：还没到的最后上班日改成今天；没填的也补今天（到职日还没到的不补），
+--     出勤月报 / 薪资才会留著他做过的那个月，HR 也还能替他补卡、请假
 --   * 已停用的人不能再设还没到的最后上班日（要复职请管理员在「员工与权限」勾「在职」）
 --   * 最后上班日不能早于到职日
+--   * 至少要留一位在职、没有最后上班日的管理员：降级 / 停用 / 设最后上班日都挡（不然没有人能进「员工与权限」）
 create or replace function ops.staff_last_day_guard() returns trigger
 language plpgsql set search_path = '' as $$
 begin
   if tg_op = 'UPDATE' then
     if new.active and not old.active and new.last_day is not null
        and (new.last_day <= ops.today() or new.last_day < new.join_date) then
+      if new.last_day < ops.today()
+         and exists (select 1 from ops.pay_profile p where p.staff_id = new.id)
+         and not exists (select 1 from ops.pay_record r where r.staff_id = new.id
+                         and r.year = extract(year from new.last_day)::int
+                         and r.month = extract(month from new.last_day)::int) then
+        raise exception '%（最后上班日 %）% 的薪资还没做：复职会清掉最后上班日，那个月的薪资、出勤就不会只算到离职那天。请先在「薪资」做好那个月再复职；只是误按停用的话，先把最后上班日清空再复职。',
+          new.name, new.last_day, to_char(new.last_day, 'YYYY-MM') using errcode = '22023';
+      end if;
       new.last_day := null;
     end if;
-    if old.active and not new.active and new.last_day > ops.today() then
+    if old.active and not new.active
+       and (new.last_day > ops.today()
+            or (new.last_day is null and (new.join_date is null or new.join_date <= ops.today()))) then
       new.last_day := ops.today();
+    end if;
+    if old.role = 'admin' and old.active and old.last_day is null
+       and not (new.role = 'admin' and new.active and new.last_day is null)
+       and not exists (select 1 from ops.staff a where a.id <> old.id and a.role = 'admin' and a.active
+                       and a.last_day is null) then
+      raise exception '至少要留一位没有最后上班日的管理员（避免没有人能管理）。' using errcode = '22023';
     end if;
   end if;
   if not new.active and new.last_day > ops.today()
@@ -99,42 +120,54 @@ begin
   return n;
 end $$;
 
--- pg_cron 用 UTC：16:05 UTC = 00:05 KL。同名工作会被取代（重套不会重复）。本机测试库没有 pg_cron → 跳过。
+-- pg_cron 用 UTC：16:05 UTC = 00:05 KL。同名工作会被取代（重套不会重复）。
+-- 没装 pg_cron 就在这里装（Supabase 装在 pg_catalog）；装不起来整个 migration 失败，不会默默少了排程
+-- （没排程的话离职的人进不了系统，但一直是「在职」：通讯录、司机名单、打卡设定都还看得到他）。
+-- 本机测试库（有 ops_test_marker schema）没有 pg_cron → 跳过，测试直接呼叫 ops.staff_offboard()。
+-- 套完检查：select jobname, schedule from cron.job where jobname = 'ops_staff_offboard';
 do $$
 begin
+  if not exists (select 1 from pg_catalog.pg_extension where extname = 'pg_cron')
+     and not exists (select 1 from pg_catalog.pg_namespace where nspname = 'ops_test_marker') then
+    execute 'create extension if not exists pg_cron with schema pg_catalog';
+  end if;
   if exists (select 1 from pg_catalog.pg_extension where extname = 'pg_cron') then
     execute $c$select cron.schedule('ops_staff_offboard', '5 16 * * *', 'select ops.staff_offboard()')$c$;
   end if;
 end $$;
 
--- 存最后上班日之前的检查（打卡设定、薪资资料、员工与权限共用）
--- 管理员：和 ops_staff_save「不能停用自己」同一个道理，避免没有人能进「员工与权限」复职 ——
---   只有管理员能设定 / 改管理员的最后上班日、管理员不能设自己的、至少要留一位没有最后上班日的在职管理员。
---   原样送回同一个日期（打卡设定表单会整笔送回）不算改。
+-- 存最后上班日之前的检查（打卡设定、薪资资料、员工与权限共用）。原样送回同一个日期（打卡设定表单会整笔送回）不算改。
+-- * 自己的最后上班日不能自己改（设、延后、清掉都不行）：要走的 HR / 管薪资的人看得到证件、银行，不能自己取消离职
+-- * 管理员的最后上班日（设、改、清掉）只有另一位管理员能动；至少要留一位没有最后上班日的在职管理员
+--   （和 ops_staff_save「不能停用自己」同一个道理，避免没有人能进「员工与权限」复职）
 create or replace function ops.check_last_day(p_me ops.staff, p_target ops.staff, p_join date, p_last date) returns void
 language plpgsql stable set search_path = '' as $$
 begin
   if p_last is not null and p_join is not null and p_last < p_join then
     raise exception '最后上班日（%）不能早于到职日（%）。', p_last, p_join using errcode = '22023';
   end if;
-  if p_target.id = p_me.id and p_last < ops.today() then
-    raise exception '不能把自己的最后上班日设在今天以前（设了会马上进不了系统）。' using errcode = '22023';
+  if p_last is not distinct from p_target.last_day then
+    return;
   end if;
-  if p_target.role = 'admin' and p_last is not null and p_last is distinct from p_target.last_day then
+  if p_target.id = p_me.id then
+    if p_target.role = 'admin' then
+      raise exception '管理员不能设定自己的最后上班日（避免没有人能管理），请另一位管理员设定。' using errcode = '22023';
+    end if;
+    raise exception '不能改自己的最后上班日，请另一位 HR 或管理员设定。' using errcode = '42501';
+  end if;
+  if p_target.role = 'admin' then
     if p_me.role is distinct from 'admin' then
       raise exception '只有管理员可以设定管理员的最后上班日。' using errcode = '42501';
     end if;
-    if p_target.id = p_me.id then
-      raise exception '管理员不能设定自己的最后上班日（避免没有人能管理），请另一位管理员设定。' using errcode = '22023';
-    end if;
-    if not exists (select 1 from ops.staff a where a.role = 'admin' and a.active and a.id <> p_target.id
-                   and a.last_day is null) then
+    if p_last is not null and not exists (select 1 from ops.staff a where a.role = 'admin' and a.active
+                                          and a.id <> p_target.id and a.last_day is null) then
       raise exception '至少要留一位没有最后上班日的管理员（避免没有人能管理）。' using errcode = '22023';
     end if;
   end if;
 end $$;
 
--- 员工的打卡设定（20261003_ops_leave 版）+ 最后上班日；manager_id 没带就不改（Excel 开账号只带到职日 / 性别时不会清掉直属主管）
+-- 员工的打卡设定（20261003_ops_leave 版）+ 最后上班日；manager_id 没带就不改（Excel 开账号只带到职日 / 性别时不会清掉直属主管）；
+-- 已停用的主管只挡「换成他」，原本就是他的照存
 create or replace function public.ops_att_staff_set(p jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -152,7 +185,9 @@ begin
   if mgr = t.id then
     raise exception '直属主管不能是自己。' using errcode = '22023';
   end if;
-  if mgr is not null and not exists (select 1 from ops.staff s where s.id = mgr and s.active) then
+  -- 只在换主管时检查：原本的主管离职被自动停用后，表单整笔送回旧的 manager_id 也要能存
+  if mgr is not null and mgr is distinct from t.manager_id
+     and not exists (select 1 from ops.staff s where s.id = mgr and s.active) then
     raise exception '指派的员工不存在或已停用。' using errcode = '22023';
   end if;
   if not exists (select 1 from ops.hr_shift h where h.code = coalesce(p->>'shift', t.shift)) then
