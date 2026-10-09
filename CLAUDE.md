@@ -191,7 +191,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。首页「今天还没盘点」不提醒物流部（使用者 2026-10-09，migration
   `20261009_ops_home_no_count_logistics.sql` = `ops_home_no_count_logistics`，已套；最近 30 天自己盘过的物流部同事照样提醒）。
 - **AttendX 功能比对（2026-10-09）**：AttendX 175 条规则，65 已有、15 使用者早先决定不要（主管先审、星期六半天、星期五礼拜、迟到按分钟扣、
-  缺勤自动扣钱、对外接口），其余约 45 项问过使用者，**只选了 4 项**（migration `20261010_ops_profile_offboard.sql` = `ops_profile_offboard`）：
+  缺勤自动扣钱、对外接口），其余约 45 项问过使用者，**只选了 4 项**（migration `20261010_ops_profile_offboard.sql`；正式环境 2026-10-09
+  分 4 段套用 `ops_profile_offboard_1`～`_4`（70 KB 一次送会被挡），套完 35 个函数的 md5(prosrc) 与本机逐一相同）：
   ① 最后上班日 `ops.staff.last_day`：隔天 00:00 KL 起 `ops.current_staff()` 找不到人；pg_cron `ops_staff_offboard`（16:05 UTC）把 active 改 false；
   出勤月报 / 看板 / `ops.pay_att` 算到最后上班日、之后月份不列；薪资「离职日」= last_day（`pay_profile.leave_date` 是同步副本）；自己的不能改、
   管理员的只有另一位管理员能动、至少留一位没有 last_day 的在职管理员（触发器 `staff_last_day_guard`）；停用时没填就记今天；复职清掉（离职月有薪资资料
