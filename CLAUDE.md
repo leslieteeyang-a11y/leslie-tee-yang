@@ -176,7 +176,12 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - **PostgREST「JWT issued at future」（PGRST303）**（2026-10-08）：PostgREST 闲置后偶尔把刚签发的 token 判成未来时间，回 401；
   同一个 token 几毫秒前才通过，不是员工装置时钟。这个 401 在执行 SQL 之前就挡下，所以 `portal/src/supabase.ts` 的 `global.fetch`
   与 Edge Function `ops-account` v5 / `ops-join` v3 的 `fetchRetry` 都对它等 1.5 秒重送一次（只限 /rest/v1/、文字 body）。
-  根治要升级 PostgREST（Supabase Dashboard → Settings → Infrastructure，使用者决定）。BI 网页没有这个重送，遇到时重新整理即可。
+  **根治**：专案跑 PostgREST 14.5（`pg_stat_activity.application_name`），上游在 14.18（2026-09-10，#5196「Fix sporadic PGRST303」）修好。
+  只能由使用者在 Supabase Dashboard → Project Settings → Infrastructure 按「Upgrade project」（in-place，会停机几分钟；MCP 没有升级工具，
+  不要用 pause/restore：会停更久，且自订角色密码不会还原）。事前已查：唯一自订登入角色 `bi_sync` 密码已是 scram-sha-256（升级不会让它登不进去），
+  没有 replication slot。避开 04:05 UTC（12:05 KL）BI 同步与上班打卡时间。升好后验证：application_name ≥ PostgREST 14.18、
+  `bi.delivery_*` / BI 同步时间照常更新、首页与打卡能用。没提供升级或版本仍 < 14.18 → 开 Supabase 支援单引用 PostgREST #5196。
+  BI 网页没有这个重送，遇到时重新整理即可。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
