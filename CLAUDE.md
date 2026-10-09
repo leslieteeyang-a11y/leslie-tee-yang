@@ -190,6 +190,19 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
   Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。首页「今天还没盘点」不提醒物流部（使用者 2026-10-09，migration
   `20261009_ops_home_no_count_logistics.sql` = `ops_home_no_count_logistics`，已套；最近 30 天自己盘过的物流部同事照样提醒）。
+- **AttendX 功能比对（2026-10-09）**：AttendX 175 条规则，65 已有、15 使用者早先决定不要（主管先审、星期六半天、星期五礼拜、迟到按分钟扣、
+  缺勤自动扣钱、对外接口），其余约 45 项问过使用者，**只选了 4 项**（migration `20261010_ops_profile_offboard.sql` = `ops_profile_offboard`）：
+  ① 最后上班日 `ops.staff.last_day`：隔天 00:00 KL 起 `ops.current_staff()` 找不到人；pg_cron `ops_staff_offboard`（16:05 UTC）把 active 改 false；
+  出勤月报 / 看板 / `ops.pay_att` 算到最后上班日、之后月份不列；薪资「离职日」= last_day（`pay_profile.leave_date` 是同步副本）；自己的不能改、
+  管理员的只有另一位管理员能动、至少留一位没有 last_day 的在职管理员（触发器 `staff_last_day_guard`）；停用时没填就记今天；复职清掉（离职月有薪资资料
+  却没薪资纪录先挡）。只挡营运系统，BI 名单要另外移除（员工与权限会提醒）。② 补卡一定要附证明（`ops_att_self_close` 照 AttendX §2.5 免）。
+  ③ 年假 `min_service_months = 3`：只挡开始日早于到职 + 3 个月的申请，天数照算；没填到职日先不挡（正式环境 8 人有 6 人没填）；HR 在假别设定可改每种假的月数。
+  ④ 员工档案 `ops.staff_profile`（证件 MyKad/护照、生日由 MyKad 带出、地址、紧急联络人、银行）：本人全看全改（首页卡片 + `#/profile`），
+  人事「只看」看非银行、「可编辑」改非银行（`#/hr/profiles`），银行只有本人与薪资 ≥ 可编辑；`ops_hr_gaps` 多 `id_no` / `emergency` / `bank`。
+  测试 `tests/profile_test.sql`。使用者**没选**的（以后再提就照这份比对）：加班模块细节（先申请 / 星期日 2 倍公假 3 倍 / 餐费）、全勤奖、车贴、
+  日薪合约工、PCB 自动、CP38、两间公司分开汇总与工资单抬头、会计分录、通知 / 推播 / 打卡提醒、公告、通讯录、培训、手册、强密码 / 忘记密码、
+  紧急假 EL、补假 RL、年假结转、团队请假日历、老板免打卡。**已提醒使用者但未处理**：佣金没算进 EPF、佣金与加班没算进 SOCSO/EIS（照 HR 旧系统，
+  建议问会计）；工资单抬头只有一个公司名（JB 员工印成 HOMEWORKS SDN BHD）。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
