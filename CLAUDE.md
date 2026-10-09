@@ -180,7 +180,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
-  Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。
+  Excel 开账号「物流」→ logistics。测试在 `dlv_test.sql` 最后。首页「今天还没盘点」不提醒物流部（使用者 2026-10-09，migration
+  `20261009_ops_home_no_count_logistics.sql` = `ops_home_no_count_logistics`，已套；最近 30 天自己盘过的物流部同事照样提醒）。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，

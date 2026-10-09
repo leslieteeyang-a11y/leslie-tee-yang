@@ -230,6 +230,26 @@ do $$ declare m jsonb := public.ops_dlv_meta(); me jsonb := public.ops_me(); r j
   assert jsonb_array_length(public.ops_dlv_my_runs()) = 1, 'logistics driver sees own run';
 end $$;
 reset role;
+-- 物流部不提醒「今天还没盘点」（20261009）；仓库部照旧；物流部最近 30 天自己盘过的也照旧提醒
+set role authenticated;
+select pg_temp.as_user('logi@example.com');
+do $$ begin
+  assert public.ops_home()->'wh_counted_today' = 'null'::jsonb, 'logistics: no count reminder';
+end $$;
+select pg_temp.as_user('picker@example.com');
+do $$ begin
+  assert (public.ops_home()->>'wh_counted_today') is not null, 'warehouse still reminded';
+end $$;
+reset role;
+insert into ops.wh_count (company, location, item_code, qty, system_qty, status, counted_by, count_date)
+  values ('HOMEWORKSSB', 'HQ', 'X-LOGI', 1, 1, 'match', (select id from ops.staff where email = 'logi@example.com'), ops.today() - 5);
+set role authenticated;
+select pg_temp.as_user('logi@example.com');
+do $$ begin
+  assert (public.ops_home()->>'wh_counted_today')::int = 0, 'logistics who counted recently: reminded again';
+end $$;
+reset role;
+delete from ops.wh_count where item_code = 'X-LOGI';
 select set_config('dlv.logi_jb', (select id::text from ops.staff where email = 'logi.jb@example.com'), false),
        set_config('dlv.hqsales', (select id::text from ops.staff where email = 'hqsales@example.com'), false);
 set role authenticated;
