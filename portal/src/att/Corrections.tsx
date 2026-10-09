@@ -1,4 +1,4 @@
-// 补卡：申请（漏打 / 打错 / 外出公务）、主管 → HR 两段审核。
+// 补卡：申请（漏打 / 打错 / 外出公务）、主管 → HR 两段审核。证明（附件）必填。
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { fmtDate, Me } from "../api";
 import { Empty, ErrorBox, Modal, Tabs } from "../ui";
@@ -83,15 +83,14 @@ function CorrectionForm({ me, date, onClose, onSaved }: { me: Me; date: string; 
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    // 补卡一定要附证明（AttendX §3.2）；自己补下班卡（打卡页）不在这里，不用附
+    if (!file) return setError("补卡要附证明（例：WhatsApp 截图、送货单照片）。");
     setBusy(true);
     setError("");
     try {
-      let attachment: string | null = null;
-      if (file) {
-        const blob = file.type.startsWith("image/") ? await shrinkImage(file) : file;
-        if (blob.size > 5 * 1024 * 1024) throw new Error("附件太大（上限 5 MB）。");
-        attachment = await uploadPhoto(me.staff.id, d, "doc", blob);
-      }
+      const blob = file.type.startsWith("image/") ? await shrinkImage(file) : file;
+      if (blob.size > 5 * 1024 * 1024) throw new Error("附件太大（上限 5 MB）。");
+      const attachment = await uploadPhoto(me.staff.id, d, "doc", blob);
       await att.createCorrection({ date: d, kind, punch: kind === "punch" ? punch : null, time: kind === "punch" ? time : null,
                                    reason, attachment });
       onSaved();
@@ -125,9 +124,10 @@ function CorrectionForm({ me, date, onClose, onSaved }: { me: Me; date: string; 
         ) : <p className="muted small">批准后，这天会按你的班表记成全天出勤（上下班、午休都按标准时间）。</p>}
         <label>原因<textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required minLength={5}
                              placeholder="例：手机没电，08:25 到公司（有同事可证明）" /></label>
-        <label>证明（选填：照片或 PDF）
-          <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <label>证明（必填）
+          <input type="file" accept="image/*,application/pdf" onChange={(e) => { setFile(e.target.files?.[0] || null); setError(""); }} />
         </label>
+        <p className="muted small">照片或 PDF，例：WhatsApp 截图、送货单、客户签收单。没有证明的补卡送不出去。</p>
         <p className="muted small">14 天以内的可以自己申请，交给 HR 审核。</p>
         <ErrorBox error={error} />
         <div className="actions">

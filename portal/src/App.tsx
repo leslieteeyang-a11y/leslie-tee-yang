@@ -17,6 +17,7 @@ import Hr from "./pages/Hr";
 import Warehouse from "./pages/Warehouse";
 import Payroll from "./pages/Payroll";
 import MyPay from "./pages/MyPay";
+import MyProfile from "./pages/MyProfile";
 import Join from "./pages/Join";
 import JoinStatus from "./pages/JoinStatus";
 import Delivery from "./pages/Delivery";
@@ -110,8 +111,11 @@ export default function App() {
     case "mypay":
       page = <MyPay />;
       break;
+    case "profile":
+      page = <MyProfile />;
+      break;
     case "hr":
-      page = can(me, "hr", "view") ? <Hr me={me} sub={arg} /> : <NoAccess />;
+      page = can(me, "hr", "view") ? <Hr me={me} sub={arg} arg={arg2} /> : <NoAccess />;
       break;
     case "password":
       page = <Password />;
@@ -151,7 +155,7 @@ export default function App() {
           <b>{me.staff.name}</b>
           <span>{me.staff.department_name} · {ROLE_LABEL[me.staff.role]} · {BRANCH_LABEL[me.staff.branch]}</span>
           <span>
-            <a href="#/password">改密码</a> · <a href="#/" onClick={() => supabase.auth.signOut().then(() => go("/"))}>登出</a>
+            <a href="#/profile">我的资料</a> · <a href="#/password">改密码</a> · <a href="#/" onClick={() => supabase.auth.signOut().then(() => go("/"))}>登出</a>
           </span>
           <LangSwitch />
         </div>

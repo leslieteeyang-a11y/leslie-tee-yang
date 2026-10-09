@@ -1,5 +1,7 @@
 // 薪资 · 员工薪资资料（照原系统「员工」页的栏位）。到职日在「打卡 → 设定」改，这里只看。
+// 离职日 = 员工名单的最后上班日（存的时候资料库一起写 ops.staff.last_day）。
 import { FormEvent, useState } from "react";
+import { confirmPastLastDay } from "../api";
 import { Empty, ErrorBox, Modal } from "../ui";
 import { displayName, money, pay, Profile } from "../pay-api";
 
@@ -63,6 +65,8 @@ function ProfileForm({ p, onClose, onSaved }: { p: Profile; onClose: () => void;
   );
   async function submit(e: FormEvent) {
     e.preventDefault();
+    // 离职日选了已经过了的日子：存了之后那个人马上进不了营运系统，先确认
+    if (!confirmPastLastDay(p.name, v.leave_date, p.leave_date)) return;
     setBusy(true); setError("");
     try { await pay.saveProfile(v); onSaved(); } catch (err) { setError((err as Error).message); setBusy(false); }
   }
@@ -102,8 +106,11 @@ function ProfileForm({ p, onClose, onSaved }: { p: Profile; onClose: () => void;
         </div>
         <div className="row">
           <label>到职日<input value={p.join_date || "（在「打卡 → 设定」填）"} disabled /></label>
-          <label>离职日（选填）<input type="date" value={v.leave_date || ""} onChange={(e) => set("leave_date", e.target.value || null)} /></label>
+          <label>离职日 = 最后上班日（选填）<input type="date" value={v.leave_date || ""} min={p.join_date || undefined}
+                                                  onChange={(e) => set("leave_date", e.target.value || null)} /></label>
         </div>
+        {/* 离职日就是员工名单的最后上班日（ops.staff.last_day），这里改了打卡设定也跟着改 */}
+        {v.leave_date && <p className="muted small">和「打卡 → 设定」的最后上班日是同一个日期：过了这天员工就进不了营运系统（也看不到「我的工资单」，最后一张请用 WhatsApp 发），隔天自动停用；已经停用的人只有管理员能在「员工与权限」复职。</p>}
         <label>备注<input value={v.note} onChange={(e) => set("note", e.target.value)} /></label>
         <p className="muted small">PCB（月扣税）每月在计算页手动填，底薪超过设定的门槛才开放。到职 / 离职当月会按日历自动扣未在职的天数。</p>
         <ErrorBox error={error} />

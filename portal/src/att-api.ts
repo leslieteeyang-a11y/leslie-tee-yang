@@ -121,6 +121,7 @@ export interface AttStaff {
   friday_prayer: boolean;
   join_date: string | null;
   gender: "M" | "F" | null;
+  last_day?: string | null;        // 最后上班日（过了这天进不了系统，隔天自动停用）
 }
 export interface AttSettings {
   shifts: Shift[];

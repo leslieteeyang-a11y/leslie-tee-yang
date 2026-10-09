@@ -132,7 +132,8 @@ end $$;
 reset role;
 do $$ begin
   assert (select department = 'sales' and name = '阿斯' and active from ops.staff where email = 'spam@x.com'), 'linked keeps dept';
-  update ops.staff set active = false where email = 'new.worker@gmail.com';
+  -- 离职（最后上班日 10/5、已停用）后再申请回来
+  update ops.staff set active = false, last_day = '2026-10-05' where email = 'new.worker@gmail.com';
 end $$;
 select pg_temp.sub('{"email":"new.worker@gmail.com","name":"新工人阿德","join_date":"2027-01-05","gender":"M"}');
 set role authenticated;
@@ -145,7 +146,8 @@ end $$;
 reset role;
 do $$ begin
   assert (select active and department = 'sales' and branch = 'HOMEWORKSSOUTHERN' and join_date = '2027-01-05'
-          from ops.staff where email = 'new.worker@gmail.com'), 'rehired';
+                 and last_day is null
+          from ops.staff where email = 'new.worker@gmail.com'), 'rehired, old last_day cleared';
 end $$;
 
 -- 8. 同一个 IP 一小时最多 5 张

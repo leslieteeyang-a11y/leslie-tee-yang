@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api, BRANCH_LABEL, DeptModule, Level, LEVEL_LABEL, Me, ROLE_LABEL, StaffAdmin } from "../api";
+import { api, BRANCH_LABEL, can, confirmPastLastDay, DeptModule, Level, LEVEL_LABEL, Me, ROLE_LABEL, StaffAdmin, todayKL } from "../api";
+import { att } from "../att-api";
 import { ErrorBox, Modal, Tabs } from "../ui";
 import { BulkStaff } from "./BulkStaff";
 import JoinAdmin from "./JoinAdmin";
@@ -50,7 +51,10 @@ function StaffTab({ me, onChanged }: { me: Me; onChanged: () => void }) {
             <tbody>
               {rows.map((s) => (
                 <tr key={s.id} className={s.active ? "" : "inactive"}>
-                  <td><b>{s.name}</b>{s.title && <span className="muted"> · {s.title}</span>}{!s.active && <span className="tag">已停用</span>}</td>
+                  <td><b>{s.name}</b>{s.title && <span className="muted"> · {s.title}</span>}
+                    {s.left ? <span className="tag">已离职</span> : !s.active && <span className="tag">已停用</span>}
+                    {s.last_day && <div className={"small" + (s.left ? " muted" : " late")}>{`最后上班日 ${s.last_day}`}</div>}
+                    {s.in_bi && (s.last_day || !s.active) && <div className="small late">BI 名单要另外移除</div>}</td>
                   <td className="hide-sm">{s.email}</td>
                   <td>{deptName(me, s.department)}</td>
                   <td className="hide-sm">{BRANCH_LABEL[s.branch]}</td>
@@ -87,6 +91,14 @@ function StaffForm({ me, staff, onClose, onSaved }: {
     phone: staff?.phone ?? "", active: staff?.active ?? true,
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({ ...(staff?.overrides ?? {}) });
+  // 最后上班日存在 ops_att_staff_set（要人事「可编辑」，和打卡设定同一个函数）；新增员工时不填。
+  // 自己那一行不显示：管理员不能设自己的最后上班日（和「不能停用自己」同理，资料库也挡）
+  const canLastDay = !!staff && staff.id !== me.staff.id && can(me, "hr", "edit");
+  const [lastDay, setLastDay] = useState(staff?.last_day ?? "");
+  const today = todayKL();
+  const lastChanged = !!staff && (lastDay || "") !== (staff.last_day || "");
+  const rehire = !!staff && f.active && !staff.active;           // 停用 → 在职：资料库会清掉已经到了 / 过了的最后上班日
+  const quitting = !!staff && !f.active && staff.active;         // 在职 → 停用：还没到的最后上班日资料库会改成今天
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -94,13 +106,20 @@ function StaffForm({ me, staff, onClose, onSaved }: {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError("");
+    if (canLastDay && lastChanged) {
+      // 先在这里挡，免得「在职」已经存了、最后上班日才被资料库拒绝
+      if (!f.active && lastDay && lastDay > today) return setError("取消「在职」的话，最后上班日不能晚于今天。");
+      if (!confirmPastLastDay(staff!.name, lastDay, staff!.last_day)) return;
+    }
+    setBusy(true);
     // 原本有、现在清掉的例外要送空字串，资料库才会删掉
     const ov: Record<string, string> = {};
     for (const k of new Set([...Object.keys(staff?.overrides ?? {}), ...Object.keys(overrides)])) ov[k] = overrides[k] ?? "";
     try {
       const saved = await api.saveStaff({ ...f, id: staff?.id, overrides: ov });
+      // 复职 / 停用时资料库自己调整最后上班日；这里只在有改过才送（在 saveStaff 之后，复职又另外填新日期也对）
+      if (staff && canLastDay && lastChanged) await att.setStaff({ id: staff.id, last_day: lastDay || "" });
       onSaved({ ...(saved as StaffAdmin), has_login: staff?.has_login ?? false, overrides: {} }, !staff);
     } catch (err) {
       setError((err as Error).message);
@@ -139,6 +158,25 @@ function StaffForm({ me, staff, onClose, onSaved }: {
           <label>电话<input value={f.phone} onChange={set("phone")} /></label>
           <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> 在职（取消 = 停用，不能登入）</label>
         </div>
+        {canLastDay && (
+          <div className="row">
+            <label>最后上班日（选填，要离职才填）
+              <input type="date" value={lastDay} min={staff?.join_date || undefined} onChange={(e) => setLastDay(e.target.value)} />
+            </label>
+            <div>
+              <p className="muted small">过了这天（隔天 00:00 起）就进不了营运系统，系统也会自动停用；出勤、薪资照样算到这一天。</p>
+              {rehire && !lastChanged && staff?.last_day && staff.last_day <= today && (
+                <p className="small late">复职后会清掉这个最后上班日。</p>
+              )}
+              {quitting && !lastChanged && staff?.last_day && staff.last_day > today && (
+                <p className="small late">取消在职 = 今天起停用：最后上班日会改成今天。</p>
+              )}
+            </div>
+          </div>
+        )}
+        {staff?.in_bi && (lastDay || !f.active) && (
+          <p className="small late">这个人也在 BI 名单：离职 / 停用只挡营运系统，BI 网页要另外从 BI 名单移除。</p>
+        )}
         <details>
           <summary>个人权限例外（一般不用设，照部门预设）</summary>
           <div className="ov-grid">

@@ -13,7 +13,8 @@ export interface LeaveType {
   calendar_days: boolean;
   need_attachment: boolean;
   gender?: "M" | "F" | null;
-  min_service_months?: number;
+  min_service_months?: number;     // 到职满几个月才能请（0 = 不限）
+  available_from?: string | null;  // 只有请假页（ops_leave_home）有：从哪天起可以请；没限制或没填到职日 = null
   active?: boolean;
   note: string;
   sort?: number;
@@ -54,6 +55,7 @@ export interface LeaveHome {
   today: string;
   year: number;
   join_date: string | null;
+  last_day?: string | null;
   gender: "M" | "F" | null;
   is_hr: boolean;
   types: LeaveType[];
@@ -67,6 +69,7 @@ export interface StaffBalances {
   department_name: string;
   branch: string;
   join_date: string | null;
+  last_day?: string | null;          // 那一年离职的人照列（HR 补最后几天的假）
   gender: "M" | "F" | null;
   years: number;
   balances: Balance[];

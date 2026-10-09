@@ -1,5 +1,5 @@
-// 人事（HR）：请假审批、请假纪录、假期余额（含调整、代填）、假别设定。打卡设定仍在「打卡 → 设定」。
-// 路由 #/hr/<分页>
+// 人事（HR）：请假审批、请假纪录、假期余额（含调整、代填）、假别设定、员工档案、资料缺漏。打卡设定仍在「打卡 → 设定」。
+// 路由 #/hr/<分页>；员工档案可以直接开某个人：#/hr/profiles/<staff_id>
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { can, Me } from "../api";
 import { go } from "../router";
@@ -13,12 +13,14 @@ import {
 } from "../leave-api";
 import { BalanceCards, LeaveDetail, LeaveForm, LeaveTable } from "./Leave";
 import HrGaps from "./HrGaps";
+import HrProfiles from "./HrProfiles";
 
-type Tab = "todo" | "records" | "balances" | "types" | "gaps";
+type Tab = "todo" | "records" | "balances" | "types" | "profiles" | "gaps";
 
-export default function Hr({ me, sub }: { me: Me; sub?: string }) {
+export default function Hr({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
   const canEdit = can(me, "hr", "edit");
-  const tabs: [Tab, string][] = [["todo", "请假审核"], ["records", "请假纪录"], ["balances", "假期余额"], ["types", "假别设定"]];
+  const tabs: [Tab, string][] = [["todo", "请假审核"], ["records", "请假纪录"], ["balances", "假期余额"], ["types", "假别设定"],
+                                 ["profiles", "员工档案"]];
   if (canEdit) tabs.push(["gaps", "资料缺漏"]);
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "todo";
   return (
@@ -32,6 +34,7 @@ export default function Hr({ me, sub }: { me: Me; sub?: string }) {
       {tab === "records" && <Requests scope="all" />}
       {tab === "balances" && <Balances me={me} canEdit={canEdit} />}
       {tab === "gaps" && <HrGaps />}
+      {tab === "profiles" && <HrProfiles openId={arg && /^\d+$/.test(arg) ? Number(arg) : undefined} />}
       {tab === "types" && <Types canEdit={can(me, "hr", "approve")} />}
     </>
   );
@@ -104,7 +107,8 @@ function Balances({ me, canEdit }: { me: Me; canEdit: boolean }) {
                 const al = pick(r.balances, "annual"), sl = pick(r.balances, "sick"), ul = pick(r.balances, "unpaid");
                 return (
                   <tr key={r.staff_id} className="click" onClick={() => setOpen(r)}>
-                    <td><b>{r.name}</b><div className="muted small">{r.department_name}</div></td>
+                    <td><b>{r.name}</b><div className="muted small">{r.department_name}</div>
+                      {r.last_day && <div className="small late">{`最后上班日 ${r.last_day}`}</div>}</td>
                     <td className="num">{r.join_date ? `${r.years} 年` : <span className="late small">没填到职日</span>}</td>
                     <td className="num">{al ? daysLabel(al.balance) : "—"}</td>
                     <td className="num">{sl ? daysLabel(sl.balance) : "—"}</td>
@@ -240,7 +244,8 @@ function Types({ canEdit }: { canEdit: boolean }) {
                   <td><b>{t.name}</b>{!t.active && <span className="muted small">{" · 停用"}</span>}</td>
                   <td>{t.rule === "annual" ? "8 / 12 / 16" : t.rule === "sick" ? "14 / 18 / 22"
                        : t.rule === "none" ? (Number(t.days) > 0 ? `每次最多 ${daysLabel(t.days)}` : "不限") : daysLabel(t.days)}</td>
-                  <td className="hide-sm small">{RULE_LABEL[t.rule]}{t.half_day ? " · 可请半天" : ""}{t.calendar_days ? " · 日历天" : ""}{t.need_attachment ? " · 要附证明" : ""}</td>
+                  <td className="hide-sm small">{RULE_LABEL[t.rule]}{t.half_day ? " · 可请半天" : ""}{t.calendar_days ? " · 日历天" : ""}{t.need_attachment ? " · 要附证明" : ""}
+                    {Number(t.min_service_months) > 0 ? ` · 到职满 ${t.min_service_months} 个月` : ""}</td>
                   <td className="hide-sm small muted">{t.note}</td>
                   <td>{canEdit && <a href="#" onClick={(e) => { e.preventDefault(); setOpen(t); }}>修改</a>}</td>
                 </tr>
@@ -265,7 +270,8 @@ function TypeForm({ t, onClose, onSaved }: { t: LeaveType; onClose: () => void; 
     setError("");
     try {
       await leave.saveType({ code: v.code, name: v.name, days: v.days, half_day: v.half_day,
-                             need_attachment: v.need_attachment, active: v.active, note: v.note });
+                             need_attachment: v.need_attachment, active: v.active, note: v.note,
+                             min_service_months: Number(v.min_service_months) || 0 });
       onSaved();
     } catch (err) {
       setError((err as Error).message);
@@ -282,6 +288,13 @@ function TypeForm({ t, onClose, onSaved }: { t: LeaveType; onClose: () => void; 
           </label>
         )}
         {(t.rule === "annual" || t.rule === "sick") && <p className="muted small">天数按劳工法与年资自动计算，不能在这里改；个别员工可在「假期余额」调整。</p>}
+        <label>到职满几个月才能请（0 = 不限）
+          <input type="number" min={0} max={120} step={1} value={v.min_service_months ?? 0}
+                 onChange={(e) => setV({ ...v, min_service_months: e.target.value === "" ? 0 : Number(e.target.value) })} />
+        </label>
+        <p className="muted small">{t.rule === "annual"
+          ? "年假照样按到职月数累积，只是到职满这个月数之前不能请；没填到职日的员工先不挡。"
+          : "没满这个月数（或没填到职日）的员工不能请这个假别（例：陪产假要服务满 12 个月）。"}</p>
         <label>说明（员工申请时看得到）<input value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} /></label>
         <label className="check"><input type="checkbox" checked={v.half_day} onChange={(e) => setV({ ...v, half_day: e.target.checked })} /> 可以请半天</label>
         <label className="check"><input type="checkbox" checked={v.need_attachment} onChange={(e) => setV({ ...v, need_attachment: e.target.checked })} /> 一定要附证明</label>

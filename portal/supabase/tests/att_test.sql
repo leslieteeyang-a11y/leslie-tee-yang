@@ -114,6 +114,7 @@ do $$ declare t jsonb := public.ops_att_today(); begin
 end $$;
 select pg_temp.expect_error($q$select public.ops_att_self_close('{"date":"2026-10-06","time":"18:00","reason":"忘"}')$q$, '至少 5 个字');
 select pg_temp.expect_error($q$select public.ops_att_self_close('{"date":"2026-10-06","time":"08:00","reason":"忘了打下班卡"}')$q$, '要晚于');
+-- 自己补下班卡不用附证明（AttendX §2.5：附件选填）
 select public.ops_att_self_close('{"date":"2026-10-06","time":"18:00","reason":"忘了打下班卡"}');
 do $$ declare t jsonb; begin
   t := public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
@@ -128,11 +129,21 @@ select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"lunch_in","time":"12:00","reason":"打卡机慢了"}')$q$, '顺序不对');
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-09-01","punch":"clock_in","time":"08:30","reason":"打卡机慢了"}')$q$, '14 天');
 select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-07","punch":"clock_out","time":"18:00","reason":"打卡机慢了"}')$q$, '还没到');
+-- 补卡要附证明（2026-10-09）：没附、附了别人资料夹的 / 没上传成功的都挡
+select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:30","reason":"门口排队打卡"}')$q$, '补卡要附证明');
+select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:30","reason":"门口排队打卡","attachment":"  "}')$q$, '补卡要附证明');
+select pg_temp.expect_error($q$select public.ops_att_correction_create(jsonb_build_object('date','2026-10-05','punch','clock_in','time','08:30',
+  'reason','门口排队打卡','attachment', pg_temp.sid('buyer@example.com') || '/proof.jpg'))$q$, '没有上传成功');
+select pg_temp.expect_error($q$select public.ops_att_correction_create(jsonb_build_object('date','2026-10-05','punch','clock_in','time','08:30',
+  'reason','门口排队打卡','attachment', pg_temp.sid('hqsales@example.com') || '/never-uploaded.jpg'))$q$, '没有上传成功');
 do $$ declare c jsonb; begin
-  c := public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:30","reason":"门口排队打卡"}');
+  c := public.ops_att_correction_create(jsonb_build_object('date', '2026-10-05', 'punch', 'clock_in', 'time', '08:30',
+         'reason', '门口排队打卡', 'attachment', pg_temp.photo('hqsales@example.com', 'proof/1005.jpg')));
   assert c->>'status' = 'pending_hr' and not (c->>'can_decide')::boolean and c->>'original' is not null, 'created: ' || c::text;
+  assert c->>'attachment' like '%/proof/1005.jpg', 'attachment stored: ' || c::text;
 end $$;
-select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-05","punch":"clock_in","time":"08:31","reason":"门口排队打卡"}')$q$, '审核中');
+select pg_temp.expect_error($q$select public.ops_att_correction_create(jsonb_build_object('date','2026-10-05','punch','clock_in','time','08:31',
+  'reason','门口排队打卡','attachment', pg_temp.photo('hqsales@example.com', 'proof/1005b.jpg')))$q$, '审核中');
 
 -- 别分店的人、一般员工看不到也不能审
 select pg_temp.as_user('jbsales@example.com');
@@ -178,9 +189,13 @@ select pg_temp.as_user('hqsales@example.com');
 do $$ begin assert public.ops_att_today()->>'open_shift' = '2026-10-07', 'reverted'; end $$;
 -- HR 替她补 18:30（不受 14 天限制，直接定案）
 select pg_temp.as_user('hr@example.com');
+-- HR 替员工补也要附证明（AttendX §3.2 每张补卡都要；只有自己补下班卡 §2.5 不用）；证明放 HR 自己的资料夹
+select pg_temp.expect_error($q$select public.ops_att_correction_create(jsonb_build_object('staff_id', pg_temp.sid('hqsales@example.com'),
+  'date', '2026-10-07', 'punch', 'clock_out', 'time', '18:30', 'reason', 'HR 依监视器补登'))$q$, '补卡要附证明');
 do $$ declare c jsonb; begin
   c := public.ops_att_correction_create(jsonb_build_object('staff_id', pg_temp.sid('hqsales@example.com'),
-         'date', '2026-10-07', 'punch', 'clock_out', 'time', '18:30', 'reason', 'HR 依监视器补登'));
+         'date', '2026-10-07', 'punch', 'clock_out', 'time', '18:30', 'reason', 'HR 依监视器补登',
+         'attachment', pg_temp.photo('hr@example.com', 'proof/cctv-1007.jpg')));
   assert c->>'status' = 'pending_hr', 'hr filed';
   -- HR 不能审自己开的？可以：申请人是员工本人，不是 HR
   c := public.ops_att_correction_decide((c->>'id')::bigint, 'approve', '', '18:35');
@@ -190,7 +205,9 @@ select pg_temp.as_user('hqsales@example.com');
 do $$ begin assert public.ops_att_today()->'open_shift' = 'null'::jsonb, 'closed by HR'; end $$;
 
 -- 6. 外出公务：整天按班表补
-select public.ops_att_correction_create('{"date":"2026-10-02","kind":"offsite","reason":"去客户工地丈量"}');
+select pg_temp.expect_error($q$select public.ops_att_correction_create('{"date":"2026-10-02","kind":"offsite","reason":"去客户工地丈量"}')$q$, '补卡要附证明');
+select public.ops_att_correction_create(jsonb_build_object('date', '2026-10-02', 'kind', 'offsite', 'reason', '去客户工地丈量',
+                                                           'attachment', pg_temp.photo('hqsales@example.com', 'proof/site.jpg')));
 select pg_temp.as_user('hr@example.com');
 select public.ops_att_correction_decide((public.ops_att_corrections('todo')->0->>'id')::bigint, 'approve');
 do $$ declare d jsonb; x jsonb; begin
@@ -249,7 +266,9 @@ select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@ex
 select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'),
   'manager_id', pg_temp.sid('hqsales@example.com')))$q$, '不能是自己');
 select pg_temp.as_user('hqsales@example.com');
-select public.ops_att_correction_create('{"date":"2026-10-08","punch":"clock_in","time":"08:30","reason":"测试直属主管"}');
+select public.ops_att_correction_create(jsonb_build_object('date', '2026-10-08', 'punch', 'clock_in', 'time', '08:30',
+                                                           'reason', '测试直属主管',
+                                                           'attachment', pg_temp.photo('hqsales@example.com', 'proof/1008.jpg')));
 select pg_temp.as_user('mgr@example.com');
 do $$ begin assert jsonb_array_length(public.ops_att_corrections('todo')) = 0, 'mgr no todo'; end $$;
 select pg_temp.as_user('buyer@example.com');
@@ -319,6 +338,107 @@ do $$ declare t jsonb; begin
 end $$;
 select pg_temp.expect_error($q$select public.ops_att_punch(jsonb_build_object('action','lunch_out',
   'selfie', pg_temp.photo('hqsales@example.com', '2026-10-20/x3.jpg')))$q$, '已经打过午休下班卡');
+
+-- 12. 最后上班日（2026-10-09）：当天还进得来、隔天 00:00 起进不来；半夜自动停用；报表算到最后上班日；复职清掉
+select pg_temp.at('2026-10-13 08:50:00+08');
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"leaver@example.com","name":"离职阿伟","department":"sales","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hr@example.com');
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@example.com'),
+  'join_date', '2026-10-01', 'last_day', '2026-09-30'))$q$, '不能早于到职日');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@example.com'), 'join_date', '2026-10-01',
+                                                   'last_day', '2026-10-14'));
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@example.com'),
+  'join_date', '2026-10-15'))$q$, '不能早于到职日');
+-- HR 不能把自己锁在外面
+select pg_temp.expect_error($q$select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hr@example.com'),
+  'last_day', '2026-10-12'))$q$, '不能把自己');
+-- 只带到职日（Excel 开账号那样）不会清掉直属主管（第 9 段设的 buyer）
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('hqsales@example.com'), 'join_date', '2026-09-01'));
+do $$ declare s jsonb := public.ops_att_settings(); begin
+  assert (select x->>'last_day' from jsonb_array_elements(s->'staff') x where x->>'name' = '离职阿伟') = '2026-10-14',
+    'settings last_day: ' || (s->'staff')::text;
+  assert (select (x->>'manager_id')::bigint from jsonb_array_elements(s->'staff') x where x->>'name' = '门市小美')
+         = pg_temp.sid('buyer@example.com'), 'manager kept when not sent';
+end $$;
+select pg_temp.as_user('leaver@example.com');
+do $$ begin assert public.ops_me() is not null, 'before last day ok'; end $$;
+select public.ops_att_punch(jsonb_build_object('action', 'in', 'lat', 1.5, 'lng', 103.7,
+                                               'selfie', pg_temp.photo('leaver@example.com', '2026-10-13/in.jpg')));
+select pg_temp.at('2026-10-13 17:40:00+08');
+select public.ops_att_punch(jsonb_build_object('action', 'out', 'selfie', pg_temp.photo('leaver@example.com', '2026-10-13/out.jpg')));
+select pg_temp.at('2026-10-14 23:59:00+08');
+do $$ begin assert public.ops_me() is not null, 'last day itself still ok'; end $$;
+select pg_temp.at('2026-10-15 00:00:01+08');
+do $$ begin
+  assert public.ops_me() is null, 'locked out the day after';
+  assert not public.ops_hr_file_ok(pg_temp.sid('leaver@example.com') || '/x.jpg', true), 'no storage after last day';
+end $$;
+select pg_temp.expect_error('select public.ops_home()', '还没加入营运系统');
+select pg_temp.expect_error($q$select public.ops_att_days('2026-10')$q$, '还没加入营运系统');
+-- 还没停用（半夜的排程还没跑）：看板只列到最后上班日；缺漏清单 / 首页不再算他
+select pg_temp.at('2026-10-15 00:03:00+08');
+select pg_temp.as_user('hr@example.com');
+do $$ declare g jsonb := public.ops_hr_gaps(); begin
+  assert exists (select 1 from jsonb_array_elements(public.ops_att_board('2026-10-14')->'rows') r where r->>'name' = '离职阿伟'),
+    'board on last day';
+  assert not exists (select 1 from jsonb_array_elements(public.ops_att_board('2026-10-15')->'rows') r where r->>'name' = '离职阿伟'),
+    'board after last day';
+  assert not exists (select 1 from jsonb_array_elements(g->'staff') x where x->>'name' = '离职阿伟'), 'gaps skip leaver';
+  assert (public.ops_home()->>'hr_gaps')::int = jsonb_array_length(g->'staff'), 'home gaps = list';
+end $$;
+-- 00:05 的排程：停用一个人；再跑一次没有人
+reset role;
+select pg_temp.at('2026-10-15 00:05:00+08');
+do $$ begin
+  assert ops.staff_offboard() = 1, 'offboard one';
+  assert ops.staff_offboard() = 0, 'offboard idempotent';
+  assert not (select active from ops.staff where email = 'leaver@example.com'), 'leaver inactive';
+  assert (select active from ops.staff where email = 'hqsales@example.com'), 'others untouched';
+  assert exists (select 1 from ops.audit_log a where a.action = 'offboard' and a.entity_id = pg_temp.sid('leaver@example.com')),
+    'offboard logged';
+end $$;
+set role authenticated;
+-- 月报：已停用的人照列 10 月，只算到 10/14：工作日 10/2、3、5–10、12–14 = 11（10/1 假日、星期日休），有出勤 1、缺勤 10
+select pg_temp.at('2026-10-20 09:00:00+08');
+select pg_temp.as_user('hr@example.com');
+do $$ declare m jsonb; d jsonb; begin
+  select e into m from jsonb_array_elements(public.ops_att_month('2026-10')) e where e->>'name' = '离职阿伟';
+  assert m is not null and (m->>'workdays')::int = 11 and (m->>'present')::int = 1 and (m->>'absent')::int = 10,
+    'leaver month clipped: ' || coalesce(m::text, 'missing');
+  d := public.ops_att_days('2026-10', pg_temp.sid('leaver@example.com'));
+  assert d->'days'->0->>'date' = '2026-10-14' and jsonb_array_length(d->'days') = 14, 'days end at last day: ' || d::text;
+  assert exists (select 1 from jsonb_array_elements(public.ops_att_board('2026-10-13')->'rows') r where r->>'name' = '离职阿伟'
+                 and r->>'clock_in' is not null), 'inactive leaver on board for a day he worked';
+end $$;
+select pg_temp.at('2026-11-02 09:00:00+08');
+do $$ begin
+  assert not exists (select 1 from jsonb_array_elements(public.ops_att_month('2026-11')) e where e->>'name' = '离职阿伟'),
+    'not in later months';
+  assert exists (select 1 from jsonb_array_elements(public.ops_att_month('2026-10')) e where e->>'name' = '离职阿伟'),
+    'still in october';
+end $$;
+-- 复职：重新启用 → 已过的最后上班日清掉、进得来；再设回 10/14 → 立刻进不来，半夜再停用
+select pg_temp.at('2026-10-20 09:00:00+08');
+select pg_temp.as_user('boss@example.com');
+do $$ declare s jsonb; begin
+  s := public.ops_staff_save(jsonb_build_object('id', pg_temp.sid('leaver@example.com'), 'email', 'leaver@example.com',
+                                                'active', true));
+  assert (s->>'active')::boolean and s->'last_day' = 'null'::jsonb, 'rehire clears last_day: ' || s::text;
+end $$;
+select pg_temp.as_user('leaver@example.com');
+do $$ begin assert public.ops_me() is not null, 'rehired can log in'; end $$;
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('leaver@example.com'), 'last_day', '2026-10-14'));
+select pg_temp.as_user('boss@example.com');
+do $$ begin
+  assert (select (x->>'left')::boolean and x->>'last_day' = '2026-10-14' from jsonb_array_elements(public.ops_staff_admin_list()) x
+          where x->>'email' = 'leaver@example.com'), 'admin list shows left';
+end $$;
+select pg_temp.as_user('leaver@example.com');
+do $$ begin assert public.ops_me() is null, 'locked again'; end $$;
+reset role;
+do $$ begin assert ops.staff_offboard() = 1, 'offboard again'; end $$;
 
 reset role;
 select 'ALL ATTENDANCE TESTS PASSED' as result;

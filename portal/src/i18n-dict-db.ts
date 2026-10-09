@@ -99,4 +99,28 @@ export const DICT_DB: Record<string, string> = {
   "请先登入": "Please log in first",
   "资料格式不对": "Invalid data",
   "这位员工已停用，请先启用": "This staff member is inactive — activate them first",
+  // 2026-10-10：最后上班日、补卡证明、假别月数、员工档案（20261010_ops_profile_offboard）
+  "资料格式不对。": "Invalid data.",
+  "不能把自己的最后上班日设在今天以前（设了会马上进不了系统）。":
+    "You can't set your own last working day before today (you'd be locked out immediately).",
+  "补卡要附证明（例：WhatsApp 截图、送货单照片）。":
+    "A correction needs evidence (e.g. a WhatsApp screenshot or a photo of the delivery order).",
+  "「到职满几个月才能请」要是 0 – 120 的整数。": "\"Months of service\" must be a whole number from 0 to 120.",
+  "你没有权限改这位员工的资料。": "You don't have permission to change this staff member's details.",
+  "只有本人和管理薪资的人可以改银行资料。": "Only the staff member and the people who manage payroll can change bank details.",
+  "证件种类只能是 MyKad 或护照。": "ID type must be MyKad or passport.",
+  "身份证号码要是 12 位数字（例：900101-01-1234）。": "The IC number must be 12 digits (e.g. 900101-01-1234).",
+  "护照号码要是 5 – 20 个英文字母或数字。": "The passport number must be 5–20 letters or digits.",
+  "身份证号码前 6 位不是有效的出生日期（YYMMDD）。": "The first 6 digits of the IC number aren't a valid date of birth (YYMMDD).",
+  "生日格式不对（要是 YYYY-MM-DD）。": "Invalid date of birth (use YYYY-MM-DD).",
+  "生日不合理：年龄要在 14 – 80 岁之间。": "Date of birth doesn't look right: age must be between 14 and 80.",
+  "紧急联络人电话要是 8 – 15 位数字（可以有空格、+、-）。":
+    "The emergency contact's phone must have 8–15 digits (spaces, + and - are OK).",
+  "银行户口号码要是 6 – 20 位数字。": "The bank account number must be 6–20 digits.",
+  "只有管理员可以设定管理员的最后上班日。": "Only an admin can set an admin's last working day.",
+  "管理员不能设定自己的最后上班日（避免没有人能管理），请另一位管理员设定。":
+    "Admins can't set their own last working day (so someone can always manage the system); ask another admin.",
+  "至少要留一位没有最后上班日的管理员（避免没有人能管理）。":
+    "At least one admin must have no last working day (so someone can always manage the system).",
+  "这位员工已停用。": "This staff member is inactive.",
 };

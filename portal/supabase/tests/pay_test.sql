@@ -131,5 +131,45 @@ do $$ declare h jsonb := public.ops_pay_history('{}'); begin
   assert jsonb_array_length(public.ops_pay_history('{}')) = 1, 'deleted';
 end $$;
 
+-- 7. 离职日 = 员工名单的最后上班日（2026-10-09）
+--    离职阿伟（打卡测试：10/1 到职、10/14 最后上班日、已被排程停用）：10 月薪资照列，出勤只算到 10/14；11 月不列
+select pg_temp.as_user('hr@example.com');
+do $$ declare p jsonb; x jsonb; begin
+  p := public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('leaver@example.com'), 'base', 1500));
+  assert p->>'leave_date' = '2026-10-14' and not (p->>'active')::boolean, 'leave_date from last_day: ' || p::text;
+  x := (select e from jsonb_array_elements(public.ops_pay_month(2026, 10)->'rows') e where e->>'name' = '离职阿伟');
+  assert x is not null and (x->'att'->>'absent_days')::int = 10 and x->'att'->>'counted_to' = '2026-10-14',
+    'leaver in october payroll, clipped: ' || coalesce(x::text, 'missing');
+  assert not exists (select 1 from jsonb_array_elements(public.ops_pay_month(2026, 11)->'rows') e where e->>'name' = '离职阿伟'),
+    'leaver not in november';
+end $$;
+-- 薪资资料存离职日 → 最后上班日一起改；打卡设定改最后上班日 → 薪资资料的 leave_date 跟著改；存空白 = 取消
+do $$ declare p jsonb; begin
+  p := public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('picker@example.com'), 'base', 1800,
+                                                      'leave_date', '2026-12-31'));
+  assert p->>'leave_date' = '2026-12-31', 'pay leave date';
+  assert (select x->>'last_day' from jsonb_array_elements(public.ops_att_settings()->'staff') x where x->>'name' = '仓库阿强')
+         = '2026-12-31', 'staff last_day synced from payroll';
+  perform public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('picker@example.com'), 'last_day', '2026-12-15'));
+end $$;
+reset role;
+do $$ begin
+  assert (select p.leave_date from ops.pay_profile p join ops.staff s on s.id = p.staff_id where s.email = 'picker@example.com')
+         = '2026-12-15', 'pay_profile.leave_date follows last_day';
+end $$;
+set role authenticated;
+select pg_temp.as_user('hr@example.com');
+do $$ declare p jsonb; begin
+  -- 没带 leave_date = 不改
+  p := public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('picker@example.com'), 'base', 1900));
+  assert p->>'leave_date' = '2026-12-15', 'leave_date kept when not sent: ' || p::text;
+  p := public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('picker@example.com'), 'base', 1800, 'leave_date', ''));
+  assert p->'leave_date' = 'null'::jsonb
+     and (select x->'last_day' from jsonb_array_elements(public.ops_att_settings()->'staff') x where x->>'name' = '仓库阿强')
+         = 'null'::jsonb, 'cleared both';
+end $$;
+select pg_temp.expect_error($q$select public.ops_pay_profile_save(jsonb_build_object('staff_id', pg_temp.sid('hr@example.com'),
+  'leave_date', '2026-11-01'))$q$, '不能把自己');
+
 reset role;
 select 'ALL PAYROLL TESTS PASSED' as result;

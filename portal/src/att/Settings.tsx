@@ -1,6 +1,6 @@
 // 打卡设定（HR）：班别、打卡点、员工设定、每月上班星期六、假日。
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { BRANCH_LABEL, Me } from "../api";
+import { BRANCH_LABEL, confirmPastLastDay, Me } from "../api";
 import { Empty, ErrorBox, Modal } from "../ui";
 import { HolidayImport } from "./HolidayImport";
 import { att, AttSettings, AttStaff, Fence, getFix, mapLink, minsLabel, SAT_RULE_LABEL, Shift, weekday } from "../att-api";
@@ -64,7 +64,8 @@ export default function Settings({ me }: { me: Me }) {
                   <td><b>{x.name}</b><div className="muted small">{x.department_name} · {BRANCH_LABEL[x.branch]}</div></td>
                   <td>{shiftName(x.shift)}</td>
                   <td className="hide-sm">{nameOf(x.manager_id) || <span className="muted">部门主管</span>}</td>
-                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`, x.gender && (x.gender === "F" ? "女" : "男")].filter(Boolean).join(" · ")}</td>
+                  <td className="hide-sm small">{[x.geofence_exempt && "免打卡范围", x.join_date && `到职 ${x.join_date}`, x.gender && (x.gender === "F" ? "女" : "男")].filter(Boolean).join(" · ")}
+                    {x.last_day && <div className="late">{`最后上班日 ${x.last_day}`}</div>}</td>
                   <td><a href="#" onClick={(e) => { e.preventDefault(); setStaff(x); }}>修改</a></td>
                 </tr>
               ))}
@@ -78,7 +79,7 @@ export default function Settings({ me }: { me: Me }) {
 
       {shift && <ShiftForm s={shift} onClose={() => setShift(null)} onSaved={() => { setShift(null); load(); }} />}
       {fence && <FenceForm f={fence} branches={branches} onClose={() => setFence(null)} onSaved={() => { setFence(null); load(); }} />}
-      {staff && <StaffForm x={staff} s={s} onClose={() => setStaff(null)} onSaved={() => { setStaff(null); load(); }} />}
+      {staff && <StaffForm me={me} x={staff} s={s} onClose={() => setStaff(null)} onSaved={() => { setStaff(null); load(); }} />}
     </>
   );
 }
@@ -193,12 +194,18 @@ function FenceForm({ f, branches, onClose, onSaved }: { f: Partial<Fence>; branc
   );
 }
 
-function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; onClose: () => void; onSaved: () => void }) {
+function StaffForm({ me, x, s, onClose, onSaved }: { me: Me; x: AttStaff; s: AttSettings; onClose: () => void; onSaved: () => void }) {
   const [v, setV] = useState(x);
   const { error, busy, save } = useSave(onSaved);
+  // 管理员的最后上班日只有管理员能设，管理员也不能设自己的（资料库同样挡；避免没有人能进「员工与权限」复职）
+  const lastDayLocked = x.role === "admin" && (me.staff.role !== "admin" || x.id === me.staff.id);
   return (
     <Modal title={`打卡设定：${x.name}`} onClose={onClose}>
-      <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); save(() => att.setStaff({ ...v, join_date: v.join_date || "", gender: v.gender || "" })); }}>
+      <form className="form" onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        if (x.id !== me.staff.id && !confirmPastLastDay(x.name, v.last_day, x.last_day)) return;
+        save(() => att.setStaff({ ...v, join_date: v.join_date || "", gender: v.gender || "", last_day: v.last_day || "" }));
+      }}>
         <label>班别
           <select value={v.shift} onChange={(e) => setV({ ...v, shift: e.target.value })}>
             {s.shifts.map((h) => <option key={h.code} value={h.code}>{h.name}</option>)}
@@ -220,6 +227,17 @@ function StaffForm({ x, s, onClose, onSaved }: { x: AttStaff; s: AttSettings; on
             </select>
           </label>
         </div>
+        {/* 离职：最后上班日（和薪资资料的「离职日」是同一个日期） */}
+        {lastDayLocked ? (
+          <p className="muted small">管理员的最后上班日只能由另一位管理员在「员工与权限」设定。</p>
+        ) : (
+          <>
+            <label>最后上班日（选填，要离职才填）
+              <input type="date" value={v.last_day || ""} min={v.join_date || undefined} onChange={(e) => setV({ ...v, last_day: e.target.value || null })} />
+            </label>
+            <p className="muted small">过了最后上班日（隔天 00:00 起）就进不了营运系统，系统也会自动停用；出勤月报、薪资照样算到这一天。和薪资资料的「离职日」是同一个日期。如果他也能看 BI 网页，要另外请管理员从 BI 名单移除。</p>
+          </>
+        )}
         <label className="check"><input type="checkbox" checked={v.geofence_exempt} onChange={(e) => setV({ ...v, geofence_exempt: e.target.checked })} /> 免打卡范围（业务、司机、外勤；仍会记录位置）</label>
         <ErrorBox error={error} />
         <div className="actions"><button type="button" className="ghost" onClick={onClose}>取消</button><button disabled={busy}>{busy ? "储存中…" : "储存"}</button></div>

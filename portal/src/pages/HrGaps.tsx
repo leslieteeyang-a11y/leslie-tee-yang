@@ -1,6 +1,7 @@
-// 人事 · 资料缺漏：在职员工没填到职日 / 性别 / 手机 / 薪资资料、分店没有打卡点、接下来 60 天没有假日。
+// 人事 · 资料缺漏：在职员工没填到职日 / 性别 / 手机 / 薪资资料 / 证件号码 / 紧急联络人 / 银行户口（只给管薪资的人）、
+// 分店没有打卡点、接下来 60 天没有假日。过了最后上班日的人不列。
 import { useEffect, useState } from "react";
-import { BRANCH_LABEL } from "../api";
+import { BRANCH_LABEL, PROFILE_MISSING_LABEL } from "../api";
 import { supabase } from "../supabase";
 import { Empty, ErrorBox } from "../ui";
 
@@ -12,6 +13,9 @@ const MISSING: Record<string, [string, string]> = {
   join_date: ["到职日", "#/attendance/settings"], gender: ["性别", "#/attendance/settings"],
   phone: ["手机", "#/admin"], pay: ["薪资资料", "#/payroll/staff"],
 };
+// 员工档案的缺漏（id_no / emergency / bank）直接开那个人的档案
+const gapLink = (m: string, staffId: number): [string, string] =>
+  PROFILE_MISSING_LABEL[m] ? [PROFILE_MISSING_LABEL[m], `#/hr/profiles/${staffId}`] : MISSING[m] ?? [m, "#"];
 
 export default function HrGaps() {
   const [g, setG] = useState<Gaps | null>(null);
@@ -42,7 +46,7 @@ export default function HrGaps() {
                   <tr key={s.id}>
                     <td><b>{s.name}</b><div className="muted small">{`${s.department_name} · ${BRANCH_LABEL[s.branch] || s.branch}`}</div></td>
                     <td>{s.missing.map((m, i) => (
-                      <span key={m}>{i > 0 && " · "}<a href={MISSING[m]?.[1] ?? "#"}>{MISSING[m]?.[0] ?? m}</a></span>
+                      <span key={m}>{i > 0 && " · "}<a href={gapLink(m, s.id)[1]}>{gapLink(m, s.id)[0]}</a></span>
                     ))}</td>
                   </tr>
                 ))}
@@ -50,6 +54,7 @@ export default function HrGaps() {
             </table>
           </div>
           <p className="muted small">到职日决定年假、病假天数；性别决定产假 / 陪产假；手机用来 WhatsApp 工资单；没有薪资资料的人不会出现在每月薪资计算。</p>
+          <p className="muted small">证件号码、紧急联络人、银行户口在「员工档案」补；员工也可以在首页「我的资料」自己填。</p>
         </>
       )}
     </>

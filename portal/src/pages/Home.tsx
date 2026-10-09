@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, can, Home, Me, moduleHref, Task } from "../api";
+import { missingText } from "./MyProfile";
 import { hhmm } from "../att-api";
 import { ErrorBox } from "../ui";
 import { DeliveryHomeCard } from "../dlv/HomeCard";
@@ -95,9 +96,11 @@ export default function HomePage({ me }: { me: Me }) {
     po_arriving?: number | null; hr_gaps?: number | null; holidays_ahead?: number | null }) | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
+  const [profileMissing, setProfileMissing] = useState<string[]>([]);   // 自己的档案还缺什么（我的资料卡片提醒用）
 
   useEffect(() => {
     api.home().then(setHome).catch((e: Error) => setError(e.message));
+    api.profile().then((p) => setProfileMissing(p.missing)).catch(() => {});
     if (can(me, "tasks", "view")) api.tasks("mine", "open").then((t) => setTasks(t.slice(0, 8))).catch(() => {});
   }, [me]);
 
@@ -114,6 +117,12 @@ export default function HomePage({ me }: { me: Me }) {
       <DeliveryHomeCard me={me} />
       {home && <Todo h={home} />}
       <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
+      <a className={"card att-home" + (profileMissing.length ? " warn" : "")} href="#/profile">
+        <span><b>👤 我的资料</b><br />
+          {profileMissing.length ? <span className="late">{missingText(profileMissing)}</span>
+            : <span className="muted">身份证、紧急联络人、银行户口</span>}</span>
+        <span className="go">{profileMissing.length ? "去填 →" : "看 →"}</span>
+      </a>
       {home && (
         <div className="kpis">
           <a className="kpi" href="#/tasks"><b>{home.my_open_tasks}</b><span>我的待办任务</span></a>

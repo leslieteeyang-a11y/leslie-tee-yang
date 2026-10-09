@@ -1,5 +1,6 @@
 // 资料层：所有读写都走 public.ops_* 函数（权限在资料库里检查），这里只负责呼叫与型别。
 import { supabase } from "./supabase";
+import { tr } from "./i18n";
 
 export type Level = "none" | "view" | "edit" | "approve";
 export const LEVEL_RANK: Record<Level, number> = { none: 0, view: 1, edit: 2, approve: 3 };
@@ -108,7 +109,71 @@ export interface StaffAdmin {
   active: boolean;
   has_login: boolean;
   overrides: Record<string, Level>;
+  join_date?: string | null;
+  last_day?: string | null;      // 最后上班日（过了这天进不了营运系统，隔天自动停用）
+  left?: boolean;                // 已过最后上班日
+  in_bi?: boolean;               // 也在 BI 名单（离职只挡营运系统，BI 要另外移除）
 }
+
+/** 今天（马来西亚时间）YYYY-MM-DD */
+export const todayKL = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
+
+/** 存最后上班日之前：选了已经过了的日子（不是自己）→ 先确认，存了之后那个人马上进不了营运系统 */
+export function confirmPastLastDay(name: string, newDay: string | null | undefined, oldDay: string | null | undefined): boolean {
+  if (!newDay || newDay === (oldDay || "") || newDay >= todayKL()) return true;
+  return window.confirm(tr(`${newDay} 已经过了：存了之后 ${name} 马上进不了营运系统，今晚会自动停用（只有管理员能在「员工与权限」复职）。确定？`));
+}
+
+// 员工档案（ops.staff_profile）：本人看 / 改全部；HR 看 / 改同分店员工；银行两栏只有本人与管理薪资的人拿得到（没权限连 key 都没有）
+export type IdType = "mykad" | "passport";
+export interface StaffProfile {
+  staff_id: number;
+  name: string;
+  department: string;
+  department_name: string;
+  branch: string;
+  phone: string | null;
+  join_date: string | null;
+  last_day: string | null;
+  self: boolean;
+  can_edit: boolean;
+  can_bank: boolean;
+  id_type: IdType;
+  id_no: string | null;
+  dob: string | null;
+  address: string | null;
+  emergency_name: string | null;
+  emergency_relation: string | null;
+  emergency_phone: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  missing: string[];
+  updated_at: string | null;
+  updated_by_name: string | null;
+}
+export interface ProfileRow {
+  staff_id: number;
+  name: string;
+  department: string;
+  department_name: string;
+  branch: string;
+  phone: string | null;
+  join_date: string | null;
+  last_day: string | null;
+  id_type: IdType;
+  id_no: string | null;
+  dob: string | null;
+  emergency_name: string | null;
+  emergency_relation: string | null;
+  emergency_phone: string | null;
+  has_address: boolean;
+  missing: string[];
+  updated_at: string | null;
+}
+/** 档案缺漏代号 → 画面文字（人事「资料缺漏」、员工档案、我的资料共用） */
+export const PROFILE_MISSING_LABEL: Record<string, string> = {
+  id_no: "证件号码", emergency: "紧急联络人", bank: "银行户口",
+};
 export interface DeptModule {
   department: string;
   module: string;
@@ -229,6 +294,11 @@ export const api = {
   shipments: (includeDone = false) => rpc<Shipment[]>("ops_shipment_list", { p_include_done: includeDone }),
   saveShipment: (p: Record<string, unknown>) => rpc<Shipment>("ops_shipment_save", { p }),
   itemEta: (q: string) => rpc<ItemEta[]>("ops_item_eta", { p_q: q }),
+  // 员工档案：staffId 空 = 自己；存的时候只改 p 里有的栏位（空字串 = 清空）
+  profile: (staffId?: number | null) => rpc<StaffProfile>("ops_profile_get", { p_staff_id: staffId ?? null }),
+  saveProfile: (staffId: number | null, p: Record<string, unknown>) =>
+    rpc<StaffProfile>("ops_profile_save", { p_staff_id: staffId, p }),
+  profiles: () => rpc<{ can_edit: boolean; can_bank: boolean; rows: ProfileRow[] }>("ops_profile_list"),
   async setPassword(staffId: number, password: string): Promise<{ created: boolean }> {
     const { data, error } = await supabase.functions.invoke("ops-account", {
       body: { staff_id: staffId, password },

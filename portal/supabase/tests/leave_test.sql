@@ -51,6 +51,10 @@ do $$ declare st ops.staff; lt ops.leave_type; begin
   assert ops.leave_entitled(st, lt, 2026) = 8, 'annual no join date = first tier, full';
   st.join_date := '2027-02-01';
   assert ops.leave_entitled(st, lt, 2026) = 0, 'not joined yet';
+  -- 年假要到职满 3 个月才能请（2026-10-09），但应得天数照算：11/15 到职 → 8 × 1/12 → 1 天（不是 0）
+  assert lt.min_service_months = 3, 'annual min service 3 months';
+  st.join_date := '2026-11-15';
+  assert ops.leave_entitled(st, lt, 2026) = 1, 'annual min service does not zero entitlement';
   select * into lt from ops.leave_type where code = 'sick';
   st.join_date := '2022-01-01';
   assert ops.leave_entitled(st, lt, 2025) = 18, 'sick 2-5y';
@@ -73,6 +77,33 @@ do $$ declare h jsonb := public.ops_leave_home(); begin
   assert (public.ops_leave_preview('{"type":"compassionate","start_date":"2026-10-24","end_date":"2026-10-26"}')->>'days')::numeric = 3,
     'calendar days';
 end $$;
+-- 年假到职满 3 个月：小美 9/1 到职 → 12/1 起才能请（请假页拿得到这个日期）
+do $$ declare h jsonb := public.ops_leave_home(); begin
+  assert (select x->>'available_from' from jsonb_array_elements(h->'types') x where x->>'code' = 'annual') = '2026-12-01'
+     and (select (x->>'min_service_months')::int from jsonb_array_elements(h->'types') x where x->>'code' = 'annual') = 3,
+    'annual available_from: ' || (h->'types')::text;
+  assert (select x->'available_from' from jsonb_array_elements(h->'types') x where x->>'code' = 'sick') = 'null'::jsonb,
+    'sick has no service limit';
+end $$;
+select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-10-22","end_date":"2026-10-23"}')$q$,
+  '到职满 3 个月（2026-12-01）后才能请年假');
+-- HR（人事可审批）可以改月数：先改成不限，沿用下面原本的年假测试；最后再改回 3 个月
+select pg_temp.as_user('boss@example.com');
+select pg_temp.expect_error($q$select public.ops_leave_type_save('{"code":"annual","min_service_months":-1}')$q$, '0 – 120');
+select pg_temp.expect_error($q$select public.ops_leave_type_save('{"code":"annual","min_service_months":121}')$q$, '0 – 120');
+select pg_temp.expect_error($q$select public.ops_leave_type_save('{"code":"annual","min_service_months":"三"}')$q$, '0 – 120');
+select public.ops_leave_type_save('{"code":"annual","min_service_months":0}');
+do $$ begin
+  assert (select (x->>'min_service_months')::int from jsonb_array_elements(public.ops_leave_types()) x where x->>'code' = 'annual') = 0,
+    'min service saved';
+end $$;
+-- 没带 min_service_months（旧版前端）= 不改
+select public.ops_leave_type_save('{"code":"annual","half_day":true}');
+do $$ begin
+  assert (select (x->>'min_service_months')::int from jsonb_array_elements(public.ops_leave_types()) x where x->>'code' = 'annual') = 0,
+    'min service untouched';
+end $$;
+select pg_temp.as_user('hqsales@example.com');
 select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-10-22","end_date":"2026-10-26"}')$q$, '余额不够');
 select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-10-25"}')$q$, '不是上班日');
 select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-12-31","end_date":"2027-01-02"}')$q$, '不能跨年');
@@ -190,6 +221,37 @@ select public.ops_leave_type_save('{"code":"marriage","days":5,"half_day":true}'
 do $$ declare t jsonb := public.ops_leave_types(); begin
   assert (select (x->>'days')::numeric from jsonb_array_elements(t) x where x->>'code' = 'marriage') = 5, 'type saved';
 end $$;
+
+-- 年假改回到职满 3 个月：小美 11/30 被挡、12/1 可以（应得天数没被归零）；没填到职日（buyer）不挡；陪产假规则照旧
+select public.ops_leave_type_save('{"code":"annual","min_service_months":3}');
+select pg_temp.as_user('hqsales@example.com');
+select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-11-30"}')$q$,
+  '到职满 3 个月（2026-12-01）后才能请年假');
+do $$ declare r jsonb; begin
+  assert pg_temp.bal(public.ops_leave_home()->'balances', 'annual', 'entitled') = 3, 'entitlement not zeroed';
+  r := public.ops_leave_apply('{"type":"annual","start_date":"2026-12-01"}');
+  assert r->>'status' = 'pending' and (r->>'days')::numeric = 1, 'annual after 3 months: ' || r::text;
+  perform public.ops_leave_cancel((r->>'id')::bigint);
+end $$;
+select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"paternity","start_date":"2026-12-01"}')$q$, '服务满 12 个月');
+select pg_temp.as_user('buyer@example.com');
+do $$ declare r jsonb; h jsonb := public.ops_leave_home(); begin
+  assert h->'join_date' = 'null'::jsonb, 'buyer has no join date';
+  assert (select x->'available_from' from jsonb_array_elements(h->'types') x where x->>'code' = 'annual') = 'null'::jsonb,
+    'no join date = no date';
+  r := public.ops_leave_apply('{"type":"annual","start_date":"2026-11-02"}');
+  assert r->>'status' = 'pending', 'no join date = not blocked';
+  perform public.ops_leave_cancel((r->>'id')::bigint);
+end $$;
+-- 最后上班日之后不能请假
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('buyer@example.com'), 'last_day', '2026-11-30'));
+select pg_temp.as_user('buyer@example.com');
+select pg_temp.expect_error($q$select public.ops_leave_apply('{"type":"annual","start_date":"2026-11-30","end_date":"2026-12-01"}')$q$,
+  '不能晚于最后上班日（2026-11-30）');
+do $$ begin assert public.ops_leave_home()->>'last_day' = '2026-11-30', 'leave home last_day'; end $$;
+select pg_temp.as_user('hr@example.com');
+select public.ops_att_staff_set(jsonb_build_object('id', pg_temp.sid('buyer@example.com'), 'last_day', ''));
 
 reset role;
 select 'ALL LEAVE TESTS PASSED' as result;

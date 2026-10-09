@@ -36,6 +36,10 @@ export default function Leave({ me }: { me: Me }) {
       <h2 className="section-title">{`${data.year} 年假期余额`}</h2>
       <BalanceCards balances={data.balances} />
       {!data.join_date && <p className="muted small">HR 还没填你的到职日，年假 / 病假先按第一年计算。</p>}
+      {/* 到职未满几个月的假别（例：年假 3 个月）：天数照算，但要到那天才能请 */}
+      {data.types.filter((t) => notYet(t, data.today)).map((t) => (
+        <p key={t.code} className="small late">{serviceHint(t)}</p>
+      ))}
 
       <h2 className="section-title">我的假单</h2>
       <LeaveTable rows={data.requests} onOpen={setOpen} empty="还没有请过假。" />
@@ -48,6 +52,14 @@ export default function Leave({ me }: { me: Me }) {
       {open && <LeaveDetail r={open} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); load(); }} />}
     </>
   );
+}
+
+/** 这个假别在 day 那天还不能请（到职未满 min_service_months）；没有 available_from = 不限 */
+function notYet(t: LeaveType, day: string): boolean {
+  return !!t.available_from && day < t.available_from;
+}
+function serviceHint(t: LeaveType): string {
+  return `到职满 ${t.min_service_months} 个月（${t.available_from}）后才能请${t.name}`;
 }
 
 export function BalanceCards({ balances }: { balances: Balance[] }) {
@@ -155,6 +167,7 @@ export function LeaveForm({ me, types, today, balances, staff, onClose, onSaved 
         </label>
         {lt?.note && <p className="muted small">{lt.note}</p>}
         {bal && bal.balance !== null && <p className="small">{`还可以请 ${daysLabel(Number(bal.balance))} 天`}</p>}
+        {lt && notYet(lt, start) && <p className="small late">{serviceHint(lt)}</p>}
         {lt?.half_day && (
           <label>时段
             <select value={part} onChange={(e) => setPart(e.target.value as LeavePart)}>
@@ -184,7 +197,7 @@ export function LeaveForm({ me, types, today, balances, staff, onClose, onSaved 
         <ErrorBox error={error} />
         <div className="actions">
           <button type="button" className="ghost" onClick={onClose}>取消</button>
-          <button disabled={busy || days === 0}>{busy ? "送出中…" : "送出申请"}</button>
+          <button disabled={busy || days === 0 || (!!lt && notYet(lt, start))}>{busy ? "送出中…" : "送出申请"}</button>
         </div>
       </form>
     </Modal>
