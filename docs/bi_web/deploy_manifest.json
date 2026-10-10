@@ -13,7 +13,7 @@
  "public/icon-192.png": "2a79e48d00a1d1b0ed37064dc16c54baf8ef7068",
  "public/icon-512.png": "1e664e69386f0e2d2498259ce330a28dcf1b9676",
  "public/manifest.webmanifest": "6ee33a1a49b3e418cf6ec61235183f9d6d4e7b69",
- "src/App.tsx": "ed03a907e9321445271ffa25212ce4a6a853a6e7",
+ "src/App.tsx": "0bfc5c52f67a58da789efb8922e424e8c8a00bfd",
  "src/main.tsx": "6e1bcd1034b2597e9900dc72e52c0279399978c8",
  "src/styles.css": "90e574f01ff2bc7fc6a4dc38fa4ffbef527bd5cc",
  "src/components/AdsEditor.tsx": "31fd0c1353ff92009424add432dcc56648419adf",
@@ -26,7 +26,7 @@
  "src/i18n/core.ts": "71cfc562a51a3fa3cdeb9b876d185318a061ffa9",
  "src/i18n/ecom.ts": "1e12ad8d7c3912631489cde5ec147ab884a461d7",
  "src/i18n/finance.ts": "fcbe52558c21da8474043b924bbcf801d1659e93",
- "src/i18n/index.ts": "9b524edced23630b0f48e85a76cb860486df870d",
+ "src/i18n/index.ts": "62cfcb2df7f3d4bf3368a3eb5173952363150f34",
  "src/i18n/loyalty.ts": "d97a8b0c8788b3167a45c303ad028bd37bfb9311",
  "src/i18n/manager.ts": "481180239b2081b9fc494638561a9285dddb73ff",
  "src/i18n/pages1.ts": "6041f381439190d52e2132d0d762a91710c778ad",
@@ -58,5 +58,7 @@
  "src/pages/SlowMovers.tsx": "103f5125d85e7e7402345ebfbb191ba6170f67e4",
  "src/pages/StockAnomaly.tsx": "bd95c6506235f4a4d05f6a3e2ed5cafe38a254a3",
  "src/pages/StockPage.tsx": "cc2e3a4be739114e88c929ac74d2d8eadde12b38",
- "src/pages/SyncLog.tsx": "b3c879a5707b20567780e792c3101572e7763bd8"
+ "src/pages/SyncLog.tsx": "b3c879a5707b20567780e792c3101572e7763bd8",
+ "src/pages/Health.tsx": "2bb280762b972e6b71e8eb00798d1d3f1760f653",
+ "src/i18n/health.ts": "0e77f101863a8eb373e2f5a5b5dfcc773de12d2e"
 }

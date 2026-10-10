@@ -73,6 +73,8 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   各区块算成 jsonb 合并；集团 = 总行对外 + 分行，只加可加的基础值，`purch_l12` 扣掉内部往来）+ 视图 `public.bi_healthcheck` +
   pg_cron `bi_healthcheck_refresh`（`35 1,4,7,10,13,16,19,22 * * *`，同步后约 35 分钟）。migration：`healthcheck_snapshot`、`healthcheck_cron`、
   `healthcheck_low_s90_external`（缺货暴露分子改对外口径）；完整 SQL 在 `docs/bi_sql/healthcheck_snapshot.sql` / `healthcheck_cron.sql`。
+- 部署：`python3 mkpayload.py health` 一批（Health.tsx + health.ts + index.ts + App.tsx 内嵌，其余 60 档以 SHA 参照）→ production
+  `dpl_CZ5Vuqa9E8A9diatwASE88CP7Gyh`（2026-10-10 10:36 UTC，READY，homeworks-bi.vercel.app），四个内嵌档 SHA 已核对，manifest 已 `--commit`。
 - **快照只存基础值（约 130 个键），比率、红黄绿门槛、参考区间全在前端 `buildSections()` 里**——改门槛只要改 Health.tsx 重新部署。
   ⚪ = 只供参考不评分（留存率只评总行 B2B、净现金变动、新客贡献等）。
 - 名字叫 `healthcheck_*` 是因为 Supabase 里已有另一条管线（2026-10-08，不在本仓库）建的 `bi.health_snapshot` / `bi.refresh_health()` /
