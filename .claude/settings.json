@@ -1,5 +1,23 @@
 {
   "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "mcp__Supabase",
+      "mcp__Vercel",
+      "mcp__github",
+      "mcp__Canva",
+      "mcp__Claude_Code_Remote",
+      "mcp__Claude_Docs"
+    ]
+  }
+}{
+  "permissions": {
     "allow": [
       "mcp__Supabase__execute_sql",
       "mcp__Supabase__list_tables",
