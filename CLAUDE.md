@@ -121,6 +121,8 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 `bi_is_allowed()` + `bi_company()` 过滤（mv 没有 RLS）。全部从 3～18 秒降到 < 1.5 秒，数字最多慢 2 小时。migration：`heavy_views_materialized` /
 `heavy_views_rewire` / `heavy_views_rewire_purchase`，SQL 副本在 `docs/bi_sql/`，细节见 `docs/bi_web/README.md`。同晚总览页仍超时（`bi_sales_monthly` / `bi_sales_daily` 整表扫），
 再加 4 个 mv（`heavy_views_materialized_2` / `heavy_views_rewire_2`），共 13 个 mv；前端只剩 `bi_sales_lines(_nc)` 直接扫 fact_sales（走日期索引）。
+**公司健康体检（2026-10-10）**：使用者问「一般公司看什么数据、公司是否在轨道上」→ 用 Workflow 跑 8 维度计算 + 8 独立核对 + 汇总，报告在 `docs/health_check_2026-10.md`（结论：集团成长与获利好于同业，但总行库存周转只有同业一半、平台费率一年从 14.8% 升到 29.4%、分行总账亏损与销售口径利润差 2.3M）。做 BI 分析必记的口径陷阱：
+(1) 2026-01 起平台佣金以 CN 行 `ONLINE000002` 冲减 fact_sales（1～9 月 −1.16M），2025 全走 GL 6160 → 任何 2025 vs 2026 销售同比都要剔除 `item_code like 'ONLINE%'`，否则总行假跌 10%；(2) fact_gl 的 CO 是当期采购额（AutoCount Basic 不记存货），月度毛利率不可看；(3) 总行对分行（3000-H008）发票 72% 零成本（从 PRE (JB) 负库存仓位开单），fact_sales 的 profit/COGS 含分行时失真；(4) 分行 GL 采购比 fact_sales 成本多 2.75M、远超其库存 1.2M → 分行 SO/DO 出货未转 IV，分行利润以 GL 为下限、销售口径为上限；(5) 分行「货品行」要按 item_group 排除 GST/DELIVERY/TRANSPOR 等非商品；(6) GL 余额要从首月全量累计，不能从中间月起算；(7) 折旧 / 贷款利息 / 董事花红只在 12 月入账；(8) 同步每 3 小时一次，引用时点数字要标同步时间。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
