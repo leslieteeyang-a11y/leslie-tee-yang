@@ -20,11 +20,13 @@ import EcomReport from './pages/EcomReport';
 import BranchActual from './pages/BranchActual';
 import StockAnomaly from './pages/StockAnomaly';
 import SyncLog from './pages/SyncLog';
+import Health from './pages/Health';
 import { useT, LangToggle } from './lib/i18n';
 
 const TABS = [
   { key: 'report', label: '月报' },
   { key: 'ecom', label: '电商月报' },
+  { key: 'health', label: '健康体检' },
   { key: 'dash', label: '总览' },
   { key: 'alerts', label: '今日异常' },
   { key: 'mgr', label: '门店' },
@@ -49,8 +51,8 @@ const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'stockx', 'slow', 'oo', 'lo
 const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'stockx', 'slow', 'oo', 'log'];
 // 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
 const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
-// 月报/调价跟踪仅老板可见(月报含利润与现金)
-const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'price'];
+// 月报/电商月报/健康体检/调价跟踪仅老板可见(含利润与现金)
+const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'health', 'price'];
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -126,7 +128,7 @@ export default function App() {
   const tabs = role === 'buyer' ? TABS.filter((t) => BUYER_TABS.includes(t.key))
     : role === 'manager' ? TABS.filter((t) => MANAGER_TABS.includes(t.key))
     : role === 'sales' ? TABS.filter((t) => SALES_TABS.includes(t.key))
-    : role === 'owner' ? TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom')) // 月报/电商月报目前只算总部
+    : role === 'owner' ? TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom' && t.key !== 'health')) // 月报/电商月报/健康体检只在总部视角(体检页本身已并列总行/分行/集团)
     : TABS.filter((t) => !OWNER_ONLY.includes(t.key));
   // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行账套有资料(JB Southern、KL…):老板切到分行、或分行店长登入时才显示
   const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || !isHQ);
@@ -178,6 +180,7 @@ export default function App() {
       {tab === 'pl' && <ProfitLoss />}
       {tab === 'report' && <OnePager />}
       {tab === 'ecom' && <EcomReport canEdit={role === 'owner'} />}
+      {tab === 'health' && <Health />}
       {tab === 'branch' && <BranchActual />}
       {tab === 'pay' && <Payables showCashflow={role === 'owner' && isHQ} />}
       {tab === 'price' && <PriceEffect />}

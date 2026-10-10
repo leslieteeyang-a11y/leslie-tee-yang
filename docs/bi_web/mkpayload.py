@@ -1,6 +1,7 @@
 """分批部署用：印出 create_deployment 的 files 阵列。
    python3 mkpayload.py <batch>           → 该批档案内嵌，其余以「上次部署的 SHA」参照
    python3 mkpayload.py --commit <batch>  → 部署成功后把该批档案的 SHA 记进 manifest
+   python3 mkpayload.py --sync <tree.txt> → 用 Vercel 现行部署的档案树（每行「路径 sha」）重建 manifest
 manifest = deploy_manifest.json {path: sha}（Vercel 端已存在的内容）"""
 import hashlib, json, sys
 from pathlib import Path
@@ -14,11 +15,16 @@ BATCH = {
   "pages2": ["src/pages/OnePager.tsx", "src/pages/SalesLines.tsx", "src/pages/PriceEffect.tsx", "src/pages/SlowMovers.tsx", "src/i18n/pages2.ts"],
   "kl": ["src/lib/supabase.ts", "src/App.tsx", "src/pages/EcomReport.tsx", "src/i18n/core.ts"],
   "purchasing": ["src/pages/Purchasing.tsx", "src/pages/OpenOrders.tsx", "src/pages/SyncLog.tsx", "src/i18n/purchasing.ts"],
+  "health": ["src/pages/Health.tsx", "src/i18n/health.ts", "src/i18n/index.ts", "src/App.tsx"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
 M = Path("deploy_manifest.json")
 manifest = json.loads(M.read_text()) if M.exists() else {}
 sha = lambda b: hashlib.sha1(b).hexdigest()
+
+if sys.argv[1] == "--sync":   # 从 Vercel 现行部署的档案树重建 manifest（每行「路径 sha」；别人部署过就要先做这步）
+    manifest = dict(line.split() for line in Path(sys.argv[2]).read_text().splitlines() if line.strip())
+    M.write_text(json.dumps(manifest, indent=1)); print("manifest rebuilt:", len(manifest)); sys.exit()
 
 if sys.argv[1] == "--commit":
     for f in BATCH[sys.argv[2]]:

@@ -65,3 +65,32 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   再加 4 个 mv：`mv_sales_monthly` / `mv_sales_daily` / `mv_mgr_channel_daily` / `mv_alert_low_stock`（`heavy_views_materialized_2`），
   视图 `bi_sales_monthly(_nc)` / `bi_sales_daily` / `bi_mgr_channel_daily` / `bi_alert_low_stock` 改读 mv（`heavy_views_rewire_2`），
   `bi.refresh_heavy_views()` 现在重算 13 个。前端还会直接扫 fact_sales 的只剩 `bi_sales_lines(_nc)`（销售明细页，按日期范围走索引，不改）。
+
+## 2026-10-10：「健康体检」分页（使用者：「做成 BI 的健康体检分页」）
+- 来源：`docs/health_check_2026-10.md` 的 8 维度记分卡（Workflow 算 + 独立核对）。页面 `src/pages/Health.tsx`，字典 `src/i18n/health.ts`，
+  分页 `{ key: 'health', label: '健康体检' }`，OWNER_ONLY，只在总部视角显示（页面本身并列 总行 / 分行 JB / 集团 三列）。
+- Supabase：`bi.healthcheck_snapshot(company, as_of, m jsonb, refreshed_at)`（RLS 只给 owner）+ `bi.refresh_healthcheck()`（security definer，
+  各区块算成 jsonb 合并；集团 = 总行对外 + 分行，只加可加的基础值，`purch_l12` 扣掉内部往来）+ 视图 `public.bi_healthcheck` +
+  pg_cron `bi_healthcheck_refresh`（`35 1,4,7,10,13,16,19,22 * * *`，同步后约 35 分钟）。migration：`healthcheck_snapshot`、`healthcheck_cron`、
+  `healthcheck_low_s90_external`（缺货暴露分子改对外口径）；完整 SQL 在 `docs/bi_sql/healthcheck_snapshot.sql` / `healthcheck_cron.sql`。
+- **快照只存基础值（约 130 个键），比率、红黄绿门槛、参考区间全在前端 `buildSections()` 里**——改门槛只要改 Health.tsx 重新部署。
+  ⚪ = 只供参考不评分（留存率只评总行 B2B、净现金变动、新客贡献等）。
+- 名字叫 `healthcheck_*` 是因为 Supabase 里已有另一条管线（2026-10-08，不在本仓库）建的 `bi.health_snapshot` / `bi.refresh_health()` /
+  cron `bi_health_refresh` / 视图 `bi_health_*`，**不要动它们**。
+- 核对（2026-10-10 10:30 UTC 快照 vs 报告）：总行 GL 对外收入 7.33M、净利 1.44M（11.4%）、应收发票 248k、应付 1.10M（>90 天 76%）、
+  平台费率 28.9%、负库存 853 行、DIO 224 天、DPO 40 天、缺货暴露 22.5%，都与报告一致；库存成本 6.23M（报告 6.45M，报告含的仓位略多）。
+
+### 部署时发现别人也在改 Vercel（2026-10-05～10-08，另一条工作流）
+- 现行 production 部署 `dpl_FbqpbvGBbhGykKTe3oTGPhhCa8bk` 多了 4 个入口（`delivery.html` / `driver.html` / `join.html` / `loyalty.html`，
+  `vite.config.ts` 多入口）、`src/{delivery,driver,join,loyalty}/`、`src/pages/Delivery.tsx` / `Loyalty.tsx`、`src/i18n/loyalty.ts`；
+  `src/i18n/index.ts` 多 spread 了 `loyalty`。其余档案 SHA 与本仓库副本相同。
+- **每次部署前先 `list_deployment_files`（用 `get_project` 的 latestDeployment / 现行 production 的 id）把档案树抄成 `tree.txt`
+  （每行「路径 sha」），`python3 mkpayload.py --sync tree.txt` 重建 manifest**，否则会把别人的新档案从部署里漏掉。
+- `get_deployment_file_contents` 一次只回约 4KB（base64），大档会被截断：`src/styles.css`、`src/i18n/loyalty.ts`、`src/pages/Delivery.tsx` /
+  `Loyalty.tsx`、`src/{delivery,driver,join,loyalty}/*.tsx|css` 本仓库**没有副本**（只在 manifest 里以 SHA 参照）；四个 `*.html` 入口已抓回。
+  要改那些档案得先想别的办法取回（例如请对方把原始码放进仓库）。
+
+### Supabase MCP `apply_migration` 的另一个坑（2026-10-10）
+- 不只 `drop …` / `cron.unschedule`：SQL 里出现 `truncate`、`on commit drop` 这类字眼（连注释都算）也会被当破坏性语句等使用者确认；
+  在无人值守的会话里不会回 `cancelled`，而是**卡到 60 秒 timeout，什么都没套用**（同一份 SQL 卡了两次才查出来）。
+  所以 `refresh_healthcheck()` 不用临时表，改成各区块 `select to_jsonb(r) into j` 再 `||` 合并。写 migration 前 `grep -i 'drop\|truncate\|delete'`。
