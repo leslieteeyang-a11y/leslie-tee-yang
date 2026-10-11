@@ -1,3 +1,4 @@
+-- ※ 2026-10-10 targets_fix1 已收回 authenticated 对这个物化视图的 SELECT，前端改经 security definer 函数 bi.targets_daily_rows()（先过滤公司）读取。
 -- 2026-10-08：「目标」分页的逐日渠道净销售物化视图。migration：targets_daily_mv。
 -- 为什么要自己的物化视图：
 --   进度要「本月至今」、预测要「去年同月同期累计」（逐日），参考栏要「去年同月 / 近 3 个月平均」，

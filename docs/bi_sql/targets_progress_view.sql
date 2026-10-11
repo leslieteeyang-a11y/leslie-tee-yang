@@ -1,3 +1,4 @@
+-- ※ 2026-10-10 已被 targets_fix1 取代（视图现况以 targets_fix1.sql 为准：渠道各自的预测截止日、分行渠道按近 3 个月平均、今天不算进预测、KL 空推送、改读 bi.targets_daily_rows()）。
 -- 2026-10-08：「目标」分页（BI 网页 src/pages/Targets.tsx）读的进度视图。migration：targets_progress_view。
 -- 一列 = 公司 × 月（马来西亚时间本月往前 12 个月 ～ 下个月，共 14 个月）× 范围：
 --   scope='company' / scope_key='ALL'（公司总目标）＋ scope='channel' / scope_key=渠道名（每个有销售的渠道）。

@@ -1,3 +1,5 @@
+-- 【2026-10-10 已被 health_fix1 取代】bi.refresh_health() 的现行定义见 health_fix1.sql（多算 sales_through / sales_synced_at，
+--  近 90 天流量截到「已完整同步的最后一天」）。
 -- 2026-10-08：「健康度」分页的重算函数。migration：health_refresh_fn。
 -- bi.refresh_health() 做两件事（pg_cron bi_health_refresh 每 2 小时第 35 分呼叫，避开 15 / 25 分的
 -- onepager 与 heavy_views 重算）：

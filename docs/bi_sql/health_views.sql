@@ -1,3 +1,5 @@
+-- 【2026-10-10 已被 health_fix1 取代】三个视图的现行定义见 health_fix1.sql（改读 bi.health_sales_daily()；
+--  bi_health_now 的 as_of 改成按公司「已完整同步的最后一天」，尾端加 ly_as_of / synced_at；bi_health_snapshot 尾端加 sales_through / sales_synced_at）。
 -- 2026-10-08：「健康度」分页（BI 网页 src/pages/Health.tsx）读的三个 public 视图。migration：health_views。
 -- 权限照既有做法：security_invoker + bi_is_allowed() + bi_company() 公司过滤；
 -- 含成本 / 毛利 / 余额，所以再加 bi_role() = 'owner'（店长 / 订货员读到 0 行）。

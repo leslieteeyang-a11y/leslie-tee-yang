@@ -1,3 +1,4 @@
+-- 【2026-10-10 health_fix1】另加两栏：sales_through date（近 90 天流量截到哪一天）、sales_synced_at timestamptz（当时最后一次成功同步）。
 -- 2026-10-08：「健康度」分页的每日余额快照。migration：health_snapshot_table。
 -- 为什么要快照：库存（fact_stock）、应收（fact_ar_open）、应付（fact_ap_open）、库龄（fact_item_aging）
 -- 都只有「现在」的余额，没有历史，算不出库存天数 / 应收天数 / 应付天数 / 现金周期的趋势与去年同期。

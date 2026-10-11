@@ -1,3 +1,5 @@
+-- 【2026-10-10 health_fix1】最后一行的 grant 已收回：authenticated 不能直接读这个 mv，
+--  改经 security definer 的 bi.health_sales_daily()（只给 owner）。
 -- 2026-10-08：「健康度」分页（只给 owner 看）的销售流量底稿。migration：health_sales_daily_mv。
 -- 为什么要另建物化视图：毛利率要把「没有成本的行」分开算（可信毛利率只算 cost<>0 的行），
 -- 既有的 bi.mv_sales_monthly / mv_sales_daily 只有 net / cost 合计，分不出来；直接扫 fact_sales

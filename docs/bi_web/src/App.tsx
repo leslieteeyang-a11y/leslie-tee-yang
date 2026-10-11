@@ -20,17 +20,23 @@ import EcomReport from './pages/EcomReport';
 import BranchActual from './pages/BranchActual';
 import StockAnomaly from './pages/StockAnomaly';
 import SyncLog from './pages/SyncLog';
+import Health from './pages/Health';
+import Margin from './pages/Margin';
+import Targets from './pages/Targets';
 import { useT, LangToggle } from './lib/i18n';
 
 const TABS = [
   { key: 'report', label: '月报' },
   { key: 'ecom', label: '电商月报' },
+  { key: 'health', label: '健康度' },
   { key: 'dash', label: '总览' },
   { key: 'alerts', label: '今日异常' },
   { key: 'mgr', label: '门店' },
+  { key: 'target', label: '目标' },
   { key: 'branch', label: '实际销售' },
   { key: 'buy', label: '订货' },
   { key: 'pl', label: '损益' },
+  { key: 'margin', label: '毛利分析' },
   { key: 'ar', label: '应收账款' },
   { key: 'pay', label: '应付账款' },
   { key: 'price', label: '调价跟踪' },
@@ -46,11 +52,11 @@ type TabKey = (typeof TABS)[number]['key'];
 type Role = 'owner' | 'buyer' | 'viewer' | 'manager' | 'sales';
 // 订货员只看采购相关页面;店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
 const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'stockx', 'slow', 'oo', 'log'];
-const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'stockx', 'slow', 'oo', 'log'];
+const MANAGER_TABS: TabKey[] = ['mgr', 'target', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'stockx', 'slow', 'oo', 'log'];
 // 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
 const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
-// 月报/调价跟踪仅老板可见(月报含利润与现金)
-const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'price'];
+// 月报/调价跟踪/健康度/毛利分析仅老板可见(含利润与现金)
+const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'price', 'health', 'margin'];
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -176,6 +182,9 @@ export default function App() {
       {tab === 'mgr' && <Manager />}
       {tab === 'dash' && <Dashboard onEmpty={setEmpty} showProfit={showProfit} />}
       {tab === 'pl' && <ProfitLoss />}
+      {tab === 'health' && <Health />}
+      {tab === 'margin' && <Margin />}
+      {tab === 'target' && <Targets canEdit={role === 'owner'} />}
       {tab === 'report' && <OnePager />}
       {tab === 'ecom' && <EcomReport canEdit={role === 'owner'} />}
       {tab === 'branch' && <BranchActual />}
