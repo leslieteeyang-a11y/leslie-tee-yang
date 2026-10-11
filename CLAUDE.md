@@ -121,8 +121,36 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 `bi_is_allowed()` + `bi_company()` 过滤（mv 没有 RLS）。全部从 3～18 秒降到 < 1.5 秒，数字最多慢 2 小时。migration：`heavy_views_materialized` /
 `heavy_views_rewire` / `heavy_views_rewire_purchase`，SQL 副本在 `docs/bi_sql/`，细节见 `docs/bi_web/README.md`。同晚总览页仍超时（`bi_sales_monthly` / `bi_sales_daily` 整表扫），
 再加 4 个 mv（`heavy_views_materialized_2` / `heavy_views_rewire_2`），共 13 个 mv；前端只剩 `bi_sales_lines(_nc)` 直接扫 fact_sales（走日期索引）。
+**公司健康体检（2026-10-10）**：使用者问「一般公司看什么数据、公司是否在轨道上」→ 用 Workflow 跑 8 维度计算 + 8 独立核对 + 汇总，报告在 `docs/health_check_2026-10.md`（结论：集团成长与获利好于同业，但总行库存周转只有同业一半、平台费率一年从 14.8% 升到 29.4%、分行总账亏损与销售口径利润差 2.3M）。做 BI 分析必记的口径陷阱：
+(1) 2026-01 起平台佣金以 CN 行 `ONLINE000002` 冲减 fact_sales（1～9 月 −1.16M），2025 全走 GL 6160 → 任何 2025 vs 2026 销售同比都要剔除 `item_code like 'ONLINE%'`，否则总行假跌 10%；(2) fact_gl 的 CO 是当期采购额（AutoCount Basic 不记存货），月度毛利率不可看；(3) 总行对分行（3000-H008）发票 72% 零成本（从 PRE (JB) 负库存仓位开单），fact_sales 的 profit/COGS 含分行时失真；(4) 分行 GL 采购比 fact_sales 成本多 2.75M、远超其库存 1.2M → 分行 SO/DO 出货未转 IV，分行利润以 GL 为下限、销售口径为上限；(5) 分行「货品行」要按 item_group 排除 GST/DELIVERY/TRANSPOR 等非商品；(6) GL 余额要从首月全量累计，不能从中间月起算；(7) 折旧 / 贷款利息 / 董事花红只在 12 月入账；(8) 同步每 3 小时一次，引用时点数字要标同步时间。
+**健康体检分页（2026-10-10）**：使用者要「做成 BI 的健康体检分页」→ `bi.healthcheck_snapshot` + `bi.refresh_healthcheck()`（security definer，只存约 130 个基础值，
+比率 / 红黄绿 / 参考区间全在前端 `src/pages/Health.tsx` 的 `buildSections()`）+ 视图 `public.bi_healthcheck`（RLS 只给 owner）+ pg_cron `bi_healthcheck_refresh`
+每 3 小时（`35 1,4,…,22 * * *`）；migration `healthcheck_snapshot` / `healthcheck_cron` / `healthcheck_low_s90_external`，SQL 在 `docs/bi_sql/`。分页 key `health`，
+OWNER_ONLY，只在总部视角显示，三列 总行（对外）/ 分行 JB / 集团。**Supabase 里另有别人建的 `bi.health_snapshot` / `bi.refresh_health()` / cron `bi_health_refresh` /
+`bi_health_*` 视图（2026-10-08，不在本仓库），别动；Vercel 也被另一条工作流改过（delivery / driver / join / loyalty 入口），部署前一定先 `list_deployment_files` →
+`mkpayload.py --sync` 重建 manifest**（细节见 `docs/bi_web/README.md`）。
+**毛利分析 / 目标 / 健康度（2026-10-08～11，分支 `claude/gifted-gates-6se6cl`）**：使用者从选择题选了「公司健康度、毛利分析、补货预测、目标追踪」
+（补货 = 既有「订货」页，不重做）。三个功能各自 建造 → 独立复核（原始表重算、owner / 店长 / 非白名单 / anon 四种身分、explain analyze）→ 修正。
+- **毛利分析**（分页 `margin`，OWNER_ONLY，`src/pages/Margin.tsx`）：RPC `public.bi_margin_summary(p_company,p_from,p_to,p_ex_branch,p_top)` 一次回 jsonb、
+  `bi_margin_nocost_lines`（没成本明细 CSV，≤5000 行）；mv `bi.mv_margin_month` / `_item_month` / `_dim_month` / `_badcost` / `_nocost_lines`，`bi.refresh_margin()`，
+  cron `bi_margin_refresh`（`45 */2 * * *`）。口径：**可信毛利只算「成本 ≠ 0 且与销售同号」的商品行**；服务群组（ONLINE/SHIP FEE/PAY FEE/TRAN FEE/SERV FEE/INSTALL/
+  TRANSPOR/DELIVERY/SERV INC/CARD INT/GST）与无代号行另列；扣费后毛利率只扣平台费 / Voucher / 刷卡转账费、加网店运费，不含 JB 代收的 GST / 运费；本月至今不显示扣费后；
+  JB 不显示渠道表（`bi.sale_channel` 只认总部客户代号）。以 `margin_fix1.sql` 为准（RPC v5）。HQ 近 12 个月可信毛利率 43.5%（账面 62%），JB 39.7%；
+  HQ 没成本金额约 9 成是开给分行 3000-H008 的整批发票。
+- **目标**（分页 `target`，owner 可改、店长看自己公司，`src/pages/Targets.tsx` props `canEdit`）：表 `bi.target_month(company, month, scope company|channel, scope_key, amount)`，
+  RPC `bi_target_set` / `bi_target_copy_prev`（只 owner），视图 `public.bi_targets_progress`（经 security definer `bi.targets_daily_rows()` 过滤公司），mv `bi.mv_targets_daily`，
+  cron `targets` 第 55 分。预测：到昨天的日均 × 当月天数；平台渠道（晚 2 天入账）用各自最后单据日；「分行」渠道（月中集团内大单）用 max(至今, 近 3 月平均)；公司合计 = 各渠道相加；
+  KL 用 `branch_actual_month`，空推送显示提示不亮灯。以 `targets_fix1.sql` 为准。`bi.target_month` 目前 0 行，等老板自己填。`app_setting.store_month_target` 是门店页的门市目标，不同概念，没动。
+- **健康度（`health_*`）**：上面那段说「别人建的 `bi.health_snapshot` / `bi.refresh_health()` / cron `bi_health_refresh` / `bi_health_*`」就是这条分支建的
+  （本月至今按各公司实际同步日对齐去年同期、费用率分母不含卖给分行，以 `health_fix1.sql` 为准）。**前端没有上线**：同一时间另一个 session 做了「健康体检」（`healthcheck_*`）
+  并已部署，为免两页重复，页面原始码另存在 `docs/bi_web/alt/health_trend/`（要用时改名成别的分页 key 再接进 App.tsx）。资料库物件与 cron 仍在跑（每 2 小时约 20 秒）；
+  老板若决定不要，再写 migration 停掉 cron（`cron.unschedule` 会卡 MCP，要请使用者在 SQL Editor 执行）。
+- 部署（2026-10-11）：Vercel 连接器又能建部署了（09-28 起的 403 已解除）。大档逐一用「预览部署 + 只带该档」上传、`list_deployment_files` 核对 SHA，
+  最后正式部署只内嵌 App.tsx / index.ts、其余 64 档以 SHA 参照 → `dpl_CJE3AbnkcyRJ1QP7z7zgdczxFUyv`，66 档 SHA 全部核对；`deploy_manifest.json` 已更新为这一版。
+  内嵌前先检查肉眼看不见的字元（`Margin.tsx` 的 CSV BOM 就是一个 U+FEFF），手抄漏掉 SHA 就对不上；部署后一律用 `list_deployment_files` 核对。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
-整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。
+整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
+无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。
 **BI 双语（2026-09-28 晚）**：使用者要「做成整个bi换成中英文」→ 整站加了 `src/lib/i18n.tsx`（`useT()` / `t('中文原文', {占位})`，
 字典键就是中文原文，英文缺键退回中文；右上角 `LangToggle` 记 localStorage `bi_lang`），字典分七档在 `src/i18n/`。
 完整原始码副本在 `docs/bi_web/src/`；分批部署工具 `docs/bi_web/mkpayload.py` + `deploy_manifest.json`，

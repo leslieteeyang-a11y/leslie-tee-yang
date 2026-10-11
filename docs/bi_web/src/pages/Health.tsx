@@ -1,583 +1,337 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { supabase, COMPANY, COMPANIES } from '../lib/supabase';
-import { fmtRM, fmtNum, ymLabel } from '../lib/format';
+import { Fragment, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { fmtNum, fmtCompact } from '../lib/format';
 import { useT } from '../lib/i18n';
 
-// 公司健康度(只给 owner 看):8 个核心指标 + 1 个资料品质指标,每个都有本期、去年同期、近 12 个月趋势、红黄绿灯与白话解释。
-// 资料层(Supabase,migration health_*):
-//   public.bi_health_monthly  按月的销售流量(可信毛利率的分子分母、没成本的行)+ 总账(SL/SA/CO/进货/EP)
-//   public.bi_health_now      当月 / 今年累计 与去年同期(同样的日期区间)。as_of = 该公司「已完整同步的最后一天」
-//                             (分行电脑没开机就不同步,所以每家公司不同;去年同期也截到 as_of − 1 年,避免拿半天比整天)
-//   public.bi_health_snapshot 每日余额快照(库存 / 应收 / 应付 / 滞销 + 截到 sales_through 的近 90 天流量),2026-08-24 起
-// 三个视图都限 owner;比率与灯号在这里算,门槛集中在下面的 TH,要调就改这里(页面上的说明文字会跟着变)。
-// migration:health_sales_daily_mv / health_snapshot_table / health_refresh_fn / health_cron / health_views / health_fix1。
+// 「健康体检」分页(2026-10-10):读 public.bi_healthcheck(= bi.healthcheck_snapshot,每 3 小时由 bi.refresh_healthcheck() 重算,
+// 口径见 docs/health_check_2026-10.md 与 docs/bi_sql/healthcheck_snapshot.sql)。快照只存「基础值」,比率与红黄绿都在这里算,
+// 改门槛不用动资料库。只有老板看得到(RLS)。三列:总行(对外口径,剔除卖给分行)、分行 JB、集团(总行对外 + 分行)。
 
-const TH = {
-  revGreenMin: 3,     // 营收:今年至今比去年同期 ≥ +3% 绿
-  revRedBelow: -5,    //       低于 −5% 红,中间黄
-  gmRedDrop: 3,       // 可信毛利率:比去年同期低 ≥ 3 个百分点 红
-  gmYellowDrop: 1,    //            低 1～3 个百分点 黄
-  epRedRise: 3,       // 费用率:比去年同期高 ≥ 3 个百分点 红
-  epYellowRise: 1,    //        高 1～3 个百分点 黄
-  dioGreen: 120,      // 库存天数 ≤ 120 绿
-  dioRed: 180,        //          > 180 红
-  slowGreen: 10,      // 滞销库存占比 ≤ 10% 绿
-  slowRed: 20,        //              > 20% 红
-  dsoGreen: 30,       // 应收天数 ≤ 30 绿
-  dsoRed: 60,         //          > 60 红
-  ar90Green: 10,      // 逾期 90 天以上占应收 ≤ 10% 绿
-  ar90Red: 25,        //                      > 25% 红
-  dpoLow: 15,         // 应付天数 15～90 绿;< 15 或 90～120 黄
-  dpoHigh: 90,
-  dpoRed: 120,        //          > 120 红
-  cccGreen: 60,       // 现金周期 ≤ 60 绿
-  cccRed: 120,        //          > 120 红
-  nocostGreen: 5,     // 没有成本的销售占比 ≤ 5% 绿
-  nocostRed: 15,      //                    > 15% 红
-};
+type M = Record<string, number | null>;
+type All = Record<string, M>;
+type St = 'g' | 'y' | 'r' | 'i'; // 绿 / 黄 / 红 / 只供参考
+type Cell = { text: string; sub?: string; st: St };
+type T = (zh: string, vars?: Record<string, string | number>) => string;
+type Metric = { label: string; ref: string; note?: string; cell: (m: M, c: string, all: All) => Cell | null };
+type Section = { title: string; metrics: Metric[] };
 
-// 可信毛利率从哪个月起可信(之前的成本资料异常,不拿来当去年同期比)。
-// 总部 2024-04～2024-12 的可信毛利率只有 −2%～10%(2025-01 起回到 38%～41%),是成本资料问题,不是真的毛利。
-const GM_RELIABLE_FROM: Record<string, { yr: number; mth: number }> = {
-  HOMEWORKSSB: { yr: 2025, mth: 1 },
-};
+const HQ = 'HOMEWORKSSB';
+const BR = 'HOMEWORKSSOUTHERN';
+const GP = 'GROUP';
+const COLS = [HQ, BR, GP];
+// 集团列快照里没有、但可以直接把总行 + 分行相加的键
+const EXTRA = ['stock_snap_now', 'stock_snap_30', 'll_neg', 'quote_open', 'quote_won', 'agent_hit', 'agent_n',
+  'cust_new_sales_l12', 'cust_lost_sales', 'named_l12'];
+const DOT: Record<St, string> = { g: '🟢', y: '🟡', r: '🔴', i: '⚪' };
 
-type Light = 'g' | 'y' | 'r' | 'na';
-const LIGHT_COLOR: Record<Light, string> = { g: 'var(--good)', y: '#f59e0b', r: 'var(--critical)', na: 'var(--muted)' };
-const LIGHT_LABEL: Record<Light, string> = { g: '正常', y: '留意', r: '警示', na: '资料不足' };
+const n = (v: unknown): number | null => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+const add = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+const div = (a: number | null, b: number | null) => (a == null || b == null || b === 0 ? null : a / b);
+const chg = (cur: number | null, base: number | null) =>
+  cur == null || base == null || base === 0 ? null : (cur - base) / Math.abs(base);
+const rm = (v: number | null) => (v == null ? '—' : 'RM ' + fmtCompact(Math.round(v)));
+const pct = (v: number | null, d = 1) => (v == null ? '—' : (v * 100).toFixed(d) + '%');
+const sgn = (v: number | null) => (v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%');
+const fx = (v: number | null, d = 1) => (v == null ? '—' : v.toFixed(d));
+const band = (v: number | null, good: (x: number) => boolean, warn: (x: number) => boolean): St =>
+  v == null ? 'i' : good(v) ? 'g' : warn(v) ? 'y' : 'r';
 
-type Monthly = {
-  yr: number; mth: number; net: number; net_ic: number; sales_costed: number; cost_costed: number;
-  gross_goods: number; sales_nocost: number; sales_nocost_ic: number; nocost_lines: number; last_date: string | null;
-  gl_sales: number | null; gl_sa: number | null; gl_co: number | null; gl_purch: number | null; gl_ep: number | null;
-};
-type Now = {
-  as_of: string; ly_as_of: string; last_sales_date: string | null;
-  mtd_net: number; mtd_ic: number; ly_mtd_net: number; ly_mtd_ic: number;
-  ytd_net: number; ytd_ic: number; ly_ytd_net: number; ly_ytd_ic: number;
-  refreshed_at: string | null; synced_at: string | null;
-};
-type Snap = {
-  snap_date: string; source: string;
-  stock_cost: number | null; stock_excluded: number | null; stock_neg: number | null;
-  slow_cost: number | null; aging_total: number | null;
-  ar_pos: number | null; ar_neg: number | null; ar_over90: number | null; ar_ic: number | null;
-  ap_pos: number | null; ap_neg: number | null;
-  sales_90: number; sales_costed_90: number; cost_costed_90: number; sales_nocost_90: number;
-  purch_3m: number | null; purch_days: number | null; refreshed_at: string;
-};
-type YM = { yr: number; mth: number };
-type Pt = { label: string; cur: number | null; ly?: number | null };
-
-const n = (v: unknown) => Number(v ?? 0);
-const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
-const pct1 = (v: number) => v.toFixed(1) + '%';
-const signed = (v: number, d = 1) => (v >= 0 ? '+' : '') + v.toFixed(d);
-const ymShort = (p: YM) => `${String(p.yr).slice(2)}/${String(p.mth).padStart(2, '0')}`;
-const ymBefore = (a: YM, b: YM) => a.yr * 100 + a.mth < b.yr * 100 + b.mth;
-// 马来西亚今天的日期(YYYY-MM-DD),用来判断这家公司今天有没有同步
-const todayMY = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date());
-const addDays = (d: string, k: number) => {
-  const [y, m, dd] = d.split('-').map(Number);
-  const x = new Date(y, m - 1, dd + k);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-};
-const fmtTime = (ts: string | null) => (ts ? new Date(ts).toLocaleString('en-MY', { hour12: false }) : '—');
-const tooltipStyle = {
-  background: 'var(--surface)', border: '1px solid var(--border)',
-  borderRadius: 8, fontSize: 12, color: 'var(--ink)',
-} as const;
-
-/* ---------- 指标计算(纯函数) ---------- */
-
-// 近 90 天日均销货成本(估):有成本的行用实际成本;没成本的行按同期「成本 ÷ 销售」比例估
-function cogsDaily(s: Snap): number {
-  const ratio = s.sales_costed_90 > 0 ? s.cost_costed_90 / s.sales_costed_90 : 0;
-  return (s.cost_costed_90 + s.sales_nocost_90 * ratio) / 90;
+// 总账损益 = 收入 + 其他收入 − 销货成本(AutoCount Basic 里其实是采购额)− 费用 − 税。集团 = 总行 + 分行(内部买卖互相抵销)
+function profit(m: M, sfx: string): number | null {
+  const r = n(m['rev_' + sfx]);
+  if (r == null) return null;
+  return r + (n(m['oi_' + sfx]) ?? 0) - (n(m['co_' + sfx]) ?? 0) - (n(m['ep_' + sfx]) ?? 0) - (n(m['tx_' + sfx]) ?? 0);
 }
-const dioOf = (s: Snap) => (s.stock_cost !== null && cogsDaily(s) > 0 ? s.stock_cost / cogsDaily(s) : null);
-const dsoOf = (s: Snap) => (s.ar_pos !== null && s.sales_90 > 0 ? s.ar_pos / (s.sales_90 / 90) : null);
-const dpoOf = (s: Snap) =>
-  s.ap_pos !== null && s.purch_3m !== null && s.purch_3m > 0 && s.purch_days ? s.ap_pos / (s.purch_3m / s.purch_days) : null;
-const cccOf = (s: Snap) => {
-  const a = dioOf(s), b = dsoOf(s), c = dpoOf(s);
-  return a === null || b === null || c === null ? null : a + b - c;
-};
-const slowOf = (s: Snap) => (s.slow_cost !== null && s.aging_total ? (s.slow_cost / s.aging_total) * 100 : null);
-
-const lightLow = (v: number | null, green: number, red: number): Light =>
-  v === null ? 'na' : v <= green ? 'g' : v > red ? 'r' : 'y';
-const worse = (a: Light, b: Light): Light => {
-  const rank: Record<Light, number> = { na: 0, g: 1, y: 2, r: 3 };
-  if (a === 'na') return b; if (b === 'na') return a;
-  return rank[a] >= rank[b] ? a : b;
-};
-
-/* ---------- 小元件 ---------- */
-
-function LightBadge({ light }: { light: Light }) {
-  const t = useT();
-  const sym = light === 'g' ? '●' : light === 'y' ? '▲' : light === 'r' ? '■' : '○';
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 650, color: 'var(--ink)', whiteSpace: 'nowrap' }}>
-      <span style={{ color: LIGHT_COLOR[light], fontSize: 13 }} aria-hidden>{sym}</span>{t(LIGHT_LABEL[light])}
-    </span>
-  );
+const profitOf = (c: string, all: All, sfx: string) =>
+  c === GP ? add(profit(all[HQ] ?? {}, sfx), profit(all[BR] ?? {}, sfx)) : profit(all[c] ?? {}, sfx);
+function ebitda(m: M): number | null {
+  const r = n(m['rev_l12']);
+  if (r == null) return null;
+  return r + (n(m['oi_l12']) ?? 0) - (n(m['co_l12']) ?? 0) - (n(m['ep_l12']) ?? 0) + (n(m['dep_l12']) ?? 0) + (n(m['int_l12']) ?? 0);
 }
+const ebitdaOf = (c: string, all: All) => (c === GP ? add(ebitda(all[HQ] ?? {}), ebitda(all[BR] ?? {})) : ebitda(all[c] ?? {}));
+const dso = (m: M) => div(n(m['ar_inv']), div(n(m['credit_90']), 90));
+const dio = (m: M) => div(n(m['stock_cost']), div(n(m['purch_l12']), 365));
+const dpo = (m: M) => div(n(m['ap_inv']), div(n(m['purch_l12']), 365));
 
-function Spark({ data, kind, fmt, curName, lyName, note }: {
-  data: Pt[]; kind: 'bar' | 'line'; fmt: (v: number) => string; curName: string; lyName?: string; note?: string;
-}) {
-  const t = useT();
-  const points = data.filter((p) => p.cur !== null).length;
-  if (points < 2) return <div className="muted" style={{ fontSize: 12, margin: '10px 0 4px' }}>{note ?? t('趋势资料不足')}</div>;
-  const hasLy = !!lyName && data.some((p) => p.ly !== null && p.ly !== undefined);
-  return (
-    <div style={{ margin: '8px 0 2px' }}>
-      <ResponsiveContainer width="100%" height={96}>
-        <ComposedChart data={data} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
-          <CartesianGrid stroke="var(--grid)" strokeWidth={1} vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: 'var(--muted)', fontSize: 10 }} axisLine={{ stroke: 'var(--baseline)' }} tickLine={false} minTickGap={18} />
-          <YAxis hide domain={kind === 'bar' ? [0, 'auto'] : ['auto', 'auto']} />
-          <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--grid)', opacity: 0.4 }}
-                   formatter={(v: number) => fmt(Number(v))} />
-          {kind === 'bar'
-            ? <Bar dataKey="cur" name={curName} fill="var(--series-1)" radius={[3, 3, 0, 0]} maxBarSize={14} />
-            : <Line dataKey="cur" name={curName} stroke="var(--series-1)" strokeWidth={2} dot={false} type="monotone" connectNulls />}
-          {hasLy && <Line dataKey="ly" name={lyName} stroke="var(--muted)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} type="monotone" connectNulls />}
-        </ComposedChart>
-      </ResponsiveContainer>
-      {hasLy && (
-        <div className="muted" style={{ fontSize: 11, display: 'flex', gap: 12 }}>
-          <span><span style={{ color: 'var(--series-1)' }} aria-hidden>■</span> {curName}</span>
-          <span><span aria-hidden>┄</span> {lyName}</span>
-        </div>
-      )}
-    </div>
-  );
+function buildSections(t: T): Section[] {
+  // 本期 vs 基期:good / warn 是「变动率」门槛
+  const yoy = (cur: number | null, base: number | null, good: number, warn: number,
+               fmt: (v: number | null) => string, subZh: string): Cell | null => {
+    if (cur == null) return null;
+    const c = chg(cur, base);
+    return { text: fmt(cur), sub: t(subZh, { v: fmt(base), p: sgn(c) }), st: band(c, (x) => x >= good, (x) => x >= warn) };
+  };
+  const cnt = (v: number | null) => (v == null ? '—' : fmtNum(v));
+  return [
+    { title: '① 成长', metrics: [
+      { label: '对外销售 YTD(可比口径)', ref: '年增 8～15% 健康,>20% 高速', note: '剔除平台费 CN 行(ONLINE%);总行剔除卖给分行的部分',
+        cell: (m) => yoy(n(m['sales_ytd']), n(m['sales_ly_ytd']), 0.08, 0, rm, '去年同期 {v} · {p}') },
+      { label: '滚动 12 个月销售', ref: '同上',
+        cell: (m) => yoy(n(m['sales_l12']), n(m['sales_p12']), 0.08, 0, rm, '上一个 12 个月 {v} · {p}') },
+      { label: '近 3 个月 vs 前 3 个月', ref: '环比持平或上升',
+        cell: (m) => { const c = chg(n(m['sales_l3']), n(m['sales_p3'])); if (c == null) return null;
+          return { text: sgn(c), sub: t('近 3 个月 {v} · 比去年同季 {p}', { v: rm(n(m['sales_l3'])), p: sgn(chg(n(m['sales_l3']), n(m['sales_ly3']))) }),
+                   st: band(c, (x) => x >= 0, (x) => x >= -0.05) }; } },
+      { label: '订单数(近 12 个月)', ref: '与销售同向增长',
+        cell: (m) => yoy(n(m['orders_l12']), n(m['orders_p12']), 0.05, 0, cnt, '上一个 12 个月 {v} · {p}') },
+      { label: '客单价(近 12 个月)', ref: '年变动在 ±5% 内',
+        cell: (m) => { const a = div(n(m['sales_l12']), n(m['orders_l12'])), b = div(n(m['sales_p12']), n(m['orders_p12'])); if (a == null) return null;
+          const c = chg(a, b);
+          return { text: 'RM ' + fmtNum(a), sub: t('上一个 12 个月 RM {v} · {p}', { v: fmtNum(b ?? 0), p: sgn(c) }), st: band(c, (x) => x >= -0.05, (x) => x >= -0.1) }; } },
+      { label: '平台商品销售 YTD', ref: '与总体同向;单一平台连续萎缩 >30% 属渠道流失', note: '只有总行有平台客户',
+        cell: (m) => yoy(n(m['plat_goods_ytd']), n(m['plat_goods_ly_ytd']), 0.08, 0, rm, '去年同期 {v} · {p}') },
+      { label: '业务员月目标达标(近 3 个月)', ref: '50～70% 的业务员-月达标', note: '只算月销售 >5 万、有目标的业务员(目标在门店页设定)',
+        cell: (m) => { const h = n(m['agent_hit']), a = n(m['agent_n']); if (!a) return null; const r = div(h, a);
+          return { text: `${fmtNum(h ?? 0)}/${fmtNum(a)}`, sub: pct(r, 0), st: band(r, (x) => x >= 0.5, (x) => x >= 0.3) }; } },
+    ] },
+    { title: '② 获利', metrics: [
+      { label: '商品毛利率(销售口径,近 12 个月)', ref: '卫浴品牌零售 35～45%', note: '零成本行(如对分行调拨)会虚抬毛利,看旁边的占比',
+        cell: (m) => { const v = div(n(m['gp_l12']), n(m['gnet_l12'])); if (v == null) return null;
+          return { text: pct(v), sub: t('上一个 12 个月 {p} · 零成本行占 {z}', { p: pct(div(n(m['gp_p12']), n(m['gnet_p12']))), z: pct(div(n(m['zero_cost_l12']), n(m['goods_l12'])), 0) }),
+                   st: band(v, (x) => x >= 0.4, (x) => x >= 0.3) }; } },
+      { label: '总账净利 YTD', ref: '净利率 5～10%,>10% 优秀', note: '完整月累计;折旧 / 贷款利息 / 董事花红只在 12 月入账,全年会再低几点',
+        cell: (m, c, all) => { const p = profitOf(c, all, 'ytd'); if (p == null) return null;
+          const mg = div(p, n(m['rev_ytd'])); const ly = div(profitOf(c, all, 'ly_ytd'), n(m['rev_ly_ytd']));
+          return { text: rm(p), sub: t('净利率 {m} · 去年同期 {l}', { m: pct(mg), l: pct(ly) }), st: band(mg, (x) => x >= 0.05, (x) => x >= 0) }; } },
+      { label: '费用率 YTD(总账费用 ÷ 对外收入)', ref: '零售批发混合 20～30%',
+        cell: (m) => { const v = div(n(m['ep_ytd']), n(m['rev_ext_ytd'])); if (v == null) return null;
+          return { text: pct(v), sub: t('去年同期 {p}', { p: pct(div(n(m['ep_ly_ytd']), n(m['rev_ext_ly_ytd']))) }), st: band(v, (x) => x <= 0.25, (x) => x <= 0.3) }; } },
+      { label: '平台费率 YTD(总账手续费 ÷ 平台商品销售)', ref: '佣金+手续费 8～12%;含广告 / 联盟 / 优惠券 15～22%',
+        cell: (m) => { const v = div(n(m['plat_fee_ytd']), n(m['plat_goods_ytd'])); if (v == null) return null;
+          return { text: pct(v), sub: t('去年同期 {p}', { p: pct(div(n(m['plat_fee_ly_ytd']), n(m['plat_goods_ly_ytd']))) }), st: band(v, (x) => x <= 0.15, (x) => x <= 0.22) }; } },
+      { label: '平台扣费后毛利率 YTD', ref: '25～35% 才够覆盖运费、包装、人工',
+        cell: (m) => { const g = n(m['plat_gp_ytd']), f = n(m['plat_fee_ytd']), s = n(m['plat_goods_ytd']); if (g == null || !s) return null;
+          const v = (g - (f ?? 0)) / s;
+          return { text: pct(v), sub: t('商品毛利 {g} − 平台费 {f}', { g: rm(g), f: rm(f) }), st: band(v, (x) => x >= 0.25, (x) => x >= 0.15) }; } },
+      { label: '盈亏平衡月销售(总账)', ref: '安全边际 >25% 健康,<10% 危险', note: '近 12 个月总账毛利率与月均费用;集团不适用',
+        cell: (m, c) => { if (c === GP) return null;
+          const r12 = n(m['rev_l12']), co = n(m['co_l12']), ep = n(m['ep_l12']), r3 = div(n(m['rev_l3']), 3);
+          if (!r12 || ep == null || r3 == null) return null;
+          const gm = (r12 - (co ?? 0)) / r12; if (gm <= 0) return { text: '—', sub: t('毛利率为负'), st: 'r' };
+          const be = ep / 12 / gm; const sm = (r3 - be) / r3;
+          return { text: rm(be), sub: t('近 3 个月月均收入 {v} · 安全边际 {p}', { v: rm(r3), p: pct(sm, 0) }), st: band(sm, (x) => x >= 0.25, (x) => x >= 0.1) }; } },
+    ] },
+    { title: '③ 现金与偿债', metrics: [
+      { label: '账面净现金', ref: '为正且不低于年初', note: '银行 + 现金科目累计余额,含透支 / 卡户抵减',
+        cell: (m) => { const v = n(m['net_cash']); if (v == null) return null; const y0 = n(m['net_cash_y0']);
+          return { text: rm(v), sub: t('年初 {a} · 月初 {b}', { a: rm(y0), b: rm(n(m['net_cash_m0'])) }), st: v <= 0 ? 'r' : y0 != null && v < y0 ? 'y' : 'g' }; } },
+      { label: '现金跑道', ref: '3～6 个月营运费用', note: '正余额账户 ÷ 近 12 个月月均费用',
+        cell: (m) => { const e = div(n(m['ep_l12']), 12); const v = div(n(m['cash_pos']), e); if (v == null) return null;
+          return { text: t('{n} 个月', { n: fx(v) }), sub: t('正余额账户 {v} · 月均费用 {e}', { v: rm(n(m['cash_pos'])), e: rm(e) }), st: band(v, (x) => x >= 6, (x) => x >= 3) }; } },
+      { label: '有息负债', ref: '净负债／EBITDA <2.5 倍', note: '定期贷款 + 租购 + 透支;EBITDA 用近 12 个月总账',
+        cell: (m, c, all) => { const d = -((n(m['loans_cl_neg']) ?? 0) + (n(m['ll_neg']) ?? 0) + (n(m['cash_neg']) ?? 0));
+          const nd = d - (n(m['cash_pos']) ?? 0); const e = ebitdaOf(c, all); const r = e != null && e > 0 ? nd / e : null;
+          return { text: rm(d), sub: t('净负债 {v} · 净负债／EBITDA {r} 倍', { v: rm(nd), r: fx(r, 2) }),
+                   st: e != null && e <= 0 ? 'r' : nd <= 0 ? 'g' : band(r, (x) => x <= 2.5, (x) => x <= 3.5) }; } },
+      { label: '利息保障倍数(近 12 个月)', ref: '>4 倍', note: 'EBIT ÷ 利息',
+        cell: (m, c, all) => { const i = n(m['int_l12']); const e = ebitdaOf(c, all); if (!i || i <= 0 || e == null) return null;
+          const v = (e - (n(m['dep_l12']) ?? 0)) / i;
+          return { text: t('{x} 倍', { x: fx(v) }), sub: t('利息 {v}', { v: rm(i) }), st: band(v, (x) => x >= 4, (x) => x >= 2) }; } },
+      { label: '流动比率 / 速动比率', ref: '流动 1.5～2.5,速动 0.8～1.2', note: '总账流动资产 ÷ 流动负债;集团不适用(内部往来未抵销)',
+        cell: (m, c) => { if (c === GP) return null;
+          const stock = n(m['stock_cost']) ?? 0;
+          const ca = (n(m['cash_pos']) ?? 0) + (n(m['ar_gl_pos']) ?? 0) + stock + (n(m['ca_other_pos']) ?? 0) + (n(m['ap_gl_prepaid']) ?? 0);
+          const cl = -((n(m['cash_neg']) ?? 0) + (n(m['ap_gl_neg']) ?? 0) + (n(m['cl_other_neg']) ?? 0) + (n(m['ar_gl_neg']) ?? 0));
+          if (cl <= 0) return null;
+          const cur = ca / cl, q = (ca - stock) / cl;
+          return { text: `${fx(cur, 2)} / ${fx(q, 2)}`, sub: t('流动资产 {a} · 流动负债 {b}', { a: rm(ca), b: rm(cl) }),
+                   st: cur >= 1.5 && q >= 0.8 ? 'g' : cur >= 1 && q >= 0.5 ? 'y' : 'r' }; } },
+      { label: '净现金年初至今变动', ref: '加回本金与资本开支后应 ≥ 净利的 70～100%', note: '这里只加回资本开支,没加回贷款本金偿还,所以偏低',
+        cell: (m, c, all) => { const v = n(m['net_cash']), y0 = n(m['net_cash_y0']); if (v == null || y0 == null) return null;
+          const d = v - y0 + (n(m['capex_ytd']) ?? 0); const p = profitOf(c, all, 'ytd');
+          return { text: rm(v - y0), sub: t('加回资本开支 {v} = 净利的 {p}', { v: rm(d), p: pct(div(d, p), 0) }), st: 'i' }; } },
+      { label: '现金转换周期 CCC', ref: '60～120 天;进口自有品牌可到 150', note: 'DSO(B2B 应收)+ DIO(库存)− DPO(应付)',
+        cell: (m) => { const a = dso(m), b = dio(m), d = dpo(m); if (b == null) return null; const v = (a ?? 0) + b - (d ?? 0);
+          return { text: t('{n} 天', { n: fmtNum(Math.round(v)) }), sub: `DSO ${fx(a, 0)} + DIO ${fx(b, 0)} − DPO ${fx(d, 0)}`, st: band(v, (x) => x <= 120, (x) => x <= 180) }; } },
+    ] },
+    { title: '④ 应收', metrics: [
+      { label: 'B2B 应收天数 DSO', ref: '30～45 天', note: '应收发票 ÷ 近 90 天赊销日均(剔平台、现金柜台、分行)',
+        cell: (m) => { const v = dso(m); if (v == null) return null;
+          return { text: t('{n} 天', { n: fx(v) }), sub: t('应收发票 {v}', { v: rm(n(m['ar_inv'])) }), st: band(v, (x) => x <= 45, (x) => x <= 60) }; } },
+      { label: '逾期 >60 天占比', ref: '>60 天 <10%',
+        cell: (m) => { const v = div(n(m['ar_over60']), n(m['ar_inv'])); if (v == null) return null;
+          return { text: pct(v), sub: t('>90 天 {a} · >1 年 {b}', { a: rm(n(m['ar_over90'])), b: rm(n(m['ar_over365'])) }), st: band(v, (x) => x <= 0.1, (x) => x <= 0.2) }; } },
+      { label: '应收集中度(前 10 大)', ref: '<50% 分散', note: '集团不适用',
+        cell: (m, c) => { if (c === GP) return null; const v = div(n(m['ar_top10']), n(m['ar_pos_total'])); if (v == null) return null;
+          return { text: pct(v, 0), st: band(v, (x) => x <= 0.5, (x) => x <= 0.7) }; } },
+      { label: '未核销收款', ref: '现金柜台应接近 0', note: '总行 = 现金柜台客户(CASH)的未核销收款;分行 = 全部未核销收款,多为客户订金(正常)',
+        cell: (m, c) => { if (c === GP) return null; const v = c === HQ ? n(m['cash_counter_unapplied']) : n(m['deposits_rp']); if (v == null) return null;
+          const a = Math.abs(v);
+          return { text: rm(a), sub: c === HQ ? t('现金柜台') : t('多为订金'), st: c === HQ ? band(a, (x) => x <= 10000, (x) => x <= 50000) : 'i' }; } },
+      { label: '分行欠总行', ref: '集团内往来,风险性质不同',
+        cell: (m, c) => { if (c !== HQ) return null; const v = n(m['ar_h008']); if (v == null) return null; return { text: rm(v), st: 'i' }; } },
+    ] },
+    { title: '⑤ 库存', metrics: [
+      { label: '库存成本(正库存)', ref: '库存增速不应高于销售', note: '不含次品 / 展示仓与虚拟商品;变化率用每日快照',
+        cell: (m) => { const v = n(m['stock_cost']); if (v == null) return null; const c = chg(n(m['stock_snap_now']), n(m['stock_snap_30']));
+          return { text: rm(v), sub: t('30 天变化 {p}', { p: sgn(c) }), st: band(c, (x) => x <= 0, (x) => x <= 0.05) }; } },
+      { label: '库存天数 DIO / 周转', ref: '90～150 天 / 2.5～4 次', note: '按近 12 个月总账采购额(AutoCount Basic 没有存货科目)',
+        cell: (m) => { const v = dio(m); if (v == null) return null;
+          return { text: t('{n} 天', { n: fmtNum(Math.round(v)) }), sub: t('周转 {x} 次／年', { x: fx(365 / v) }), st: band(v, (x) => x <= 150, (x) => x <= 200) }; } },
+      { label: '库存 ÷ 月商品销售(近 3 个月)', ref: '3～5 个月',
+        cell: (m) => { const v = div(n(m['stock_cost']), div(n(m['gnet_l3']), 3)); if (v == null) return null;
+          return { text: t('{n} 个月', { n: fx(v) }), st: band(v, (x) => x <= 5, (x) => x <= 7) }; } },
+      { label: '呆滞库存(180 天无销售)', ref: '<10%,>15% 要清仓',
+        cell: (m) => { const v = n(m['dead_180']); if (v == null) return null; const p = div(v, n(m['aging_total']));
+          return { text: rm(v), sub: t('占 {p} · 从未售出 {v}', { p: pct(p, 0), v: rm(n(m['never_sold'])) }), st: band(p, (x) => x <= 0.1, (x) => x <= 0.15) }; } },
+      { label: '缺货暴露', ref: '断货品项占销售 <10%', note: '30 天内断货的品项占近 90 天商品销售',
+        cell: (m) => { const v = div(n(m['low_s90']), n(m['goods_90'])); if (v == null) return null;
+          return { text: pct(v, 0), sub: t('{n} 项 30 天内断货', { n: fmtNum(n(m['low_n']) ?? 0) }), st: band(v, (x) => x <= 0.1, (x) => x <= 0.2) }; } },
+      { label: '负库存', ref: '应为 0',
+        cell: (m) => { const v = n(m['neg_rows']); if (v == null) return null;
+          return { text: t('{n} 行', { n: fmtNum(v) }), sub: t('残留成本 {v}', { v: rm(n(m['neg_cost'])) }), st: band(v, (x) => x === 0, (x) => x <= 50) }; } },
+      { label: '商品退货率(近 12 个月)', ref: '<2% 良好',
+        cell: (m) => { const v = div(n(m['goods_cn_l12']), n(m['goods_l12'])); if (v == null) return null;
+          return { text: pct(v), sub: t('上一个 12 个月 {p}', { p: pct(div(n(m['goods_cn_p12']), n(m['goods_p12']))) }), st: band(v, (x) => x <= 0.02, (x) => x <= 0.04) }; } },
+    ] },
+    { title: '⑥ 客户与渠道', metrics: [
+      { label: '平台占比(商品口径,近 12 个月)', ref: '任一渠道 <35～40%', note: '只有总行有平台客户',
+        cell: (m) => { const v = div(n(m['plat_goods_l12']), n(m['goods_l12'])); if (v == null) return null;
+          return { text: pct(v, 0), st: band(v, (x) => x <= 0.4, (x) => x <= 0.55) }; } },
+      { label: '活跃具名客户(近 12 个月)', ref: '不减少', note: '总行 = B2B 客户(剔平台、现金柜台、分行);分行 = 全部具名客户',
+        cell: (m) => yoy(n(m['cust_active_l12']), n(m['cust_active_p12']), 0, -0.05, cnt, '上一个 12 个月 {v} · {p}') },
+      { label: '客户留存率', ref: '留存 >75%', note: '只评总行 B2B;零售装修客多为一次性,分行 / 集团只供参考',
+        cell: (m, c) => { const v = div(n(m['cust_retained']), n(m['cust_active_p12'])); if (v == null) return null;
+          return { text: pct(v, 0), sub: t('流失 {n} 家(原贡献 {v})', { n: fmtNum(n(m['cust_lost']) ?? 0), v: rm(n(m['cust_lost_sales'])) }), st: c === HQ ? band(v, (x) => x >= 0.75, (x) => x >= 0.6) : 'i' }; } },
+      { label: '新客贡献(近 12 个月)', ref: '成熟 B2B 10～30%;新店 >50% 正常',
+        cell: (m) => { const v = div(n(m['cust_new_sales_l12']), n(m['named_l12'])); if (v == null) return null;
+          return { text: pct(v, 0), sub: t('{n} 家新客 · {v}', { n: fmtNum(n(m['cust_new_l12']) ?? 0), v: rm(n(m['cust_new_sales_l12'])) }), st: 'i' }; } },
+      { label: '客户集中度(前 10 大)', ref: '<50% 分散', note: '集团不适用',
+        cell: (m, c) => { if (c === GP) return null; const v = div(n(m['top10_l12']), n(m['named_l12'])); if (v == null) return null;
+          return { text: pct(v, 0), st: band(v, (x) => x <= 0.5, (x) => x <= 0.7) }; } },
+    ] },
+    { title: '⑦ 应付与采购', metrics: [
+      { label: '应付发票未付', ref: '>90 天 <25%',
+        cell: (m) => { const v = n(m['ap_inv']); if (v == null) return null; const p = div(n(m['ap_over90']), v);
+          return { text: rm(v), sub: t('>90 天占 {p} · 关联公司 HOMEGUARD {v}', { p: pct(p, 0), v: rm(n(m['ap_related'])) }), st: band(p, (x) => x <= 0.25, (x) => x <= 0.5) }; } },
+      { label: '应付天数 DPO', ref: '本地供应商 30～60 天', note: '应付发票 ÷ 近 12 个月采购日均',
+        cell: (m) => { const v = dpo(m); if (v == null) return null;
+          return { text: t('{n} 天', { n: fx(v) }), st: v >= 30 && v <= 60 ? 'g' : v >= 20 && v <= 90 ? 'y' : 'r' }; } },
+      { label: '供应商预付(未核销付款)', ref: '进口订金正常,但须核销',
+        cell: (m) => { const v = n(m['ap_unapplied']); if (v == null) return null;
+          return { text: rm(-v), sub: t('净应付 {v}', { v: rm(n(m['ap_net'])) }), st: 'i' }; } },
+      { label: '未交采购单', ref: '逾期未交 <10%',
+        cell: (m) => { const v = n(m['open_po_n']); if (v == null) return null; const o = n(m['open_po_old_n']); const p = div(o, v);
+          return { text: t('{n} 张', { n: fmtNum(v) }), sub: t('金额 {v} · 逾一年 {o} 张', { v: rm(n(m['open_po'])), o: fmtNum(o ?? 0) }),
+                   st: v === 0 ? 'g' : band(p, (x) => x <= 0.1, (x) => x <= 0.3) }; } },
+      { label: '未交付订单积压', ref: '≤ 1～1.5 个月销售', note: '积压金额 ÷ 近 3 个月周均销售',
+        cell: (m) => { const v = n(m['backlog']); if (v == null) return null; const w = div(v, div(n(m['sales_l3']), 13));
+          return { text: rm(v), sub: t('≈ {w} 周销售 · >90 天占 {p}', { w: fx(w), p: pct(div(n(m['backlog_over90']), v), 0) }), st: band(w, (x) => x <= 6, (x) => x <= 8) }; } },
+      { label: '报价转单率', ref: '40～60%',
+        cell: (m) => { const w = n(m['quote_won']), o = n(m['quote_open']); if (w == null && o == null) return null;
+          const v = div(w ?? 0, (w ?? 0) + (o ?? 0));
+          return { text: pct(v, 0), sub: t('未转单 {v}', { v: rm(o) }), st: band(v, (x) => x >= 0.4, (x) => x >= 0.3) }; } },
+    ] },
+    { title: '⑧ 人效与费用', metrics: [
+      { label: '人力成本率 YTD', ref: '8～12%', note: '薪资、EPF / SOCSO、津贴、花红、佣金、董事酬劳 ÷ 对外收入',
+        cell: (m) => { const v = div(n(m['staff_ytd']), n(m['rev_ext_ytd'])); if (v == null) return null;
+          return { text: pct(v), sub: t('去年同期 {p}', { p: pct(div(n(m['staff_ly_ytd']), n(m['rev_ext_ly_ytd']))) }), st: band(v, (x) => x <= 0.12, (x) => x <= 0.15) }; } },
+      { label: '广告费率 YTD', ref: '2～5%',
+        cell: (m) => { const v = div(n(m['adv_ytd']), n(m['rev_ext_ytd'])); if (v == null) return null;
+          return { text: pct(v), sub: t('去年同期 {p}', { p: pct(div(n(m['adv_ly_ytd']), n(m['rev_ext_ly_ytd']))) }), st: band(v, (x) => x <= 0.05, (x) => x <= 0.08) }; } },
+      { label: '佣金率 YTD', ref: '<3%(已计入人力成本)',
+        cell: (m) => { const v = div(n(m['comm_ytd']), n(m['rev_ext_ytd'])); if (v == null) return null;
+          return { text: pct(v), sub: rm(n(m['comm_ytd'])), st: band(v, (x) => x <= 0.03, (x) => x <= 0.06) }; } },
+      { label: '租金 / 运输费率 YTD', ref: '租金 3～6%',
+        cell: (m) => { const r = div(n(m['rent_ytd']), n(m['rev_ext_ytd'])), tr = div(n(m['trans_ytd']), n(m['rev_ext_ytd']));
+          if (r == null && tr == null) return null; return { text: `${pct(r)} / ${pct(tr)}`, st: 'i' }; } },
+      { label: '经营杠杆 YTD', ref: '收入增速 > 费用增速',
+        cell: (m) => { const rg = chg(n(m['rev_ext_ytd']), n(m['rev_ext_ly_ytd'])), eg = chg(n(m['ep_ytd']), n(m['ep_ly_ytd']));
+          if (rg == null || eg == null) return null;
+          return { text: t('收入 {a} vs 费用 {b}', { a: sgn(rg), b: sgn(eg) }), st: rg >= eg ? 'g' : rg >= eg - 0.1 ? 'y' : 'r' }; } },
+    ] },
+  ];
 }
-
-function HealthCard({ title, value, light, ly, lines, chart, explain, rule }: {
-  title: string; value: string; light: Light; ly: string; lines: (string | false | null)[];
-  chart: ReactNode; explain: string; rule: string;
-}) {
-  const t = useT();
-  return (
-    <div className="card card-block" style={{ borderTop: `3px solid ${LIGHT_COLOR[light]}`, margin: 0, minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <h2 style={{ margin: 0 }}>{title}</h2>
-        <LightBadge light={light} />
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 700, margin: '6px 0 2px', color: 'var(--ink)' }}>{value}</div>
-      <div className="muted" style={{ fontSize: 12.5 }}>{t('去年同期')}: {ly}</div>
-      {lines.filter(Boolean).map((l, i) => (
-        <div key={i} style={{ fontSize: 12.5, marginTop: 3, color: 'var(--ink)' }}>{l}</div>
-      ))}
-      {chart}
-      <p style={{ fontSize: 12.5, margin: '8px 0 4px', color: 'var(--ink)' }}>{explain}</p>
-      <p className="muted" style={{ fontSize: 11.5, margin: 0 }}>{rule}</p>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <>
-      <h2 style={{ fontSize: 14, color: 'var(--muted)', margin: '18px 0 8px', fontWeight: 600 }}>{title}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: 14 }}>
-        {children}
-      </div>
-    </>
-  );
-}
-
-/* ---------- 分页 ---------- */
 
 export default function Health() {
   const t = useT();
-  const [months, setMonths] = useState<Monthly[] | null>(null);
-  const [now, setNow] = useState<Now | null>(null);
-  const [snaps, setSnaps] = useState<Snap[]>([]);
+  const [all, setAll] = useState<All | null>(null);
+  const [meta, setMeta] = useState<{ asOf: string; at: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const [m, w, s] = await Promise.all([
-        supabase.from('bi_health_monthly').select('*').eq('company', COMPANY).order('yr').order('mth'),
-        supabase.from('bi_health_now').select('*').eq('company', COMPANY).maybeSingle(),
-        supabase.from('bi_health_snapshot').select('*').eq('company', COMPANY).order('snap_date'),
-      ]);
-      const failed = [m.error, w.error, s.error].filter(Boolean);
-      setErr(failed.length ? failed.map((e) => e!.message).join(' / ') : null);
-      setMonths((m.data ?? []).map((r: Record<string, unknown>) => ({
-        yr: n(r.yr), mth: n(r.mth), net: n(r.net), net_ic: n(r.net_ic),
-        sales_costed: n(r.sales_costed), cost_costed: n(r.cost_costed), gross_goods: n(r.gross_goods),
-        sales_nocost: n(r.sales_nocost), sales_nocost_ic: n(r.sales_nocost_ic), nocost_lines: n(r.nocost_lines),
-        last_date: (r.last_date as string | null) ?? null,
-        gl_sales: nn(r.gl_sales), gl_sa: nn(r.gl_sa), gl_co: nn(r.gl_co), gl_purch: nn(r.gl_purch), gl_ep: nn(r.gl_ep),
-      })));
-      const wr = w.data as Record<string, unknown> | null;
-      setNow(wr ? {
-        as_of: String(wr.as_of), ly_as_of: String(wr.ly_as_of ?? ''),
-        last_sales_date: (wr.last_sales_date as string | null) ?? null,
-        mtd_net: n(wr.mtd_net), mtd_ic: n(wr.mtd_ic), ly_mtd_net: n(wr.ly_mtd_net), ly_mtd_ic: n(wr.ly_mtd_ic),
-        ytd_net: n(wr.ytd_net), ytd_ic: n(wr.ytd_ic), ly_ytd_net: n(wr.ly_ytd_net), ly_ytd_ic: n(wr.ly_ytd_ic),
-        refreshed_at: (wr.refreshed_at as string | null) ?? null,
-        synced_at: (wr.synced_at as string | null) ?? null,
-      } : null);
-      setSnaps((s.data ?? []).map((r: Record<string, unknown>) => ({
-        snap_date: String(r.snap_date), source: String(r.source),
-        stock_cost: nn(r.stock_cost), stock_excluded: nn(r.stock_excluded), stock_neg: nn(r.stock_neg),
-        slow_cost: nn(r.slow_cost), aging_total: nn(r.aging_total),
-        ar_pos: nn(r.ar_pos), ar_neg: nn(r.ar_neg), ar_over90: nn(r.ar_over90), ar_ic: nn(r.ar_ic),
-        ap_pos: nn(r.ap_pos), ap_neg: nn(r.ap_neg),
-        sales_90: n(r.sales_90), sales_costed_90: n(r.sales_costed_90), cost_costed_90: n(r.cost_costed_90),
-        sales_nocost_90: n(r.sales_nocost_90), purch_3m: nn(r.purch_3m), purch_days: nn(r.purch_days),
-        refreshed_at: String(r.refreshed_at),
-      })));
-    })();
+    supabase.from('bi_healthcheck').select('company,as_of,m,refreshed_at').then(({ data, error }) => {
+      if (error) { setErr(error.message); return; }
+      const rows = (data ?? []) as { company: string; as_of: string; m: M | null; refreshed_at: string }[];
+      const a: All = {};
+      rows.forEach((r) => { a[r.company] = r.m ?? {}; });
+      if (a[HQ] && a[BR]) {
+        const g: M = { ...(a[GP] ?? {}) };
+        EXTRA.forEach((k) => { if (g[k] == null) g[k] = add(n(a[HQ][k]), n(a[BR][k])); });
+        a[GP] = g;
+      }
+      setAll(a);
+      if (rows[0]) setMeta({ asOf: String(rows[0].as_of), at: new Date(String(rows[0].refreshed_at)).toLocaleString('en-MY', { hour12: false }) });
+    });
   }, []);
 
-  const calc = useMemo(() => {
-    if (!months || !now) return null;
-    const key = (p: YM) => p.yr * 100 + p.mth;
-    const byKey = new Map(months.map((r) => [key(r), r]));
-    const get = (p: YM) => byKey.get(key(p));
-    // as_of 是「已完整同步的最后一天」;它的下一天所在的月份才是还没完整的「本月」
-    // (例:as_of = 10-31 时,10 月已经完整,算进近 12 个完整月)
-    const [cy, cm] = addDays(now.as_of, 1).split('-').map(Number);
-    // 近 12 个「完整」月(不含本月)
-    const complete: YM[] = [];
-    for (let i = 12; i >= 1; i--) {
-      const d = new Date(cy, cm - 1 - i, 1);
-      complete.push({ yr: d.getFullYear(), mth: d.getMonth() + 1 });
-    }
-    const last3 = complete.slice(-3);
-    const lyOf = (p: YM): YM => ({ yr: p.yr - 1, mth: p.mth });
-    const sumOver = (ps: YM[], f: (r: Monthly) => number) => ps.reduce((s, p) => { const r = get(p); return s + (r ? f(r) : 0); }, 0);
-    const hasAll = (ps: YM[], f: (r: Monthly) => boolean) => ps.every((p) => { const r = get(p); return !!r && f(r); });
-    const rangeLabel = (ps: YM[]) => `${ymLabel(ps[0].yr, ps[0].mth)} ~ ${ymLabel(ps[ps.length - 1].yr, ps[ps.length - 1].mth)}`;
-    const series = (f: (p: YM) => number | null): Pt[] =>
-      complete.map((p) => ({ label: ymShort(p), cur: f(p), ly: f(lyOf(p)) }));
-
-    // ① 营收增长(不含卖给分行的集团内调拨)
-    const ytd = now.ytd_net - now.ytd_ic, lyYtd = now.ly_ytd_net - now.ly_ytd_ic;
-    const mtd = now.mtd_net - now.mtd_ic, lyMtd = now.ly_mtd_net - now.ly_mtd_ic;
-    const revG = lyYtd > 0 ? ((ytd - lyYtd) / lyYtd) * 100 : null;
-    const mtdG = lyMtd > 0 ? ((mtd - lyMtd) / lyMtd) * 100 : null;
-    const icG = now.ly_ytd_ic > 0 ? ((now.ytd_ic - now.ly_ytd_ic) / now.ly_ytd_ic) * 100 : null;
-    const revLight: Light = revG === null ? 'na' : revG >= TH.revGreenMin ? 'g' : revG < TH.revRedBelow ? 'r' : 'y';
-    const revSeries = series((p) => { const r = get(p); return r ? r.net - r.net_ic : null; });
-
-    // ② 可信毛利率(只算有成本记录的行);早于 GM_RELIABLE_FROM 的月份成本资料异常,不拿来比
-    const gmFloor = GM_RELIABLE_FROM[COMPANY];
-    const gmReliable = (p: YM) => !gmFloor || !ymBefore(p, gmFloor);
-    const gmOf = (ps: YM[]) => {
-      if (!ps.every(gmReliable)) return null;
-      if (!hasAll(ps, (r) => r.sales_costed > 0)) return null;
-      const s = sumOver(ps, (r) => r.sales_costed), c = sumOver(ps, (r) => r.cost_costed);
-      return s > 0 ? ((s - c) / s) * 100 : null;
-    };
-    const gm = gmOf(last3), gmLy = gmOf(last3.map(lyOf));
-    const curYM: YM = { yr: cy, mth: cm };
-    const gmMtd = (() => { const r = get(curYM); return r && r.sales_costed > 0 ? ((r.sales_costed - r.cost_costed) / r.sales_costed) * 100 : null; })();
-    const gmDelta = gm !== null && gmLy !== null ? gm - gmLy : null;
-    const gmLight: Light = gmDelta === null ? 'na' : gmDelta <= -TH.gmRedDrop ? 'r' : gmDelta <= -TH.gmYellowDrop ? 'y' : 'g';
-    const glOk = hasAll(complete, (r) => r.gl_sales !== null);
-    const glSales12 = sumOver(complete, (r) => (r.gl_sales ?? 0) - (r.gl_sa ?? 0));
-    const glGm = glOk && glSales12 > 0 ? ((glSales12 - sumOver(complete, (r) => r.gl_co ?? 0)) / glSales12) * 100 : null;
-    const gmMonth = (p: YM) => { const r = get(p); return gmReliable(p) && r && r.sales_costed > 0 ? ((r.sales_costed - r.cost_costed) / r.sales_costed) * 100 : null; };
-    const gmSeries = series(gmMonth);
-    const gmLyHidden = complete.some((p) => !gmReliable(lyOf(p)));
-
-    // ③ 费用率 = 总账 EP ÷ 销售(发票 + 现金单 − 贷项单,不含卖给分行;与营收卡片同口径)
-    //    总部卖给分行的调拨(每月约 RM0.8～0.9M)不算销售,否则费用率会被稀释成一半左右。
-    //    总账月份还没过账(gl_sales 为 null)就不算。
-    const extSales = (r: Monthly) => r.net - r.net_ic;
-    const glSalesOf = (r: Monthly) => (r.gl_sales ?? 0) - (r.gl_sa ?? 0);
-    const epOf = (ps: YM[]) => {
-      if (!hasAll(ps, (r) => r.gl_sales !== null)) return null;
-      const s = sumOver(ps, extSales), e = sumOver(ps, (r) => r.gl_ep ?? 0);
-      return s > 0 ? (e / s) * 100 : null;
-    };
-    const ep = epOf(last3), epLy = epOf(last3.map(lyOf));
-    const epDelta = ep !== null && epLy !== null ? ep - epLy : null;
-    const epLight: Light = epDelta === null ? 'na' : epDelta >= TH.epRedRise ? 'r' : epDelta >= TH.epYellowRise ? 'y' : 'g';
-    const ep3 = sumOver(last3, (r) => r.gl_ep ?? 0), epSales3 = sumOver(last3, extSales);
-    // 参考:分母用总账销售(SL − SA,总部含卖给分行)
-    const epGlSales3 = sumOver(last3, glSalesOf);
-    const epGl = hasAll(last3, (r) => r.gl_sales !== null) && epGlSales3 > 0 ? (ep3 / epGlSales3) * 100 : null;
-    const epSeries = series((p) => { const r = get(p); return r && r.gl_sales !== null && extSales(r) > 0 ? ((r.gl_ep ?? 0) / extSales(r)) * 100 : null; });
-
-    // ⑨ 资料品质:没有成本的销售占比
-    const ncOf = (ps: YM[]) => {
-      const g = sumOver(ps, (r) => r.gross_goods);
-      return hasAll(ps, (r) => r.gross_goods > 0) && g > 0 ? (sumOver(ps, (r) => r.sales_nocost) / g) * 100 : null;
-    };
-    const nc = ncOf(last3), ncLy = ncOf(last3.map(lyOf));
-    const ncAmt = sumOver(last3, (r) => r.sales_nocost);
-    const ncIcPct = ncAmt > 0 ? (sumOver(last3, (r) => r.sales_nocost_ic) / ncAmt) * 100 : 0;
-    const ncLines = Math.round(sumOver(last3, (r) => r.nocost_lines) / 3);
-    const ncLight = lightLow(nc, TH.nocostGreen, TH.nocostRed);
-    const ncSeries = series((p) => { const r = get(p); return r && r.gross_goods > 0 ? (r.sales_nocost / r.gross_goods) * 100 : null; });
-
-    // ④～⑧ 余额类(每日快照)
-    const live = snaps.filter((s) => s.source === 'live');
-    const latest = live.length ? live[live.length - 1] : null;
-    const firstStock = snaps.find((s) => s.stock_cost !== null)?.snap_date ?? null;
-    const firstLive = live.length ? live[0].snap_date : null;
-    const snapSeries = (f: (s: Snap) => number | null): Pt[] =>
-      snaps.map((s) => ({ label: s.snap_date.slice(5), cur: f(s) }));
-
-    const dio = latest ? dioOf(latest) : null;
-    const dso = latest ? dsoOf(latest) : null;
-    const dpo = latest ? dpoOf(latest) : null;
-    const ccc = latest ? cccOf(latest) : null;
-    const slow = latest ? slowOf(latest) : null;
-    const ar90 = latest && latest.ar_pos ? ((latest.ar_over90 ?? 0) / latest.ar_pos) * 100 : null;
-    const dpoLight: Light = dpo === null ? 'na'
-      : dpo > TH.dpoRed ? 'r' : dpo < TH.dpoLow || dpo > TH.dpoHigh ? 'y' : 'g';
-
-    const lights = {
-      rev: revLight, gm: gmLight, ep: epLight,
-      dio: lightLow(dio, TH.dioGreen, TH.dioRed), slow: lightLow(slow, TH.slowGreen, TH.slowRed),
-      dso: worse(lightLow(dso, TH.dsoGreen, TH.dsoRed), lightLow(ar90, TH.ar90Green, TH.ar90Red)),
-      dpo: dpoLight, ccc: lightLow(ccc, TH.cccGreen, TH.cccRed),
-    };
-    return {
-      complete, last3, rangeLabel,
-      ytd, lyYtd, mtd, lyMtd, revG, mtdG, icG, revSeries,
-      gm, gmLy, gmMtd, gmDelta, glGm, gmSeries, gmLyHidden,
-      ep, epLy, epDelta, ep3, epSales3, epGl, epSeries,
-      nc, ncLy, ncAmt, ncIcPct, ncLines, ncLight, ncSeries,
-      latest, firstStock, firstLive, snapSeries, dio, dso, dpo, ccc, slow, ar90,
-      lights,
-    };
-  }, [months, now, snaps]);
-
-  if (months === null) return <div className="loading">{t('载入中…')}</div>;
   if (err) return <div className="notice">{t('查询失败(此页仅老板账号可看):')}{err}</div>;
-  if (!now || !calc) {
-    return (
-      <div className="notice">
-        {t('{c} 还没有每日同步的销售 / 库存资料,健康度无法计算。', { c: t(COMPANIES[COMPANY] ?? COMPANY) })}
-        {' '}{t('(KL 目前只有「实际销售」分页的资料;此页仅老板账号可看。)')}
-      </div>
-    );
-  }
+  if (!all) return <div className="loading">{t('载入中…')}</div>;
+  if (!all[HQ]) return <div className="notice">{t('快照还没有产生:请等排程(每 3 小时)跑过 bi.refresh_healthcheck(),或在 Supabase 手动执行一次。')}</div>;
 
-  const c = calc;
-  const L = c.lights;
-  const days = (v: number | null) => (v === null ? '—' : t('{n} 天', { n: fmtNum(Math.round(v)) }));
-  const lyAsOf = now.ly_as_of || `${Number(now.as_of.slice(0, 4)) - 1}${now.as_of.slice(4)}`;
-  const ytdStart = `${now.as_of.slice(0, 4)}-01-01`, lyYtdStart = `${lyAsOf.slice(0, 4)}-01-01`;
-  const mtdStart = `${now.as_of.slice(0, 7)}-01`, lyMtdStart = `${lyAsOf.slice(0, 7)}-01`;
-  // as_of 比「昨天」还早 = 今天还没同步(分行电脑没开机),数字少算了几天
-  const stale = now.as_of < addDays(todayMY(), -1);
-  const hasIc = now.ytd_ic !== 0 || now.ly_ytd_ic !== 0;
-  const s = c.latest;
-  const noLyBalance = t('没有去年的余额资料');
-  const fromNote = (d: string | null) => (d ? t('每天自动累积,{d} 起才有资料;过几天就会出现趋势线。', { d }) : t('还没有快照资料'));
-
-  // 页首总结
-  const core: [string, Light][] = [
-    [t('营收增长'), L.rev], [t('可信毛利率'), L.gm], [t('费用率'), L.ep],
-    [t('库存周转天数'), L.dio], [t('滞销库存占比'), L.slow],
-    [t('应收天数'), L.dso], [t('应付天数'), L.dpo], [t('现金周期'), L.ccc],
-  ];
-  const cnt = (l: Light) => core.filter(([, x]) => x === l).length;
-  const reds = core.filter(([, x]) => x === 'r').map(([name]) => name);
-  const yellows = core.filter(([, x]) => x === 'y').map(([name]) => name);
+  const sections = buildSections(t);
+  const colLabel: Record<string, string> = { [HQ]: t('总行'), [BR]: t('分行 JB'), [GP]: t('集团') };
+  const cells = sections.map((s) => s.metrics.map((mt) => COLS.map((c) => (all[c] ? mt.cell(all[c], c, all) : null))));
+  const counts = COLS.map((_, ci) => {
+    const k = { g: 0, y: 0, r: 0 };
+    cells.forEach((s) => s.forEach((row) => { const cell = row[ci]; if (cell && cell.st !== 'i') k[cell.st]++; }));
+    return k;
+  });
 
   return (
     <>
-      <div className="notice" style={{ marginBottom: 6 }}>
-        <strong>{t('公司健康度')}</strong> · {t(COMPANIES[COMPANY] ?? COMPANY)} · {t('{n} 个核心指标:', { n: core.length })}
-        {' '}<span style={{ color: LIGHT_COLOR.g }} aria-hidden>●</span> {t('{k} 个正常', { k: cnt('g') })}
-        {' · '}<span style={{ color: LIGHT_COLOR.y }} aria-hidden>▲</span> {t('{k} 个留意', { k: cnt('y') })}
-        {' · '}<span style={{ color: LIGHT_COLOR.r }} aria-hidden>■</span> {t('{k} 个警示', { k: cnt('r') })}
-        {cnt('na') > 0 && <> · {t('{k} 个资料不足', { k: cnt('na') })}</>}
-        <div style={{ marginTop: 4 }}>
-          {reds.length > 0
-            ? t('先问红灯:{list}。', { list: reds.join(t('、')) })
-            : yellows.length > 0 ? t('没有红灯;留意:{list}。', { list: yellows.join(t('、')) }) : t('全部正常,在轨道上。')}
-          {' '}{t('资料品质:')}<LightBadge light={c.ncLight} />
-        </div>
-        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          {t('销售算到 {d}(已完整同步的最后一天),去年同期也算到 {ly}', { d: now.as_of, ly: lyAsOf })}
-          {' · '}{t('最后同步 {t}', { t: fmtTime(now.synced_at) })}
-          {stale && <> · <strong style={{ color: 'var(--ink)' }}>{t('今天还没同步,所以只算到 {d}', { d: now.as_of })}</strong></>}
-          {' · '}{t('余额快照更新于 {t}', { t: fmtTime(now.refreshed_at) })}
-        </div>
+      <div className="notice" style={{ marginBottom: 14 }}>
+        🩺 <strong>{t('公司健康体检')}</strong> · {t('数据截至 {d}', { d: meta?.asOf ?? '' })} · {t('最后重算 {t}', { t: meta?.at ?? '' })} · {t('每 3 小时随同步重算。')}
+        {t('参考区间是同规模马来西亚卫浴 / 五金零售批发商的常见范围,供判断方向用,不是官方标准;口径见 docs/health_check_2026-10.md。')}
       </div>
 
-      <Section title={t('① 成长与获利')}>
-        <HealthCard
-          title={t('营收增长')} light={L.rev}
-          value={c.revG === null ? '—' : signed(c.revG) + '%'}
-          ly={t('{a}({s} ～ {d})', { a: fmtRM(c.lyYtd), s: lyYtdStart, d: lyAsOf })}
-          lines={[
-            t('今年累计 {a}({s} ～ {d})', { a: fmtRM(c.ytd), s: ytdStart, d: now.as_of }),
-            t('当月累计 {a}({s} ～ {d})· 去年同期 {b}({ls} ～ {ld},{p})', {
-              a: fmtRM(c.mtd), s: mtdStart, d: now.as_of, b: fmtRM(c.lyMtd), ls: lyMtdStart, ld: lyAsOf,
-              p: c.mtdG === null ? '—' : signed(c.mtdG) + '%',
-            }),
-            hasIc && t('另有卖给分行(集团内调拨):今年至今 {a},去年同期 {b}({p})',
-              { a: fmtRM(now.ytd_ic), b: fmtRM(now.ly_ytd_ic), p: c.icG === null ? '—' : signed(c.icG) + '%' }),
-          ]}
-          chart={<Spark data={c.revSeries} kind="bar" fmt={fmtRM} curName={t('近 12 个月')} lyName={t('去年同月')} />}
-          explain={t('生意有没有比去年大。看「今年累计」比较稳,月初的「当月累计」天数少、起伏大。总部的数字不含卖给分行的调拨(那是集团内部转货,分行自己的销售请切换到分行看)。')}
-          rule={t('灯号:今年累计比去年同期 ≥ +{g}% 绿;{r}% ～ +{g}% 黄;低于 {r}% 红。', { g: TH.revGreenMin, r: TH.revRedBelow })}
-        />
-        <HealthCard
-          title={t('可信毛利率')} light={L.gm}
-          value={c.gm === null ? '—' : pct1(c.gm)}
-          ly={c.gmLy === null ? '—' : pct1(c.gmLy)}
-          lines={[
-            t('近 3 个完整月({m})', { m: c.rangeLabel(c.last3) }),
-            c.gmDelta !== null && t('比去年同期 {d} 个百分点', { d: signed(c.gmDelta) }),
-            c.gmMtd !== null && t('本月至今 {p}', { p: pct1(c.gmMtd) }),
-            c.glGm !== null && t('总账口径参考(近 12 个完整月):{p}', { p: pct1(c.glGm) }),
-          ]}
-          chart={<>
-            <Spark data={c.gmSeries} kind="line" fmt={pct1} curName={t('近 12 个月')} lyName={t('去年同月')} />
-            {c.gmLyHidden && (
-              <div className="muted" style={{ fontSize: 11 }}>
-                {t('总部 2024 年 4～12 月的成本资料异常(可信毛利率只有 −2%～10%),去年同月线不画这几个月,也不拿来比较。')}
-              </div>
-            )}
-          </>}
-          explain={t('每卖 RM100 赚多少毛利。只算有成本记录的行,避免没成本的行把毛利灌高(没成本的部分见下方「资料品质」)。比去年低,代表进价涨了、售价被压低或卖的货组合变了。总账口径的成本科目含进货、平台手续费、运费,没有扣存货变动,只供参考。')}
-          rule={t('灯号:比去年同期低 {r} 个百分点以上 = 红;低 {y}～{r} 个百分点 = 黄;其他 = 绿。', { r: TH.gmRedDrop, y: TH.gmYellowDrop })}
-        />
-        <HealthCard
-          title={t('费用率')} light={L.ep}
-          value={c.ep === null ? '—' : pct1(c.ep)}
-          ly={c.epLy === null ? '—' : pct1(c.epLy)}
-          lines={[
-            hasIc
-              ? t('近 3 个完整月:营业费用 {e} ÷ 销售(不含卖给分行){s}', { e: fmtRM(c.ep3), s: fmtRM(c.epSales3) })
-              : t('近 3 个完整月:营业费用 {e} ÷ 销售 {s}', { e: fmtRM(c.ep3), s: fmtRM(c.epSales3) }),
-            c.epDelta !== null && t('比去年同期 {d} 个百分点', { d: signed(c.epDelta) }),
-            hasIc && c.epGl !== null && t('参考:销售含卖给分行(总账 SL − SA)时是 {p}', { p: pct1(c.epGl) }),
-          ]}
-          chart={<Spark data={c.epSeries} kind="line" fmt={pct1} curName={t('近 12 个月')} lyName={t('去年同月')} />}
-          explain={t('每卖 RM100 要花多少营业费用(薪水、租金、水电、广告…,总账 EP 科目)。销售与「营收增长」同口径,总部不含卖给分行的调拨。越低越好;比去年高,要看是费用涨了还是销售掉了。平台手续费记在成本类科目,不算在这里。12 月常有年底调整,会特别高。')}
-          rule={t('灯号:比去年同期高 {r} 个百分点以上 = 红;高 {y}～{r} 个百分点 = 黄;其他 = 绿。', { r: TH.epRedRise, y: TH.epYellowRise })}
-        />
-      </Section>
-
-      <Section title={t('② 库存')}>
-        <HealthCard
-          title={t('库存周转天数')} light={L.dio}
-          value={days(c.dio)}
-          ly={noLyBalance}
-          lines={s ? [
-            t('库存成本 {a}', { a: fmtRM(s.stock_cost) }),
-            t('近 90 天销货成本(估){a}:有成本的行 {b} + 没成本的行估 {c}', {
-              a: fmtRM(cogsDaily(s) * 90), b: fmtRM(s.cost_costed_90), c: fmtRM(cogsDaily(s) * 90 - s.cost_costed_90),
-            }),
-            (s.stock_excluded ?? 0) > 0 && t('未计入:次品 / 展示仓与服务项目 {a}', { a: fmtRM(s.stock_excluded) }),
-          ] : []}
-          chart={<Spark data={c.snapSeries(dioOf)} kind="line" fmt={(v) => t('{n} 天', { n: fmtNum(Math.round(v)) })}
-                        curName={t('库存周转天数')} note={fromNote(c.firstStock)} />}
-          explain={t('现在的库存照近 90 天的卖法,要多少天才卖得完。天数越长,钱压在货上越久、越容易变成滞销。')}
-          rule={t('灯号:≤ {g} 天 绿;{g}～{r} 天 黄;> {r} 天 红。', { g: TH.dioGreen, r: TH.dioRed })}
-        />
-        <HealthCard
-          title={t('滞销库存占比')} light={L.slow}
-          value={c.slow === null ? '—' : pct1(c.slow)}
-          ly={noLyBalance}
-          lines={s && s.slow_cost !== null ? [
-            t('滞销库存 {a} ÷ 库龄表库存 {b}', { a: fmtRM(s.slow_cost), b: fmtRM(s.aging_total) }),
-          ] : []}
-          chart={<Spark data={c.snapSeries(slowOf)} kind="line" fmt={pct1} curName={t('滞销库存占比')} note={fromNote(c.firstLive)} />}
-          explain={t('超过 12 个月没进货、近 12 个月也没卖出的库存占多少。这些货很可能要打折、清仓或退供应商;逐项明细看「滞销品」分页。')}
-          rule={t('灯号:≤ {g}% 绿;{g}%～{r}% 黄;> {r}% 红。', { g: TH.slowGreen, r: TH.slowRed })}
-        />
-      </Section>
-
-      <Section title={t('③ 收付与现金')}>
-        <HealthCard
-          title={t('应收天数')} light={L.dso}
-          value={days(c.dso)}
-          ly={noLyBalance}
-          lines={s && s.ar_pos !== null ? [
-            (s.ar_ic ?? 0) > 0
-              ? t('应收余额 {a}(其中分行 {b})', { a: fmtRM(s.ar_pos), b: fmtRM(s.ar_ic) })
-              : t('应收余额 {a}', { a: fmtRM(s.ar_pos) }),
-            t('逾期 90 天以上 {a}(占 {p})', { a: fmtRM(s.ar_over90), p: c.ar90 === null ? '—' : pct1(c.ar90) }),
-            t('近 90 天日均销售 {a}', { a: fmtRM(s.sales_90 / 90) }),
-            (s.ar_neg ?? 0) < 0 && t('另有客户订金 / 未冲销的收款 {a}(不拿来抵别的客户)', { a: fmtRM(-(s.ar_neg ?? 0)) }),
-          ] : []}
-          chart={<Spark data={c.snapSeries(dsoOf)} kind="line" fmt={(v) => t('{n} 天', { n: fmtNum(Math.round(v)) })}
-                        curName={t('应收天数')} note={fromNote(c.firstLive)} />}
-          explain={t('客户平均多少天付钱。越短越好;逾期 90 天以上的部分要追,追不回来就是坏账。')}
-          rule={t('灯号:应收天数 ≤ {g} 天且逾期 90 天以上 ≤ {ag}% = 绿;应收天数 > {r} 天或逾期占比 > {ar}% = 红;其他 = 黄。',
-            { g: TH.dsoGreen, r: TH.dsoRed, ag: TH.ar90Green, ar: TH.ar90Red })}
-        />
-        <HealthCard
-          title={t('应付天数')} light={L.dpo}
-          value={days(c.dpo)}
-          ly={noLyBalance}
-          lines={s && s.ap_pos !== null ? [
-            t('应付供应商 {a}', { a: fmtRM(s.ap_pos) }),
-            s.purch_3m !== null && s.purch_days
-              ? t('近 3 个完整月进货 {a}(日均 {b})', { a: fmtRM(s.purch_3m), b: fmtRM(s.purch_3m / s.purch_days) })
-              : t('总账没有进货资料'),
-            (s.ap_neg ?? 0) < 0 && t('另有预付给供应商 {a}(付款先于发票入账)', { a: fmtRM(-(s.ap_neg ?? 0)) }),
-          ] : []}
-          chart={<Spark data={c.snapSeries(dpoOf)} kind="line" fmt={(v) => t('{n} 天', { n: fmtNum(Math.round(v)) })}
-                        curName={t('应付天数')} note={fromNote(c.firstLive)} />}
-          explain={t('我们平均多少天付钱给供应商。太短 = 钱很早就付出去(或先付订金);太长可能影响供应商关系与进价。')}
-          rule={t('灯号:{lo}～{hi} 天 绿;少于 {lo} 天或 {hi}～{r} 天 黄;> {r} 天 红。', { lo: TH.dpoLow, hi: TH.dpoHigh, r: TH.dpoRed })}
-        />
-        <HealthCard
-          title={t('现金周期')} light={L.ccc}
-          value={days(c.ccc)}
-          ly={noLyBalance}
-          lines={[
-            c.ccc !== null && t('= 库存 {a} 天 + 应收 {b} 天 − 应付 {c} 天', {
-              a: fmtNum(Math.round(c.dio ?? 0)), b: fmtNum(Math.round(c.dso ?? 0)), c: fmtNum(Math.round(c.dpo ?? 0)),
-            }),
-          ]}
-          chart={<Spark data={c.snapSeries(cccOf)} kind="line" fmt={(v) => t('{n} 天', { n: fmtNum(Math.round(v)) })}
-                        curName={t('现金周期')} note={fromNote(c.firstLive)} />}
-          explain={t('从付钱进货到把货款收回来,钱被占用多少天。越短,做同样的生意需要的现金越少;变长就要看是库存堆高、客户拖款,还是太早付款给供应商。')}
-          rule={t('灯号:≤ {g} 天 绿;{g}～{r} 天 黄;> {r} 天 红。', { g: TH.cccGreen, r: TH.cccRed })}
-        />
-      </Section>
-
-      <Section title={t('④ 资料品质')}>
-        <HealthCard
-          title={t('没有成本的销售占比')} light={c.ncLight}
-          value={c.nc === null ? '—' : pct1(c.nc)}
-          ly={c.ncLy === null ? '—' : pct1(c.ncLy)}
-          lines={[
-            t('近 3 个完整月没有成本的商品销售 {a}(每月约 {k} 行)', { a: fmtRM(c.ncAmt), k: fmtNum(c.ncLines) }),
-            c.ncIcPct > 0 && t('其中 {p} 是卖给分行的发票', { p: pct1(c.ncIcPct) }),
-          ]}
-          chart={<Spark data={c.ncSeries} kind="line" fmt={pct1} curName={t('近 12 个月')} lyName={t('去年同月')} />}
-          explain={t('有多少销售金额在 AutoCount 里没有商品成本(运费、平台费等服务项目不算)。这些行会让毛利率、库存天数失真,所以上面的毛利率把它们排除。请会计查这些发票为什么没有成本,补上后毛利才准。')}
-          rule={t('灯号:≤ {g}% 绿;{g}%～{r}% 黄;> {r}% 红。', { g: TH.nocostGreen, r: TH.nocostRed })}
-        />
-      </Section>
-
-      <div className="card card-block" style={{ marginTop: 18 }}>
-        <h2>{t('口径说明')}</h2>
-        <ul className="muted" style={{ fontSize: 12.5, paddingLeft: 18, margin: 0, lineHeight: 1.6 }}>
-          <li>{t('资料来源:总部账套每天同步 4 次(马来西亚约 09:00 / 12:00 / 15:00 / 18:00),分行账套要分行电脑开机才会同步(有些天只有一次);本页的物化视图与余额快照每 2 小时(第 35 分)重算。')}</li>
-          <li>{t('今年 / 当月累计只算到「已完整同步的最后一天」(页首的日期,通常是昨天),去年同期也算到同一天,不拿今天还没同步完的半天去比去年的整天;近 90 天的销售与成本也截到这一天。趋势只比较完整月份。')}</li>
-          <li>{t('销售 = 发票 + 现金单 − 贷项单(不含税)。总部的营收灯号以「不含卖给分行」计算。')}</li>
-          <li>{t('可信毛利率只算有成本记录的行(含退货冲回的成本);没有成本的行另列在「资料品质」。')}</li>
-          <li>{t('库存 = 正库存的成本,不含 DEFECTS / DISPLAY 仓与服务项目(运费、平台费等);负库存(没转仓造成)不抵减。近 90 天销货成本 = 有成本行的成本 + 没成本行按同期成本率估算。')}</li>
-          <li>{t('应收 / 应付:按客户 / 供应商把未结单据加总,只算净额为正的部分(AutoCount 很多收款没有冲销到发票,单看发票余额会虚高);逾期 90 天以上用「收款先抵最旧的单」估算。')}</li>
-          <li>{t('应付天数用总账近 3 个完整月的进货(PURCHASES − PURCHASES RETURN)。费用率 = 总账营业费用(EP)÷ 销售(发票 + 现金单 − 贷项单,不含卖给分行,与营收同口径)。')}</li>
-          <li>{t('滞销库存来自库龄表(最后进货日):超过 12 个月没进货,且近 12 个月销售数量为 0。')}</li>
-          <li>{t('库存、应收、应付只有「现在」的余额,所以没有去年同期;库存趋势从 {a} 起有,应收 / 应付 / 滞销从 {b} 起每天累积。', { a: c.firstStock ?? '—', b: c.firstLive ?? '—' })}</li>
-        </ul>
+      <div className="grid-kpi">
+        {COLS.map((c, i) => (
+          <div className="card kpi" key={c}>
+            <div className="label">{colLabel[c]}</div>
+            <div className="value" style={{ fontSize: 20 }}>🟢 {counts[i].g} · 🟡 {counts[i].y} · 🔴 {counts[i].r}</div>
+            <div className="sub" style={{ fontSize: 12 }}>
+              {c === GP ? t('总行对外 + 分行,内部交易已抵销') : c === HQ ? t('对外口径(剔除卖给分行)') : t('分行账套全部')}
+            </div>
+          </div>
+        ))}
       </div>
+
+      <div className="table-scroll">
+        <table className="data">
+          <thead>
+            <tr><th>{t('指标')}</th>{COLS.map((c) => <th key={c}>{colLabel[c]}</th>)}<th>{t('参考区间')}</th></tr>
+          </thead>
+          <tbody>
+            {sections.map((s, si) => (
+              <Fragment key={s.title}>
+                <tr><td colSpan={5} style={{ paddingTop: 16, fontWeight: 600, color: 'var(--ink-2)' }}>{t(s.title)}</td></tr>
+                {s.metrics.map((mt, mi) => (
+                  <tr key={mt.label}>
+                    <td>{t(mt.label)}{mt.note && <div className="muted" style={{ fontSize: 11 }}>{t(mt.note)}</div>}</td>
+                    {COLS.map((c, ci) => {
+                      const cell = cells[si][mi][ci];
+                      return (
+                        <td key={c} style={{ whiteSpace: 'nowrap' }}>
+                          {cell ? <>{DOT[cell.st]} {cell.text}{cell.sub && <div className="muted" style={{ fontSize: 11 }}>{cell.sub}</div>}</>
+                                : <span className="muted">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="muted" style={{ fontSize: 12 }}>{t(mt.ref)}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="muted" style={{ fontSize: 12 }}>
+        {t('读法:先看红色,再看与去年 / 上期的方向;⚪ 只供参考不评分。')}
+        {t('口径陷阱:2026 年起平台费以 CN 行冲销售,所有同比已剔除;总账「销货成本」其实是当期采购额,月度毛利率不可看;总行对分行的零成本调拨会虚抬销售口径毛利;分行总账采购远大于销售口径成本(SO/DO 未转发票),分行利润以总账为下限、销售口径为上限;折旧 / 利息 / 董事花红只在 12 月入账。')}
+      </p>
     </>
   );
 }
