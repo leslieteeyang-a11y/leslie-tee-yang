@@ -205,6 +205,28 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   日薪合约工、PCB 自动、CP38、两间公司分开汇总与工资单抬头、会计分录、通知 / 推播 / 打卡提醒、公告、通讯录、培训、手册、强密码 / 忘记密码、
   紧急假 EL、补假 RL、年假结转、团队请假日历、老板免打卡。**已提醒使用者但未处理**：佣金没算进 EPF、佣金与加班没算进 SOCSO/EIS（照 HR 旧系统，
   建议问会计）；工资单抬头只有一个公司名（JB 员工印成 HOMEWORKS SDN BHD）。
+- **订货升级第一段（2026-10-12 上线）：厂家到货 / 分到各分店 / 在路上 / 厂家问题**。migration `20261012_ops_po_do.sql`（89 KB，正式环境照
+  「-- ====」分 5 段套用 `ops_po_do_1`～`_5`，每段 ≤ 24 KB；套完 39 个函数 md5(prosrc) 与本机一致）；前端部署中（部署编号待补）。
+  使用者决定：所有厂家；厂家给装箱单 / DO 时由订货员开「厂家到货」（选厂家 → 选 PO → 上传厂家 DO（Excel / CSV 浏览器读；PDF / 照片先当附件，
+  第三段用 AI 读，要使用者的 Anthropic API 金钥）→ 数量可改 → 每个型号显示出货总数与各分店订了多少，订货员自己分（同型号可按数量拆；
+  只有一间分店订时预填）→ 填 ETA → 确认）。确认后：分店看「在路上」与 ETA（不含价格）；少发 / 多发 / 发错型号自动记成厂家问题，坏货 / 到货少
+  手动记；少发每行选「厂家会补」或「取消（下次再订）」；问题清单按厂家分组，可下载 Excel、打印 / 存 PDF，一次提醒厂家。
+  **分店 `ops.outlet`**：HQ（总部仓库 = 仓位 HQ + SRGADING，总部账套其他仓位也算总部）、BATU（Batu 店，与总部仓库分开；仓位 PRE (BATU) / BATU）、
+  JB（PRE (JB) / JB / JB RESER；HOMEWORKSSOUTHERN 账套整本算 JB）、PUCHONG（KL Puchong，另一间公司 / 账套，但总部会开 PUCHONG / PRE (PUCHONG)
+  仓位；`staff_branch` 还是空 = 第二段再把 Puchong 分店加进 ops.staff）。AutoCount 2026-10-12 还没有 BATU / PUCHONG 仓位（要等员工开）。
+  **AutoCount 仓位惯例（使用者说明）**：JB = JB 一共订的数量；PRE (JB) 负数 = 还欠 JB；JB + PRE (JB) = 已到总部、还没送去 JB（寄存在总部）；
+  送去 JB 时分行开 stock received、总部开单员开 stock issue（仓位 JB）。2026-10-12 正式数字：JB 351 个型号 13,039 件、PRE (JB) 236 个 −6,925、
+  寄存总部 215 个 6,175 件。**在路上**：AutoCount「未到」要等 GRN 才减，所以自己记：同厂家同型号所有 PO 一起算（已收 T = 各 PO 行
+  transferred 合计），每张已确认 / 已到货的 DO 有起算点（确认时的 T 扣掉 DO 日期之后的 GRN；退回草稿再确认沿用原起算点），照起算点顺序扣，
+  坏货 / 到货少不算在路上，再摊回各 PO 行 / 分店；剩下未到 = AutoCount 未到 − 在路上（§3 有完整说明）。
+  表：`ops.supplier_do`（draft → confirmed（在路上）→ arrived；草稿可 cancelled；已确认可由订货「可审批」退回草稿）、`ops.supplier_do_apply`
+  （每个型号分给哪间分店、记在哪行 PO；退回草稿 void 不删）、`ops.supplier_issue`（short / over / wrong / damaged；少发 decision pending / await /
+  cancelled；status open / resolved / void；后来的 DO 自动补「厂家会补」的少发）。权限：订货可编辑 = 开 DO / 处理问题；可审批 = 退回草稿；
+  订货或仓库可编辑 = 标到货；订货只看 = 看在路上（JB 的人只看 JB）。档案 Storage 私有 bucket `ops-po`（`ops_po_file_ok`）。未到货 PO 清单多 `dos`。
+  测试 `tests/po_do_test.sql`。正式环境最大厂家（89 张 PO、598 个型号全选）载入约 3 秒。厂家 DO 样本档只放 scratch，**不要放进 repo**。
+  **第二段（还没做）**：分店在系统填要的型号 / 数量（自己寄存的货不用批；要总部自己的现货要总部店长 = 订货可审批批准）→ 总部按「已送出」
+  （仓库 / 物流 / 总部开单员都可以）→ 分店按「已收到」；分店看得到总部仓库现货、在路上与 ETA、厂家问题，不看价格；Puchong 加进 ops.staff。
+  **第三段**：AI 读 PDF / 照片的厂家 DO。小地方还没改：JB 可编辑的人在总部 DO 也看得到「在路上」连结；新 DO 第一次存档前候选数量以今天计。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
