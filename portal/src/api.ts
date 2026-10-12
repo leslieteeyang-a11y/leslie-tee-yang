@@ -210,6 +210,7 @@ export interface PoRow {
   days_late: number;
   overdue: boolean;
   stale: boolean;
+  dos?: { id: number; do_no: string; eta: string | null }[];   // 已确认、还在路上的厂家 DO（20261012_ops_po_do）
 }
 export interface PoDetail extends PoRow {
   can_edit: boolean;

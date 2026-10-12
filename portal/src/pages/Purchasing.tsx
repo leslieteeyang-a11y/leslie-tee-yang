@@ -1,25 +1,40 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   api, BRANCH_LABEL, can, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
   PoStatus, Shipment, SHIPMENT_STATUS_LABEL, ShipmentStatus,
 } from "../api";
 import { go } from "../router";
 import { Empty, ErrorBox, Modal, Tabs } from "../ui";
+import "../podo.css";
 
-type Tab = "po" | "shipments" | "item";
+// 厂家到货 / 厂家问题 / 在路上：点到才下载（大部分员工用不到，不放进主程式）
+const DoList = lazy(() => import("../podo/DoList"));
+const DoEditor = lazy(() => import("../podo/DoEditor"));
+const IssuesTab = lazy(() => import("../podo/Issues"));
+const TransitTab = lazy(() => import("../podo/Transit"));
 
-// 路由：#/purchasing（PO）、#/purchasing/shipments、#/purchasing/item、#/purchasing/po/<公司>/<PO 号>
+type Tab = "po" | "do" | "issues" | "transit" | "shipments" | "item";
+
+// 路由：#/purchasing（PO）、#/purchasing/do（厂家到货）、#/purchasing/do/new、#/purchasing/do/<id>、#/purchasing/issues（厂家问题）、
+// #/purchasing/transit（在路上）、#/purchasing/shipments、#/purchasing/item、#/purchasing/po/<公司>/<PO 号>
 export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: string; arg1?: string; arg2?: string }) {
-  const tab: Tab = sub === "shipments" ? "shipments" : sub === "item" ? "item" : "po";
   const canEdit = can(me, "purchasing", "edit");
+  const tabs: [Tab, string][] = [["po", "未到货 PO"]];
+  if (canEdit) tabs.push(["do", "厂家到货"], ["issues", "厂家问题"]);
+  tabs.push(["transit", "在路上"], ["shipments", "货柜"], ["item", "查 SKU 到货"]);
+  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "po";
   return (
     <>
       <h1>订货与 ETA</h1>
       <div className="filters">
-        <Tabs value={tab} onChange={(t) => go(t === "po" ? "/purchasing" : `/purchasing/${t}`)}
-              options={[["po", "未到货 PO"], ["shipments", "货柜"], ["item", "查 SKU 到货"]]} />
+        <Tabs value={tab} onChange={(t) => go(t === "po" ? "/purchasing" : `/purchasing/${t}`)} options={tabs} />
       </div>
       {tab === "po" && <PoTab me={me} canEdit={canEdit} />}
+      <Suspense fallback={<p className="muted">载入中…</p>}>
+        {tab === "do" && (arg1 ? <DoEditor key={arg1} me={me} idParam={arg1} /> : <DoList me={me} />)}
+        {tab === "issues" && <IssuesTab me={me} />}
+        {tab === "transit" && <TransitTab me={me} />}
+      </Suspense>
       {tab === "shipments" && <ShipmentTab me={me} canEdit={canEdit} />}
       {tab === "item" && <ItemTab />}
       {sub === "po" && arg1 && arg2 && (
@@ -33,12 +48,16 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
 const poHref = (r: { company: string; po_no: string }) =>
   `/purchasing/po/${encodeURIComponent(r.company)}/${encodeURIComponent(r.po_no)}`;
 
-function EtaCell({ r }: { r: Pick<PoRow, "eta" | "eta_source" | "overdue" | "days_late"> }) {
+function EtaCell({ r }: { r: Pick<PoRow, "eta" | "eta_source" | "overdue" | "days_late" | "dos"> }) {
   return (
     <>
       <span className={r.overdue ? "late" : ""}>{r.eta}</span>
       {r.overdue && <span className="late"> · 迟 {r.days_late} 天</span>}
       <br /><small className="muted">{ETA_SOURCE_LABEL[r.eta_source]}</small>
+      {/* 厂家已出货（确认了厂家 DO）：DO 号与 DO 的 ETA；有效 ETA 规则不变 */}
+      {(r.dos ?? []).map((d) => (
+        <span key={d.id} className="tag transit">{`在路上 DO ${d.do_no || "#" + d.id}${d.eta ? " · ETA " + d.eta : ""}`}</span>
+      ))}
     </>
   );
 }
@@ -272,6 +291,19 @@ function PoDetailModal({ company, poNo, onClose }: { company: string; poNo: stri
             <dt>开单</dt><dd>{po.po_date}（{po.days_open} 天前）· {BRANCH_LABEL[po.company]} · 入 {po.locations}</dd>
             <dt>供应商</dt><dd>{po.supplier_name}（{po.creditor_code}）{po.is_china && <span className="tag">中国</span>}</dd>
             {po.shipment_name && (<><dt>货柜</dt><dd>{po.shipment_name}{po.shipment_status && ` · ${SHIPMENT_STATUS_LABEL[po.shipment_status]}`}</dd></>)}
+            {(po.dos ?? []).length > 0 && (
+              <>
+                <dt>厂家 DO</dt>
+                <dd>
+                  {po.dos!.map((d) => (
+                    <span key={d.id} className="tag transit">
+                      {po.can_edit ? <a href={`#/purchasing/do/${d.id}`}>{`在路上 DO ${d.do_no || "#" + d.id}${d.eta ? " · ETA " + d.eta : ""}`}</a>
+                        : `在路上 DO ${d.do_no || "#" + d.id}${d.eta ? " · ETA " + d.eta : ""}`}
+                    </span>
+                  ))}
+                </dd>
+              </>
+            )}
             {po.remark && (<><dt>备注</dt><dd className="pre">{po.remark}</dd></>)}
             {po.updated_by_name && (<><dt>最后更新</dt><dd>{po.updated_by_name} · {fmtDate(po.updated_at)}</dd></>)}
           </dl>

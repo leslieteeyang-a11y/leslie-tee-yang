@@ -1,0 +1,95 @@
+/* 厂家到货 / 厂家问题 / 在路上（订货页的新分页） */
+.dos, .isk, .isd, .iss { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; display: inline-block; margin: 1px 4px 1px 0; }
+.dos.draft { background: #eef1f5; color: var(--muted); }
+.dos.confirmed { background: var(--amber-soft); color: var(--amber); }
+.dos.arrived { background: var(--green-soft); color: var(--green); }
+.dos.cancelled { background: #eef1f5; color: var(--muted); text-decoration: line-through; }
+.isk.short, .isk.damaged { background: var(--red-soft); color: var(--red); }
+.isk.over { background: var(--amber-soft); color: var(--amber); }
+.isk.wrong { background: #f1e8fd; color: #7b3fc4; }
+.isd.pending { background: #fff; color: var(--red); border: 1px solid var(--red-soft); }
+.isd.await { background: var(--blue-soft); color: var(--blue); }
+.isd.cancelled { background: #eef1f5; color: var(--muted); }
+.iss.resolved { background: var(--green-soft); color: var(--green); }
+.iss.void { background: #eef1f5; color: var(--muted); text-decoration: line-through; }
+.tag.outlet { background: #eef1f5; color: var(--text); }
+.tag.transit { background: var(--amber-soft); color: var(--amber); display: inline-block; margin: 3px 4px 0 0; white-space: nowrap; }
+.tag.transit a { color: inherit; }
+.tag.warn { background: var(--red-soft); color: var(--red); }
+.amber { color: var(--amber); }
+.okc { color: var(--green); font-weight: 700; }
+button.danger-solid { background: var(--red); color: #fff; }
+.file-btn { flex: 0 0 auto; width: auto; white-space: nowrap; flex-direction: row; display: inline-flex; align-items: center; cursor: pointer;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--blue); font-weight: 600; margin-top: 6px; align-self: flex-start; }
+.table-wrap.flat { box-shadow: none; border: 1px solid var(--line); }
+
+/* 编辑画面 */
+.podo-head fieldset.plain { gap: 10px; }
+.podo-files li { align-items: center; }
+.podo-files .text-btn { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.podo-items h3:first-child { margin-top: 0; }
+.podo-table td { vertical-align: top; }
+.podo-table th.sticky, .podo-table td.sticky { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 180px; max-width: 280px; }
+.podo-table th.sticky { background: #fafbfd; }
+.podo-table tfoot td { border-top: 2px solid var(--line); }
+.podo-table tr.podo-zero td { background: #fbfcfe; }
+.podo-table tr.podo-zero td.sticky { background: #fbfcfe; }
+input.podo-num { width: 76px; text-align: right; padding: 6px 8px; }
+.podo-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
+.podo-tags .tag { margin-left: 0; }
+input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
+.podo-actions { position: sticky; bottom: 0; background: var(--bg); padding: 4px 0; z-index: 5; }
+.podo-actions .actions.left { margin: 6px 0; }
+.podo-msgs { max-height: 32vh; overflow-y: auto; }
+.podo-msgs .error, .podo-msgs .ok { margin: 4px 0; }
+.podo-msgs p { margin: 4px 0 0; }
+.podo-history { margin: 14px 0; }
+.podo-damaged { align-items: center; margin-bottom: 6px; flex-wrap: nowrap; }
+.podo-damaged select { flex: 1 1 140px; width: auto; }
+.podo-damaged input:not(.podo-num) { flex: 2 1 160px; width: auto; }
+
+/* Excel 读取 */
+.podo-sheet { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.podo-sheet.off { opacity: .6; }
+.row-inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.podo-sheet label { flex: 0 0 auto; }
+.podo-sheet label.inline { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 6px; font-size: .85rem; }
+.podo-sheet label.inline select { width: auto; max-width: 180px; padding: 5px 6px; }
+.podo-sum { background: var(--blue-soft); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+.podo-sum.warn { background: var(--amber-soft); color: var(--amber); }
+.podo-preview { max-height: 46vh; overflow-y: auto; }
+.podo-preview tr.podo-miss td { background: #fff8f0; }
+.podo-missing { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* 厂家问题 / 在路上 */
+.podo-group { margin-bottom: 18px; }
+.podo-group-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 6px; }
+.podo-group-head h3 { margin: 0; }
+.podo-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.podo-acts .error { flex-basis: 100%; }
+.podo-issues tr.inactive-soft td { color: var(--muted); }
+.podo-do-row td { background: #f6f8fb; }
+.podo-do-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+@media (max-width: 800px) {
+  .podo-table th.sticky, .podo-table td.sticky { min-width: 140px; max-width: 170px; }
+  .podo-damaged { flex-wrap: wrap; }
+}
+
+/* 打印：一个厂家一页 */
+#podo-print { display: none; }
+@media print {
+  body:has(#podo-print) > *:not(#podo-print) { display: none !important; }
+  #podo-print { display: block; color: #000; font-size: 11px; }
+  html, body { background: #fff !important; margin: 0; padding: 0; }
+  .podo-print-group + .podo-print-group { break-before: page; page-break-before: always; }
+  .podo-print-group h2 { font-size: 16px; margin: 0 0 2px; }
+  .podo-print-group h2 small { font-weight: 400; color: #555; }
+  .podo-print-sub { margin: 0 0 8px; color: #555; }
+  #podo-print table { width: 100%; border-collapse: collapse; }
+  #podo-print th, #podo-print td { border: 1px solid #999; padding: 3px 5px; text-align: left; vertical-align: top; background: #fff; }
+  #podo-print th { background: #eee; color: #000; font-size: 10px; }
+  #podo-print td.n { text-align: right; white-space: nowrap; }
+  #podo-print tr { break-inside: avoid; page-break-inside: avoid; }
+}
+.podo-res { display: block; }

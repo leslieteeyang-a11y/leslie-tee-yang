@@ -82,6 +82,9 @@ main { flex: 1; padding: 28px 32px; min-width: 0; max-width: 1200px; }
 .page-head p { margin: 0 0 12px; max-width: 720px; }
 .filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 .tabs { display: inline-flex; background: #e6ebf2; border-radius: 10px; padding: 3px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+/* 分页放不下（手机）：右边还有就淡出，看得出还可以往右卷 */
+.tabs.more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+             mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .tabs button { flex: 0 0 auto; white-space: nowrap; }
 .tabs button { background: transparent; color: var(--muted); padding: 6px 14px; font-weight: 500; }
 .tabs button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }

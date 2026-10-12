@@ -16,6 +16,7 @@
 | `src/api.ts` | 型别与所有 `ops_*` 呼叫 |
 | `src/pages/` | 各页：Home / Tasks / Approvals / Purchasing（订货与 ETA）/ Attendance（打卡）/ Admin / Planned（规划中模块）/ Login / Password |
 | `src/att/`、`src/att-api.ts`、`src/att.css` | 打卡模块：Today（打卡、补下班卡、外勤签到）、Camera（自拍）、Records（逐日纪录、月报 CSV）、Board（团队今天）、Corrections（补卡）、Settings（HR 设定） |
+| `src/podo/`、`src/podo-api.ts`、`src/podo.css`、`src/i18n-dict-podo.ts` | 订货页的厂家到货（`#/purchasing/do`、`/do/new`、`/do/<id>`：选厂家 → 选 PO → 上传厂家 DO → 分给各分店 → 确认）、厂家问题（`/issues`：按厂家分组、厂家会补 / 取消、Excel、打印）、在路上（`/transit`：JB 只看 JB）。`podo/parse.ts` 在浏览器读 Excel / CSV（SheetJS CE 0.20.3，npm 套件 `@e965/xlsx`，动态载入）；档案放 Storage 私有 bucket `ops-po`。这四个画面用 `React.lazy`，点到才下载。在路上的算法（同厂家同型号一起算、起算点）写在 migration `20261012_ops_po_do.sql` §3 |
 | `src/pages/Delivery.tsx`、`src/dlv/`、`src/dlv-api.ts`、`src/dlv.css` | 送货：Plan（一键排单、最短路线、WhatsApp 司机）、Runs（排单纪录、签收照片）、Mine（员工司机签收）、Setup（出发点、外包司机）、DriverSign（司机签收页，`#/driver?t=` 不用登入）、HomeCard（首页提醒） |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
