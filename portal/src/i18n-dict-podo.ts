@@ -81,8 +81,8 @@ export const DICT_PODO: Record<string, string> = {
   "货柜（可不选；货柜有 ETA 就以货柜为准）": "Container (optional; its ETA overrides the DO's)",
   "附件（厂家 DO / 装箱单）": "Attachments (supplier DO / packing list)",
   "＋ 上传 Excel / PDF / 照片": "+ Upload Excel / PDF / photo",
-  "Excel（.xlsx / .xls / .csv）会自动读出每个型号的数量；PDF、照片先当附件，数量在下面自己填。":
-    "Excel (.xlsx / .xls / .csv) quantities are read automatically; PDFs and photos are kept as attachments — type the quantities below.",
+  "Excel（.xlsx / .xls / .csv）会自动读出每个型号的数量；PDF、照片先当附件，数量在下面自己填：到齐的型号按「全到」，少到的再改数字。":
+    "Excel (.xlsx / .xls / .csv) quantities are read automatically; PDFs and photos are kept as attachments — fill the quantities below: press \"All arrived\" for models that came in full, then change the ones that came short.",
   "找型号 / 品名…": "Find model / item…",
   "只看有出货的": "Only shipped items",
   "显示全部分店": "Show all outlets",
@@ -98,6 +98,7 @@ export const DICT_PODO: Record<string, string> = {
   "备注（例：颜色不对）": "Note (e.g. wrong colour)",
   "不是数字": "Not a number",
   "照未出分": "Split by open qty",
+  "全到": "All arrived",
   "Excel 里对不到所选 PO 的型号。是同一个型号只是厂家写法不同 → 选「就是…」；真的发错 → 留著，确认时记成「发错型号」；不是货品（备注、空行）→ 拿掉。":
     "Excel rows that match no model on the chosen POs. Same model written differently by the supplier → choose \"It is …\"; really the wrong model → keep it and it's logged as \"Wrong model\" on confirm; not goods (notes, blank lines) → remove.",
   "Excel 型号 / 品名": "Excel model / item",

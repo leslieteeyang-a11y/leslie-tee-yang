@@ -140,6 +140,13 @@ function allocByRemaining(r: Row, c?: Candidate): Row {
   return { ...r, alloc, auto: false };
 }
 
+/** 全到：出货 = 还可以出，分配照各分店未出（只有一间分店订的照样预填那间） */
+function fullRow(r: Row, c?: Candidate): Row {
+  const rem = c ? r3(Math.max(c.remaining, 0)) : 0;
+  const x = withShipped({ ...r, alloc: {}, auto: !!c?.single_outlet }, String(rem), c);
+  return c && !c.single_outlet && rem > 0 ? allocByRemaining(x, c) : x;
+}
+
 function DoForm({ me, full, start, onFull, flash }: {
   me: Me; full: DoFull | null; start?: Start; onFull: (f: DoFull, msg?: string) => void; flash: string;
 }) {
@@ -385,11 +392,7 @@ function DoForm({ me, full, start, onFull, flash }: {
     setRows(next);
     touch();
   };
-  const fillRemaining = () => bulk((r, c) => {
-    const rem = c ? r3(Math.max(c.remaining, 0)) : 0;
-    const x = withShipped({ ...r, alloc: {}, auto: !!c?.single_outlet }, String(rem), c);
-    return c && !c.single_outlet && rem > 0 ? allocByRemaining(x, c) : x;
-  });
+  const fillRemaining = () => bulk(fullRow);
   const clearAll = () => bulk((r, c) => ({ ...r, shipped: "0", alloc: {}, auto: !!c?.single_outlet }));
   const allocAll = () => bulk((r, c) => (c && allocSum(r) === 0 && num(r.shipped) > 0 && r3(num(r.shipped)) === r3(c.remaining) ? allocByRemaining(r, c) : r));
 
@@ -457,7 +460,7 @@ function DoForm({ me, full, start, onFull, flash }: {
               <input type="file" accept={FILE_ACCEPT} multiple hidden onChange={onUpload} />
             </label>
           )}
-          {draft && editable && <p className="muted small">Excel（.xlsx / .xls / .csv）会自动读出每个型号的数量；PDF、照片先当附件，数量在下面自己填。</p>}
+          {draft && editable && <p className="muted small">Excel（.xlsx / .xls / .csv）会自动读出每个型号的数量；PDF、照片先当附件，数量在下面自己填：到齐的型号按「全到」，少到的再改数字。</p>}
         </fieldset>
       </div>
 
@@ -524,6 +527,9 @@ function DoForm({ me, full, start, onFull, flash }: {
                                  onChange={(e) => setRow(code, (x) => withShipped(x, e.target.value, c))} aria-label={`${code} 出货`} />
                           {!Number.isNaN(s) && s > rem && <><br /><small className="late">{`多 ${fmtQty(r3(s - rem))}`}</small></>}
                           {!Number.isNaN(s) && s < rem && <><br /><small className="amber">{`少 ${fmtQty(r3(rem - s))}`}</small></>}
+                          {editable && c && rem > 0 && (Number.isNaN(s) || r3(s) !== r3(rem)) && (
+                            <><br /><button type="button" className="small ghost podo-full" onClick={() => setRow(code, (x) => fullRow(x, c))}>全到</button></>
+                          )}
                         </td>
                         {showCols.map((o) => {
                           const bo = c?.by_outlet[o.code];

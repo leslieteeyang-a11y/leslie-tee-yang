@@ -35,6 +35,7 @@ button.danger-solid { background: var(--red); color: #fff; }
 .podo-table tr.podo-zero td { background: #fbfcfe; }
 .podo-table tr.podo-zero td.sticky { background: #fbfcfe; }
 input.podo-num { width: 76px; text-align: right; padding: 6px 8px; }
+button.podo-full { margin-top: 4px; padding: 3px 10px; }
 .podo-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
 .podo-tags .tag { margin-left: 0; }
 input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
