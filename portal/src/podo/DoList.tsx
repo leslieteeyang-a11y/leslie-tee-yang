@@ -27,6 +27,7 @@ export default function DoList({ me }: { me: Me }) {
         <p className="muted">
           {"厂家出货时开一张：选厂家 → 选 PO → 上传厂家 DO / 装箱单（Excel 自动读数量；PDF、照片当附件，数量自己填）→ 每个型号分给各分店 → 确认。"}
           <br />{"确认后分店在「在路上」看得到 ETA；少发、多发、发错型号自动记到「厂家问题」。"}
+          <br />{"货到了由仓库在「点货」填实际收到几件；到货少、坏货、来错也会记到「厂家问题」。"}
         </p>
         <button onClick={() => go("/purchasing/do/new")}>＋ 新厂家到货</button>
       </div>

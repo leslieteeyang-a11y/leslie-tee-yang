@@ -161,4 +161,14 @@ export const DICT_DB: Record<string, string> = {
     "Open POs and containers show supplier details, so only purchasing, management and the warehouse team can open them. To check when goods arrive, use \"SKU arrivals\" or \"In transit\".",
   // 前端（podo-api.ts）的错误讯息
   "只能上传 Excel（.xlsx / .xls / .csv）、PDF 或照片。": "Only Excel (.xlsx / .xls / .csv), PDF or photos can be uploaded.",
+  // 2026-10-14 点货（20261014_ops_po_receive；带型号 / 数字的在 i18n-patterns.ts）
+  "还没确认的 DO 不能点货。": "A DO that isn't confirmed yet can't be received.",
+  "来错的货最多 100 行。": "At most 100 wrong-item rows.",
+  "要「订货与 ETA」或「仓库」可编辑才能点货。": "You need Edit access to Purchasing & ETA or Warehouse to receive goods.",
+  "要先点货：请在「点货」填每个型号实际收到几件，再按「点完，货到了」。":
+    "Count the goods first: under \"Receive\", enter how many of each model actually arrived, then press \"Done — goods arrived\".",
+  "要「订货与 ETA」或「仓库」可编辑才能记厂家问题。": "You need Edit access to Purchasing & ETA or Warehouse to log supplier issues.",
+  "这张厂家 DO 是你确认的：请另一位同事（仓库部）点货，少了、坏了才有人核对。":
+    "You confirmed this supplier DO, so another colleague (warehouse) has to count it — that way short or damaged goods get a second check.",
+  "点过货的厂家 DO，厂家问题只有采购或管理层可以作废。": "Once a supplier DO has been counted, only purchasing or management can void its supplier issues.",
 };

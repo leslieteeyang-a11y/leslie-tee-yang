@@ -1,6 +1,6 @@
 import { FormEvent, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
-  api, BRANCH_LABEL, can, seesSupplier, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
+  api, BRANCH_LABEL, can, canReceive, seesPrices, seesSupplier, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
   PoStatus, Shipment, SHIPMENT_STATUS_LABEL, ShipmentStatus,
 } from "../api";
 import { go } from "../router";
@@ -12,18 +12,22 @@ const DoList = lazy(() => import("../podo/DoList"));
 const DoEditor = lazy(() => import("../podo/DoEditor"));
 const IssuesTab = lazy(() => import("../podo/Issues"));
 const TransitTab = lazy(() => import("../podo/Transit"));
+const ReceiveTab = lazy(() => import("../podo/Receive"));
 
-type Tab = "po" | "do" | "issues" | "transit" | "shipments" | "item";
+type Tab = "po" | "do" | "issues" | "transit" | "receive" | "shipments" | "item";
 
 // 路由：#/purchasing（PO）、#/purchasing/do（厂家到货）、#/purchasing/do/new、#/purchasing/do/<id>、#/purchasing/issues（厂家问题）、
-// #/purchasing/transit（在路上）、#/purchasing/shipments、#/purchasing/item、#/purchasing/po/<公司>/<PO 号>
+// #/purchasing/transit（在路上）、#/purchasing/receive（点货清单）、#/purchasing/receive/<DO id>（点一张）、
+// #/purchasing/shipments、#/purchasing/item、#/purchasing/po/<公司>/<PO 号>
 export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: string; arg1?: string; arg2?: string }) {
   const canEdit = can(me, "purchasing", "edit");
-  // 看不到厂家的人（分行、门市、电商、物流）：没有未到货 PO / 货柜，只有在路上与查 SKU 到货（只显示产品、数量、ETA）
+  // 看不到厂家的人（分行、门市、电商）：没有未到货 PO / 货柜，只有在路上与查 SKU 到货（只显示产品、数量、ETA）
   const sup = seesSupplier(me);
   const tabs: [Tab, string][] = sup ? [["po", "未到货 PO"]] : [];
   if (canEdit) tabs.push(["do", "厂家到货"], ["issues", "厂家问题"]);
   tabs.push(["transit", "在路上"]);
+  // 货到了：仓库部（或订货可编辑的人）点每个型号实际收到几件
+  if (canReceive(me)) tabs.push(["receive", "点货"]);
   if (sup) tabs.push(["shipments", "货柜"]);
   tabs.push(["item", "查 SKU 到货"]);
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : tabs[0][0];
@@ -33,16 +37,17 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
       <div className="filters">
         <Tabs value={tab} onChange={(t) => go(t === tabs[0][0] ? "/purchasing" : `/purchasing/${t}`)} options={tabs} />
       </div>
-      {tab === "po" && <PoTab me={me} canEdit={canEdit} />}
+      {tab === "po" && <PoTab me={me} canEdit={canEdit} prices={seesPrices(me)} />}
       <Suspense fallback={<p className="muted">载入中…</p>}>
         {tab === "do" && (arg1 ? <DoEditor key={arg1} me={me} idParam={arg1} /> : <DoList me={me} />)}
         {tab === "issues" && <IssuesTab me={me} />}
         {tab === "transit" && <TransitTab me={me} />}
+        {tab === "receive" && <ReceiveTab key={arg1 ?? ""} me={me} idParam={arg1} />}
       </Suspense>
       {tab === "shipments" && <ShipmentTab me={me} canEdit={canEdit} />}
       {tab === "item" && <ItemTab />}
       {sup && sub === "po" && arg1 && arg2 && (
-        <PoDetailModal company={decodeURIComponent(arg1)} poNo={decodeURIComponent(arg2)}
+        <PoDetailModal company={decodeURIComponent(arg1)} poNo={decodeURIComponent(arg2)} prices={seesPrices(me)}
                        onClose={() => go("/purchasing")} />
       )}
     </>
@@ -67,7 +72,7 @@ function EtaCell({ r }: { r: Pick<PoRow, "eta" | "eta_source" | "overdue" | "day
 }
 
 // ------------------------------------------------------------------ 未到货 PO
-function PoTab({ me, canEdit }: { me: Me; canEdit: boolean }) {
+function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: boolean }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
@@ -98,7 +103,8 @@ function PoTab({ me, canEdit }: { me: Me; canEdit: boolean }) {
   const key = (r: PoRow) => `${r.company}|${r.po_no}`;
   const pickedRows = (rows ?? []).filter((r) => picked.has(key(r)));
   const pickedCompanies = new Set(pickedRows.map((r) => r.company));
-  const showAmt = rows?.some((r) => r.open_amt != null);
+  // 金额只给采购 / 管理层（物流部是订货可编辑，但资料库不回金额：seesPrices 同规则）
+  const showAmt = prices && rows?.some((r) => r.open_amt != null);
 
   function toggle(r: PoRow) {
     const next = new Set(picked);
@@ -269,7 +275,7 @@ function PoEditForm({ company, poNos, current, bulk, onClose, onSaved }: {
   );
 }
 
-function PoDetailModal({ company, poNo, onClose }: { company: string; poNo: string; onClose: () => void }) {
+function PoDetailModal({ company, poNo, prices, onClose }: { company: string; poNo: string; prices: boolean; onClose: () => void }) {
   const [po, setPo] = useState<PoDetail | null>(null);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
@@ -283,7 +289,7 @@ function PoDetailModal({ company, poNo, onClose }: { company: string; poNo: stri
     return <PoEditForm company={company} poNos={[poNo]} current={po}
                        onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />;
 
-  const showPrice = po?.items.some((i) => i.unit_price != null);
+  const showPrice = prices && po?.items.some((i) => i.unit_price != null);
   return (
     <Modal title={`${poNo}${po ? " · " + po.creditor_name : ""}`} onClose={onClose} wide>
       <ErrorBox error={error} />

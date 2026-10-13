@@ -178,12 +178,12 @@ function DoForm({ me, full, start, onFull, flash }: {
   const [ships, setShips] = useState<Shipment[]>([]);
   const [q, setQ] = useState("");
   const [onlyShipped, setOnlyShipped] = useState(false);
-  const [allOutlets, setAllOutlets] = useState(false);
+  const [onlyOrdered, setOnlyOrdered] = useState(false);         // 预设四间分店都显示（使用者 2026-10-13：一打开就显示四间分店）
   const [imp, setImp] = useState<{ name: string; sheets: Sheet[] } | null>(null);
   const [others, setOthers] = useState<Candidate[] | null>(null);
   const [pickPos, setPickPos] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [ask, setAsk] = useState<"cancel" | "reopen" | "arrive" | null>(null);
+  const [ask, setAsk] = useState<"cancel" | "reopen" | null>(null);
   const [addIssue, setAddIssue] = useState(false);
 
   // 新开：读所选 PO 的型号
@@ -213,14 +213,16 @@ function DoForm({ me, full, start, onFull, flash }: {
     for (const k of Object.keys(rows)) if (!candMap.has(k)) codes.push(k);
     return codes;
   }, [cands, rows, candMap]);
-  const active = outlets.filter((o) => o.active);
+  // 总部账套的 PO 替四间分店订（一打开就显示四间）；JB 账套整本属于 JB，只显示 JB（资料库也只收同公司的分店）
+  const active = outlets.filter((o) => o.active && (company === "HOMEWORKSSB" || o.company === company));
   const used = useMemo(() => {
     const s = new Set<string>();
     (cands ?? []).forEach((c) => Object.keys(c.by_outlet).forEach((k) => s.add(k)));
     Object.values(rows).forEach((r) => Object.entries(r.alloc).forEach(([k, v]) => num(v) > 0 && s.add(k)));
     return s;
   }, [cands, rows]);
-  const cols = active.filter((o) => allOutlets || used.has(o.code));
+  // 「只显示有订的分店」：所选 PO 有订、或已经分了数量的分店
+  const cols = active.filter((o) => !onlyOrdered || used.has(o.code));
   const showCols = cols.length ? cols : active;
 
   const touch = () => { setDirty(true); setMsg(""); };
@@ -427,7 +429,9 @@ function DoForm({ me, full, start, onFull, flash }: {
       </p>
       {full?.status === "cancelled" && <div className="error">{`已取消 · ${full.cancelled_by_name ?? ""} · ${fmtDate(full.cancelled_at)}${full.cancel_reason ? " · " + full.cancel_reason : ""}`}</div>}
       {full?.status === "arrived" && <div className="ok">{`已到货 · ${full.arrived_by_name ?? ""} · ${fmtDate(full.arrived_at)}${full.arrive_note ? " · " + full.arrive_note : ""}`}</div>}
+      {full?.status === "arrived" && full.receipt && <ReceiptSummary full={full} />}
       {full?.status === "confirmed" && <div className="ok">{`在路上（${full.confirmed_by_name ?? ""} · ${fmtDate(full.confirmed_at)} 确认）：分店在「在路上」看得到这张与 ETA。`}</div>}
+      {full?.status === "confirmed" && full.confirmed_by_me && <p className="small muted">货到了由仓库的同事在「点货」点数量（确认这张的人不能自己点）。</p>}
 
       {full && (full.status === "confirmed" || full.status === "arrived") && (
         <p className="small">分店看到的 ETA：<EtaText eta={full.eta_effective} source={full.eta_source} arrived={full.status !== "confirmed"} /></p>
@@ -476,7 +480,7 @@ function DoForm({ me, full, start, onFull, flash }: {
               <div className="toolbar">
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="找型号 / 品名…" />
                 <label className="check"><input type="checkbox" checked={onlyShipped} onChange={(e) => setOnlyShipped(e.target.checked)} /> 只看有出货的</label>
-                <label className="check"><input type="checkbox" checked={allOutlets} onChange={(e) => setAllOutlets(e.target.checked)} /> 显示全部分店</label>
+                <label className="check"><input type="checkbox" checked={onlyOrdered} onChange={(e) => setOnlyOrdered(e.target.checked)} /> 只显示有订的分店</label>
                 <button type="button" className="small ghost" onClick={fillRemaining}>全部填还可以出的数量</button>
                 <button type="button" className="small ghost" onClick={clearAll}>全部清零</button>
                 <button type="button" className="small ghost" onClick={allocAll}>照各分店未出数量分配</button>
@@ -671,7 +675,8 @@ function DoForm({ me, full, start, onFull, flash }: {
               {busy === "储存中…" ? "储存中…" : "存 DO 号 / ETA / 附件"}
             </button>
           )}
-          {full?.can_arrive && <button disabled={!!busy} onClick={() => setAsk("arrive")}>货到了（标记到货）</button>}
+          {/* 货到了：仓库点每个型号实际收到几件（点完才算到货，少 / 坏 / 多 / 来错自动记进厂家问题） */}
+          {full?.can_arrive && <button disabled={!!busy} onClick={() => go(`/purchasing/receive/${full.id}`)}>点货（货到了）</button>}
           {full?.can_reopen && <button className="ghost" disabled={!!busy} onClick={() => setAsk("reopen")}>退回草稿</button>}
         </div>
       </div>
@@ -744,17 +749,57 @@ function DoForm({ me, full, start, onFull, flash }: {
                   message="退回后：分店的「在路上」会拿掉这张；这张自动产生、还没人处理的厂家问题会撤回（已决定或已处理的保留）。改好再确认一次。"
                   onClose={() => setAsk(null)} onOk={async (t) => { onFull(await podo.reopen(full.id, t), "已退回草稿。"); }} />
       )}
-      {ask === "arrive" && full && (
-        <AskModal title="货到了" okText="标记到货" label="备注（可空白，例：少 1 箱、有破损已拍照）"
-                  message="标记后这张从「在路上」拿掉（所有分店）。破损、少到的请另外记「坏货 / 到货少」。AutoCount 仍要照常开 GRN。"
-                  onClose={() => setAsk(null)} onOk={async (t) => { await podo.arrive(full.id, t); await reload(full.id, "已标记到货。"); }} />
-      )}
       {addIssue && full && (
         <AddIssueModal doFull={full} onClose={() => setAddIssue(false)}
                        onSaved={() => { setAddIssue(false); reload(full.id).catch((e: Error) => setError(e.message)); }} />
       )}
     </>
   );
+}
+
+// ------------------------------------------------------------------ 已到货：点货纪录的摘要（全文在 #/purchasing/receive/<id>）
+function ReceiptSummary({ full }: { full: DoFull }) {
+  const r = full.receipt!;
+  const sum = (f: (x: (typeof r.items)[number]) => number) => r3(r.items.reduce((s, x) => s + f(x), 0));
+  const good = sum((x) => Number(x.received));
+  const damaged = sum((x) => Number(x.damaged));
+  const short = sum((x) => Math.max(0, Number(x.shipped) - Number(x.received) - Number(x.damaged)));
+  const over = sum((x) => Math.max(0, Number(x.received) + Number(x.damaged) - Number(x.shipped)));
+  const wrong = r3(r.wrong.reduce((s, x) => s + Number(x.qty), 0));
+  // 点货前记的坏货 / 到货少比点到的缺口多（要采购核对）
+  const mism = sum((x) => Math.max(0, Number(x.prior?.damaged ?? 0) + Number(x.prior?.short ?? 0) - Math.max(0, Number(x.shipped) - Number(x.received))));
+  // 点完货之后才补记的（手动、不是点货记的）
+  const arrived = full.arrived_at ? new Date(full.arrived_at).getTime() : 0;
+  const later = full.issues.filter((i) => !i.auto && i.status !== "void" && !r.issue_ids.includes(i.id) && new Date(i.created_at).getTime() > arrived);
+  const laterOf = (k: string) => r3(later.filter((i) => i.kind === k).reduce((s, i) => s + Number(i.qty), 0));
+  // 改了分店分配（只有一间分店、好货全给那间不算：那只是数量跟著好货变）
+  const changed = r.items.filter((x) => {
+    const a = normAlloc(x.alloc), p = normAlloc(x.planned);
+    if (JSON.stringify(a) === JSON.stringify(p)) return false;
+    return !(p.length === 1 && a.length <= 1 && (a.length === 0 || a[0][0] === p[0][0]));
+  }).length;
+  return (
+    <div className="card podo-recv-sum">
+      <b>点货纪录</b>
+      <span>{`好货 ${fmtQty(good)}`}</span>
+      {damaged > 0 && <span className="late">{`坏货 ${fmtQty(damaged)}`}</span>}
+      {short > 0 && <span className="late">{`到货少 ${fmtQty(short)}`}</span>}
+      {over > 0 && <span className="amber">{`多到 ${fmtQty(over)}`}</span>}
+      {wrong > 0 && <span className="late">{`来错 ${fmtQty(wrong)}`}</span>}
+      {damaged + short + over + wrong === 0 && <span className="okc">{later.length ? "点货时全部照 DO 到齐" : "全部照 DO 到齐"}</span>}
+      {mism > 0 && <span className="amber">{`已记的比点到的多 ${fmtQty(mism)}`}</span>}
+      {laterOf("damaged") > 0 && <span className="late">{`之后补记坏货 ${fmtQty(laterOf("damaged"))}`}</span>}
+      {laterOf("short") > 0 && <span className="late">{`之后补记到货少 ${fmtQty(laterOf("short"))}`}</span>}
+      {laterOf("wrong") > 0 && <span className="late">{`之后补记来错 ${fmtQty(laterOf("wrong"))}`}</span>}
+      {changed > 0 && <span className="muted">{`${changed} 个型号改了分店分配`}</span>}
+      <a href={`#/purchasing/receive/${full.id}`}>看点货纪录 →</a>
+    </div>
+  );
+}
+
+/** 分配比对用：拿掉 0、照分店代号排序 */
+function normAlloc(a: Record<string, number> | null | undefined): [string, number][] {
+  return Object.entries(a ?? {}).filter(([, v]) => Number(v) > 0).map(([k, v]): [string, number] => [k, Number(v)]).sort(([x], [y]) => x.localeCompare(y));
 }
 
 // ------------------------------------------------------------------ 已确认：唯读的型号表、分到哪几张 PO

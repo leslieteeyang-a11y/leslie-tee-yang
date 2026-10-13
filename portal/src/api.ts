@@ -322,10 +322,20 @@ export function can(me: Me, module: string, need: Level): boolean {
   return !!m && LEVEL_RANK[m.level] >= LEVEL_RANK[need];
 }
 
-/** 看得到厂家（含 CS 编号）：订货「可编辑」（采购、管理层）或仓库部；同资料库 ops.sees_supplier。
- *  其他人（分行、门市、电商、物流）只看产品、数量、ETA：未到货 PO、货柜不能开，查 SKU 到货不显示 PO 号 / 厂家。 */
+/** 看得到厂家（含 CS 编号）：订货「可编辑」（采购、管理层、物流部）或仓库部；同资料库 ops.sees_supplier。
+ *  其他人（分行、门市、电商）只看产品、数量、ETA：未到货 PO、货柜不能开，查 SKU 到货不显示 PO 号 / 厂家。 */
 export function seesSupplier(me: Me): boolean {
   return can(me, "purchasing", "edit") || me.staff.department === "warehouse";
+}
+
+/** 看得到进货单价 / 金额：订货「可编辑」，但物流部不算（物流部开厂家到货、不看价格）；同资料库 ops.sees_prices */
+export function seesPrices(me: Me): boolean {
+  return can(me, "purchasing", "edit") && me.staff.department !== "logistics";
+}
+
+/** 能点货（货到了填实际收到几件）：订货或仓库「可编辑」；同资料库 ops.podo_can_receive（分店另外在资料库检查） */
+export function canReceive(me: Me): boolean {
+  return can(me, "purchasing", "edit") || can(me, "warehouse", "edit");
 }
 
 export function fmtQty(n: number | null | undefined): string {

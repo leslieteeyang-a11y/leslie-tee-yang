@@ -27,12 +27,14 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
   }
   const toggle = (id: number) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const sum = (rows || []).reduce((a, r) => a + Number(r.diff_value || 0), 0);
+  // 成本（成本差额）只给资料库回了的人：仓库「可审批」但物流部不算（物流部主管看不到进货成本）
+  const showCost = (rows || []).some((r) => r.diff_value != null);
 
   function csv() {
     if (!rows) return;
-    const head = ["日期", "仓位", "商品代号", "品名", "单位", "AutoCount", "未输入搬动", "应有", "实盘", "差额", "成本差额", "盘点人", "备注"];
+    const head = ["日期", "仓位", "商品代号", "品名", "单位", "AutoCount", "未输入搬动", "应有", "实盘", "差额", ...(showCost ? ["成本差额"] : []), "盘点人", "备注"];
     const lines = rows.map((r) => [r.count_date, r.location, r.item_code, r.description, r.uom, r.system_qty, r.pending_qty,
-      r.expected_qty, r.qty, r.diff, r.diff_value, r.counted_by_name, r.note]);
+      r.expected_qty, r.qty, r.diff, ...(showCost ? [r.diff_value] : []), r.counted_by_name, r.note]);
     const text = [head, ...lines].map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
@@ -51,7 +53,7 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
       {!rows ? (!error && <p className="muted">载入中…</p>) : rows.length === 0 ? <Empty>{status === "variance" ? "没有待审核的差异。" : "没有纪录。"}</Empty> : (
         <div className="table-wrap">
           <table>
-            <thead><tr>{status === "variance" && <th />}<th>商品</th><th>仓位</th><th className="num">应有</th><th className="num">实盘</th><th className="num">差额</th><th className="num hide-sm">成本差额</th><th className="hide-sm">盘点</th></tr></thead>
+            <thead><tr>{status === "variance" && <th />}<th>商品</th><th>仓位</th><th className="num">应有</th><th className="num">实盘</th><th className="num">差额</th>{showCost && <th className="num hide-sm">成本差额</th>}<th className="hide-sm">盘点</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
@@ -62,7 +64,7 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
                   <td className="num">{qtyLabel(r.expected_qty)}{Number(r.pending_qty) !== 0 && <div className="muted small">{`AC ${qtyLabel(r.system_qty)}`}</div>}</td>
                   <td className="num">{qtyLabel(r.qty)}{r.attempt === 1 && r.status === "variance" && <div className="muted small">未重数</div>}</td>
                   <td className={"num" + (Number(r.diff) ? " late" : "")}>{Number(r.diff) > 0 ? "+" : ""}{qtyLabel(r.diff)}</td>
-                  <td className="num hide-sm">{Number(r.diff_value || 0).toFixed(2)}</td>
+                  {showCost && <td className="num hide-sm">{Number(r.diff_value || 0).toFixed(2)}</td>}
                   <td className="hide-sm small">{r.counted_by_name}<div className="muted">{whenLabel(r.counted_at)}</div></td>
                 </tr>
               ))}
@@ -70,7 +72,8 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
           </table>
         </div>
       )}
-      {rows && rows.length > 0 && <p className="muted small">{`成本差额合计 RM ${sum.toFixed(2)}（负数 = 少了）。差额 = 实盘 − 应有；应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动。`}</p>}
+      {rows && rows.length > 0 && showCost && <p className="muted small">{`成本差额合计 RM ${sum.toFixed(2)}（负数 = 少了）。差额 = 实盘 − 应有；应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动。`}</p>}
+      {rows && rows.length > 0 && !showCost && <p className="muted small">差额 = 实盘 − 应有；应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动。</p>}
       {status === "variance" && rows && rows.length > 0 && (
         <div className="card wh-bulk">
           <p className="small">{`选了 ${picked.size} 笔：在 AutoCount 开库存调整单（Stock Adjustment）后按「已调整」；查到原因不必调的按「不调整」并写原因；觉得数错了按「请重盘」（明天会再出现在清单）。`}</p>

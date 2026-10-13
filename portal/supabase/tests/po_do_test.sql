@@ -363,24 +363,31 @@ do $$ declare i jsonb; begin
      and i ->> 'note' = '破了一个' and i ->> 'status' = 'open', 'damaged: ' || i::text;
 end $$;
 select pg_temp.as_user('picker@example.com');
+-- 仓库「可编辑」也能记厂家问题（20261014）：数量 0 → 过了权限、卡在数量
 select pg_temp.expect_error($q$select public.ops_po_issue_add(jsonb_build_object('do_id', (select id from t_do where k = 'do1'),
-  'item_code', 'BS100', 'qty', 1))$q$, '编辑权限');
+  'item_code', 'BS100', 'qty', 0))$q$, '请填数量');
 select pg_temp.expect_error($q$select public.ops_po_do_get((select id from t_do where k = 'do1'))$q$, '编辑权限');
+-- 不能再直接「标记到货」，一定要点货（20261014）
+select pg_temp.expect_error($q$select public.ops_po_do_arrive((select id from t_do where k = 'do1'), '少一箱')$q$, '要先点货');
 do $$ declare r jsonb; t jsonb; begin
   t := public.ops_po_transit();
   assert (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'warehouse can arrive';
-  r := public.ops_po_do_arrive((select id from t_do where k = 'do1'), '少一箱');
-  -- 只有仓库权限（打不开 DO）：只回状态，不回备注 / 附件 / PO
-  assert r ->> 'status' = 'arrived' and (select array_agg(k order by k) from jsonb_object_keys(r) k) = '{arrived_at,id,status}',
-    'arrived (warehouse gets status only): ' || r::text;
+  -- 点货：BS100 好货 11 + 坏货 1（采购已记过这 1 件坏货，不重复记）、分配改成总部 7 + JB 4；TP200 全到
+  r := public.ops_po_do_receive(jsonb_build_object('id', (select id from t_do where k = 'do1'), 'note', '外箱压坏一个',
+         'items', '[{"item_code":"BS100","received":11,"damaged":1,"alloc":{"HQ":7,"JB":4}},
+                    {"item_code":"TP200","received":22,"alloc":{"HQ":20,"BATU":2}}]'::jsonb));
+  assert r ->> 'status' = 'arrived' and r -> 'receipt' -> 'issue_ids' = '[]'::jsonb and pg_temp.no_price(r),
+    'received, no new issues: ' || r::text;
   t := public.ops_po_transit();
   assert not exists (select 1 from jsonb_array_elements(t -> 'rows') x where x ->> 'do_no' = 'FS-0901'), 'arrived leaves transit';
   assert jsonb_array_length(t -> 'rows') = 6, 'DO2 5 + DO3 1: ' || t::text;
 end $$;
-select pg_temp.expect_error($q$select public.ops_po_do_arrive((select id from t_do where k = 'do1'))$q$, '已经标记到货了');
+select pg_temp.expect_error($q$select public.ops_po_do_receive(jsonb_build_object('id', (select id from t_do where k = 'do1')))$q$,
+  '已经点过货了');
 select pg_temp.as_user('buyer@example.com');
 do $$ declare b jsonb; r jsonb := public.ops_po_do_get((select id from t_do where k = 'do1')); begin
-  assert r ->> 'arrived_by_name' = '仓库阿强' and r ->> 'arrive_note' = '少一箱', 'arrived: ' || r::text;
+  assert r ->> 'arrived_by_name' = '仓库阿强' and r ->> 'arrive_note' = '外箱压坏一个'
+     and (r -> 'receipt' -> 'items' -> 0 ->> 'received')::numeric = 11, 'arrived: ' || r::text;
   -- 到货了但 AutoCount 还没开 GRN：PO 行照样算在路上（JB 的 102：DO1 4 + DO2 2），只扣掉记了坏货的 1 件（不会入库，厂家欠）
   b := pg_temp.item(public.ops_po_do_candidates('', '4000-F001', array['PO-F1']) -> 'items', 'BS100');
   assert (b -> 'by_outlet' -> 'JB' ->> 'in_transit')::numeric = 5 and (b -> 'by_outlet' -> 'JB' ->> 'remaining')::numeric = 1
@@ -604,6 +611,20 @@ $$;
 create or replace function pg_temp.grn(p_key bigint, p_tr numeric) returns void language sql security definer as $$
   update bi.fact_po_line set transferred_qty = p_tr where company = 'HOMEWORKSSB' and dtl_key = p_key
 $$;
+-- 点货：每个型号照出货全到、照原分配（20261014 起不能直接标记到货；确认的人不能自己点 → 换仓库阿强点，点完换回来）
+create or replace function pg_temp.recv_all(p_id bigint) returns jsonb language plpgsql as $$
+declare
+  claims text := current_setting('request.jwt.claims', true);
+  r jsonb;
+begin
+  perform set_config('request.jwt.claims', json_build_object('email', 'picker@example.com')::text, false);
+  r := public.ops_po_do_receive(jsonb_build_object('id', p_id, 'items',
+    (select coalesce(jsonb_agg(jsonb_build_object('item_code', x ->> 'item_code', 'received', x -> 'shipped', 'alloc', x -> 'alloc')),
+                     '[]'::jsonb)
+     from jsonb_array_elements(public.ops_po_receive_get(p_id) -> 'items') x)));
+  perform set_config('request.jwt.claims', claims, false);
+  return r;
+end $$;
 grant execute on all functions in schema pg_temp to authenticated, anon;
 insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, creditor_name, item_code, description,
                              location, uom, qty, transferred_qty) values
@@ -641,7 +662,7 @@ do $$ declare c jsonb; r jsonb; v bigint; begin
   v := pg_temp.mkdo('{"creditor_code":"R5","po_nos":["R5-P1"],"do_no":"R5-1",
     "items":[{"item_code":"A5","shipped":10,"alloc":{"HQ":6,"JB":4}}]}');
   perform public.ops_po_do_confirm(v);
-  perform public.ops_po_do_arrive(v);
+  perform pg_temp.recv_all(v);
   perform pg_temp.grn(1501, 10);
   c := pg_temp.cand('R5', array['R5-P1'], 'A5');
   assert (c ->> 'in_transit')::numeric = 0 and (c ->> 'remaining')::numeric = 6
@@ -711,7 +732,7 @@ do $$ declare c jsonb; r jsonb; v bigint; begin
   v := pg_temp.mkdo('{"creditor_code":"R3","po_nos":["R3-P1"],"do_no":"R3-1",
     "items":[{"item_code":"A3","shipped":10,"alloc":{"HQ":10}},{"item_code":"A3B","shipped":10,"alloc":{"HQ":10}}]}');
   perform public.ops_po_do_confirm(v);
-  perform public.ops_po_do_arrive(v);
+  perform pg_temp.recv_all(v);
   perform public.ops_po_issue_add(jsonb_build_object('do_id', v, 'item_code', 'A3', 'qty', 4, 'note', '破了'));
   perform public.ops_po_issue_add(jsonb_build_object('do_id', v, 'kind', 'short', 'item_code', 'A3B', 'qty', 2, 'note', '少一箱'));
   perform pg_temp.expect_error(format('select public.ops_po_issue_add(%L)',

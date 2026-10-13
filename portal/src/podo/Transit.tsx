@@ -1,12 +1,13 @@
 // 在路上：已确认、还没到货的厂家 DO，按分店列出每个型号分给这间分店几件与 ETA。不含价格。
-// 总部 / 全部分店的人看全部分店；JB 的人只看 JB（资料库 ops_po_transit 已经过滤）。仓库可以在这里「货到了」。
+// 总部 / 全部分店的人看全部分店；JB 的人只看 JB（资料库 ops_po_transit 已经过滤）。仓库在这里按「点货」去点数量（#/purchasing/receive/<id>）。
 // 分行、门市等（data.full = false）不能知道厂家：资料库不回厂家 / DO 号 / PO 号 / 货柜，这里只列型号、数量、ETA。
 // full 的人（采购、仓库部）看别家公司的 DO（JB 看总部分给 JB 的货）：那几行一样没有厂家 / DO 号 / PO 号，也不能点开。
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { BRANCH_LABEL, can, fmtQty, Me } from "../api";
+import { go } from "../router";
 import { Empty, ErrorBox } from "../ui";
 import { joinList, podo, Transit, TransitRow } from "../podo-api";
-import { AskModal, EtaText } from "./common";
+import { EtaText } from "./common";
 
 interface DoGroup { do_id: number; head: TransitRow; rows: TransitRow[] }
 interface OutletGroup { code: string; name: string; dos: DoGroup[]; qty: number }
@@ -17,7 +18,6 @@ export default function TransitTab({ me }: { me: Me }) {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<Transit | null>(null);
   const [error, setError] = useState("");
-  const [arrive, setArrive] = useState<TransitRow | null>(null);
   const canOpen = can(me, "purchasing", "edit");
   const full = data?.full ?? (canOpen || me.staff.department === "warehouse");
 
@@ -69,7 +69,7 @@ export default function TransitTab({ me }: { me: Me }) {
                   <thead><tr><th>型号 / 品名</th><th className="num">数量</th><th className="hide-sm">PO</th></tr></thead>
                   <tbody>
                     {g.dos.map((d) => (
-                      <DoRows key={d.do_id} d={d} canOpen={canOpen} showCompany={me.staff.branch === "ALL"} onArrive={setArrive} />
+                      <DoRows key={d.do_id} d={d} canOpen={canOpen} showCompany={me.staff.branch === "ALL"} />
                     ))}
                   </tbody>
                 </table>
@@ -91,19 +91,11 @@ export default function TransitTab({ me }: { me: Me }) {
           </section>
         ))
       )}
-      {arrive && (
-        <AskModal title="货到了" okText="标记到货" label="备注（可空白，例：少 1 箱、有破损已拍照）"
-                  message={`DO ${arrive.do_no || "#" + arrive.do_id}（${arrive.supplier_name ?? ""}）整张标记到货，所有分店的「在路上」都会拿掉这张。`}
-                  onClose={() => setArrive(null)}
-                  onOk={async (t) => { await podo.arrive(arrive.do_id, t); setArrive(null); load(); }} />
-      )}
     </>
   );
 }
 
-function DoRows({ d, canOpen, showCompany, onArrive }: {
-  d: DoGroup; canOpen: boolean; showCompany: boolean; onArrive: (r: TransitRow) => void;
-}) {
+function DoRows({ d, canOpen, showCompany }: { d: DoGroup; canOpen: boolean; showCompany: boolean }) {
   const h = d.head;
   const label = h.do_no || `#${h.do_id}`;
   return (
@@ -119,7 +111,8 @@ function DoRows({ d, canOpen, showCompany, onArrive }: {
               <br />
               <span className="small">ETA <EtaText eta={h.eta} source={h.eta_source} /></span>
             </span>
-            {h.can_arrive && <button className="small" onClick={() => onArrive(h)}>货到了</button>}
+            {/* 货到了：去点货（每个型号填实际收到几件，点完才算到货） */}
+            {h.can_arrive && <button className="small" onClick={() => go(`/purchasing/receive/${h.do_id}`)}>点货</button>}
           </div>
         </td>
       </tr>

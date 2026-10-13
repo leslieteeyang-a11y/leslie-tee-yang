@@ -155,4 +155,76 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
     `DO ${m[1]} (${m[2]}) will be marked arrived as a whole and removed from every outlet's "In transit".`],
   [/^在路上 DO (.+)$/, (m) => `In transit: DO ${m[1]}`],
   [/^HomeWorks · 厂家问题清单 · (.+) · (\d+) 笔$/, (m) => `HomeWorks · Supplier issue list · ${m[1]} · ${m[2]} entr${m[2] === "1" ? "y" : "ies"}`],
+  // 2026-10-14 点货（货到了由仓库点数量）：画面用语 + 20261014_ops_po_receive 的错误讯息
+  [/^型号 (.+) 不是这张 DO 要点的货；来错的货请填在「来错的货」。$/, (m) =>
+    `Model ${m[1]} isn't on this DO's list to receive; enter wrong items under "Wrong items".`],
+  [/^型号 (.+) 重复了。$/, (m) => `Model ${m[1]} appears twice.`],
+  [/^型号 (.+) 请填好货收到几件。$/, (m) => `Model ${m[1]}: enter how many good units arrived.`],
+  [/^型号 (.+) 的(好货|坏货)数量(不是数字|不能是负数)。$/, (m) =>
+    `Model ${m[1]}: the ${m[2] === "好货" ? "good" : "damaged"} qty ${m[3] === "不是数字" ? "isn't a number" : "can't be negative"}.`],
+  [/^型号 (.+) 分到 (.+) 的数量(不是数字|不能是负数)。$/, (m) =>
+    `Model ${m[1]}: the qty for ${m[2]} ${m[3] === "不是数字" ? "isn't a number" : "can't be negative"}.`],
+  [/^型号 (.+) 好货 ([\d.,]+) 件，分到各分店合计 ([\d.,]+) 件：要相等。$/, (m) =>
+    `Model ${m[1]}: ${m[2]} good but the outlets add up to ${m[3]} — they must match.`],
+  [/^型号 (.+) 还没填点货数量。$/, (m) => `Not counted yet: ${m[1]}.`],
+  [/^「本来应该是」的型号 (.+) 不是这张 DO 的型号。$/, (m) => `"Should have been" model ${m[1]} isn't on this DO.`],
+  [/^待点货（(\d+)）$/, (m) => `To receive (${m[1]})`],
+  [/^最近点过（(\d+)）$/, (m) => `Received recently (${m[1]})`],
+  [/^点货（(\d+) 个型号）$/, (m) => `Count (${m[1]} models)`],
+  [/^点货纪录（(\d+) 个型号）$/, (m) => `Count record (${m[1]} models)`],
+  [/^来错的货（(\d+)）$/, (m) => `Wrong items (${m[1]})`],
+  [/^(到货少|坏货|多到)（(\d+)）$/, (m) =>
+    `${({ 到货少: "Short on arrival", 坏货: "Damaged", 多到: "Extra" } as Record<string, string>)[m[1]]} (${m[2]})`],
+  [/^厂家 DO \/ 装箱单（(\d+)）$/, (m) => `Supplier DO / packing list (${m[1]})`],
+  [/^到货少 ([\d.,]+)$/, (m) => `${m[1]} short on arrival`],
+  [/^坏货 ([\d.,]+)$/, (m) => `${m[1]} damaged`],
+  [/^坏 ([\d.,]+)$/, (m) => `${m[1]} damaged`],
+  [/^多到 ([\d.,]+)$/, (m) => `${m[1]} extra`],
+  [/^来错 ([\d.,]+)$/, (m) => `${m[1]} wrong`],
+  [/^好货 ([\d.,]+)$/, (m) => `${m[1]} good`],
+  [/^应到 ([\d.,]+)$/, (m) => `expected ${m[1]}`],
+  [/^到了 ([\d.,]+)$/, (m) => `arrived ${m[1]}`],
+  [/^原 ([\d.,]+)$/, (m) => `was ${m[1]}`],
+  [/^分配还差 ([\d.,]+)$/, (m) => `${m[1]} not allocated`],
+  [/^已记坏货 ([\d.,]+)$/, (m) => `${m[1]} damaged already logged`],
+  [/^已记到货少 ([\d.,]+)$/, (m) => `${m[1]} short already logged`],
+  [/^(.+) 好货$/, (m) => `${m[1]} good`],
+  [/^(.+) 坏货$/, (m) => `${m[1]} damaged`],
+  [/^好货共 ([\d.,]+) 件。$/, (m) => `${m[1]} good pcs in total.`],
+  [/^已点完货：(\d+) 笔记进厂家问题。$/, (m) => `Goods received: ${m[1]} supplier issue(s) logged.`],
+  [/^改了分店分配的型号：(.+)$/, (m) => `Outlet split changed for: ${m[1]}`],
+  [/^(\d+) 个型号改了分店分配$/, (m) => `${m[1]} model(s) with a changed outlet split`],
+  [/^整张备注：([\s\S]+)$/, (m) => `Note: ${m[1]}`],
+  [/^在路上（(.*) · (.+) 确认）。货到了：照实际收到的填，点完按「点完，货到了」。$/, (m) =>
+    `In transit (confirmed by ${m[1]} · ${m[2]}). When it arrives, enter what actually came, then press "Done — goods arrived".`],
+  [/^确认时已记成发错型号（厂家 DO 对不上 PO 的行）：(.+)。点到的是这些就不用再填。$/, (m) =>
+    `Already logged as wrong models when the DO was confirmed (supplier DO rows not on the POs): ${m[1]}. If that's what you found, no need to enter them again.`],
+  // 2026-10-14 审查后
+  [/^这张 DO 已经点过货了（(.+) · (.+)），请回点货清单看纪录。$/, (m) =>
+    `This DO has already been counted (${m[1]} · ${m[2]}) — see the record from the receiving list.`],
+  [/^(.+) 账套的货只能分给 (.+)（不能分给 (.+)）。$/, (m, t) =>
+    `Goods on the ${t(m[1])} books can only go to ${m[2].split("、").map(t).join(", ")} (not ${m[3].split("、").map(t).join(", ")}).`],
+  [/^来错的货第 (\d+) 行请填收到的型号或备注。$/, (m) => `Wrong items row ${m[1]}: enter the model received or a note.`],
+  [/^来错的货第 (\d+) 行请填数量。$/, (m) => `Wrong items row ${m[1]}: enter the qty.`],
+  [/^来错的货第 (\d+) 行的数量(不是数字|不能是负数)。$/, (m) =>
+    `Wrong items row ${m[1]}: the qty ${m[2] === "不是数字" ? "isn't a number" : "can't be negative"}.`],
+  [/^最近 (\d+) 天没有点过货。$/, (m) => `Nothing received in the last ${m[1]} days.`],
+  [/^最近 (\d+) 天$/, (m) => `Last ${m[1]} days`],
+  [/^第 (\d+) 行$/, (m) => `Row ${m[1]}`],
+  [/^已记的比点到的多 ([\d.,]+)$/, (m) => `${m[1]} more logged than counted`],
+  [/^已记的多 ([\d.,]+)$/, (m) => `${m[1]} more already logged`],
+  [/^之后补记(坏货|到货少|来错) ([\d.,]+)$/, (m) =>
+    `${m[2]} ${({ 坏货: "damaged", 到货少: "short", 来错: "wrong" } as Record<string, string>)[m[1]]} added later`],
+  [/^自动调整：(.+)（可改）$/, (m, t) =>
+    `Adjusted for you: ${m[1].split("、").map((x) => { const p = x.match(/^(.+) ([+−][\d.,]+)$/); return p ? `${t(p[1])} ${p[2]}` : x; }).join(", ")} (you can change it)`],
+  [/^多 ([\d.,]+)（其中坏的 ([\d.,]+) 件）$/, (m) => `${m[1]} over (${m[2]} of them damaged)`],
+  [/^点货前已记过（(\d+)）$/, (m) => `Already logged before the count (${m[1]})`],
+  [/^已记 ([\d.,]+)，不重复记$/, (m) => `${m[1]} already logged — not logged again`],
+  [/^跟已记的不一样（(\d+)）$/, (m) => `Doesn't match what was logged (${m[1]})`],
+  [/^已记坏货 \/ 到货少 ([\d.,]+)$/, (m) => `${m[1]} damaged / short already logged`],
+  [/^点到少 ([\d.,]+)$/, (m) => `${m[1]} missing at the count`],
+  [/^(\d+) 批厂家到货还没填 ETA$/, (m) => `${m[1]} supplier deliver${m[1] === "1" ? "y" : "ies"} still without an ETA`],
+  [/^(\d+) 笔厂家问题等处理$/, (m) => `${m[1]} supplier issue${m[1] === "1" ? "" : "s"} to handle`],
+  [/^(\d+) 批厂家货三天内到（含已过 ETA），到了要点货$/, (m) =>
+    `${m[1]} supplier deliver${m[1] === "1" ? "y" : "ies"} due within 3 days (incl. past ETA) — count them in when they arrive`],
 ];

@@ -95,3 +95,37 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
   #podo-print tr { break-inside: avoid; page-break-inside: avoid; }
 }
 .podo-res { display: block; }
+
+/* 点货（#/purchasing/receive） */
+.podo-recv-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.podo-recv-sum a { margin-left: auto; }
+.recv-table tr.recv-diff td { background: #fffaf2; }
+.recv-table tr.recv-diff td.sticky { background: #fffaf2; }
+input.podo-num.changed { border-color: var(--amber); background: var(--amber-soft); }
+.recv-state span { display: block; }
+.recv-state button { display: block; margin-top: 4px; padding: 3px 10px; }
+.recv-auto { display: block; margin-top: 2px; white-space: normal; max-width: 220px; }
+.recv-state .recv-alloc { display: flex; flex-wrap: wrap; gap: 0 8px; margin-top: 2px; color: var(--muted); }
+.recv-state .recv-alloc span { display: inline; }
+.recv-sm { display: none; }
+.recv-wrong-card { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; align-items: end;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.recv-wrong-card .recv-wrong-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+.recv-wrong-card label { display: flex; flex-direction: column; gap: 3px; font-size: .85rem; min-width: 0; }
+.recv-wrong-card label.wide { grid-column: 1 / -1; }
+.recv-wrong-card input, .recv-wrong-card select { width: 100%; padding: 6px 8px; }
+.recv-wrong-card input.podo-num { width: 100%; }
+select.recv-days { width: auto; padding: 5px 8px; }
+.recv-sum-line .tag, .recv-sum-line .okc { margin-right: 6px; }
+label.recv-note { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.recv-issues li > span:first-child { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; }
+.recv-issues li .pre { flex-basis: 100%; }
+/* 手机：分店栏在画面外 → 状态、分配、按钮放在第一栏型号底下；栏位收窄，一打开就看得到应到 / 好货 / 坏货 */
+@media (max-width: 640px) {
+  .recv-sm { display: block; margin-top: 4px; white-space: normal; }
+  .recv-table .recv-lg { display: none; }
+  .recv-table th, .recv-table td { padding: 6px 5px; }
+  .podo-table.recv-table th.sticky, .podo-table.recv-table td.sticky { min-width: 112px; max-width: 132px; }
+  .recv-table input.podo-num { width: 58px; padding: 6px; }
+  .recv-auto { max-width: none; }
+}

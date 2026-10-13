@@ -45,12 +45,16 @@ export interface DoHeader {
   files: DoFile[]; item_count: number; unmatched_count: number; shipped_total: number; issue_open: number;
   created_by_name: string | null; created_at: string; updated_by_name: string | null; updated_at: string;
   confirmed_by_name: string | null; confirmed_at: string | null; arrived_by_name: string | null; arrived_at: string | null;
+  /** 这张是我确认的：不能自己点货（can_arrive = false） */
+  confirmed_by_me?: boolean;
   arrive_note: string; cancelled_by_name: string | null; cancelled_at: string | null; cancel_reason: string;
   can_edit: boolean; can_edit_info: boolean; can_reopen: boolean; can_arrive: boolean; can_add_issue: boolean;
 }
 export interface Applied { item_code: string; outlet: string; qty: number; po_no: string | null; dtl_key: number | null; line_outlet: string | null }
 export interface DoFull extends DoHeader {
   items: DoItem[]; outlets: Outlet[]; candidates: Candidate[]; applied: Applied[]; issues: Issue[];
+  /** 点货纪录（仓库点完货才有；旧版直接「标记到货」的是 null） */
+  receipt?: Receipt | null;
   history: { at: string; action: string; staff_name: string | null; data: Record<string, unknown> }[];
 }
 export interface Issue {
@@ -71,18 +75,71 @@ export interface TransitRow {
 }
 export interface Transit { full: boolean; outlets: { code: string; name: string; short_name: string }[]; rows: TransitRow[] }
 
+// ------------------------------------------------------------ 点货（货到了由仓库点数量）
+/** 点完货的件数：到货少 = 出货 − 好货 − 坏货；多到 = 好货 + 坏货 − 出货；来错 = 来错的货合计；
+ *  mismatch = 点货前手动记的坏货 + 到货少比点到的缺口多几件（要采购核对）；later = 点完货之后才补记的 */
+export interface RecvSummary {
+  short: number; damaged: number; over: number; wrong: number;
+  mismatch?: number; later?: { damaged: number; short: number; wrong: number };
+}
+/** 点货清单的一张 DO。看不到厂家的人（ops.sees_supplier = false）：do_no / 厂家 / 货柜是 null、po_nos 是 []。不含价格。 */
+export interface RecvRow {
+  id: number; company: string; status: DoStatus; do_date: string | null;
+  do_no: string | null; supplier_name: string | null; creditor_code: string | null; shipment_name: string | null; po_nos: string[];
+  eta: string | null; eta_source: "shipment" | "do" | null; overdue: boolean;
+  item_count: number; unmatched_count: number; shipped_total: number;
+  /** 这张分到的分店代号（照分店顺序） */
+  outlets: string[];
+  confirmed_at: string | null; confirmed_by_name: string | null; arrived_at: string | null; arrived_by_name: string | null;
+  /** 这张是我确认的：不能自己点（物流部记、仓库部点） */
+  self_confirmed: boolean;
+  summary: RecvSummary | null;
+}
+export interface RecvList { todo: RecvRow[]; done: RecvRow[]; days?: number }
+/** 要点的一个型号：出货（应到）与确认时的分配；prior = 这张 DO 已经有的手动问题件数（到货少只算手动记的） */
+export interface RecvItem {
+  item_code: string; description: string; uom: string; shipped: number; alloc: Record<string, number>;
+  prior: { damaged: number; short: number; over: number; wrong: number };
+}
+export interface ReceiptItem {
+  item_code: string; description: string; uom: string; shipped: number; received: number; damaged: number;
+  /** 点货的人分给各分店的好货 */ alloc: Record<string, number>;
+  /** 确认时的分配 */ planned: Record<string, number>;
+  /** 点货前已经手动记的坏货 / 到货少（旧纪录没有） */ prior?: { damaged: number; short: number };
+  note: string;
+}
+export interface ReceiptWrong { received_code: string; description: string; expected_code: string | null; qty: number; note: string }
+export interface Receipt { items: ReceiptItem[]; wrong: ReceiptWrong[]; note: string; issue_ids: number[] }
+export interface RecvIssue {
+  id: number; kind: IssueKind; item_code: string | null; received_code: string; description: string; qty: number; auto: boolean;
+  status: IssueStatus; decision: IssueDecision | null; note: string; from_receipt: boolean;
+  /** 点完货之后才补记的 */ after_receipt?: boolean; created_at?: string;
+}
+export interface RecvFull extends Omit<RecvRow, "outlets"> {
+  alloc_outlets: string[];
+  /** 这张可以分的分店，照顺序：总部账套四间都有；JB 账套只有 JB */
+  outlets: { code: string; name: string; short_name: string; company: string }[];
+  remark: string; files: DoFile[]; arrive_note: string;
+  receipt: Receipt | null; can_receive: boolean;
+  items: RecvItem[];
+  /** 确认时 Excel 对不上 PO 的行（已记成发错型号） */
+  unmatched: { src_code: string; src_desc: string; shipped: number; expected_code: string | null; note: string }[];
+  issues: RecvIssue[];
+}
+
 export const DO_STATUS_LABEL: Record<DoStatus, string> = {
   draft: "草稿", confirmed: "在路上", arrived: "已到货", cancelled: "已取消",
 };
 export const ISSUE_KIND_LABEL: Record<IssueKind, string> = { short: "少发", over: "多发", wrong: "发错型号", damaged: "坏货" };
-/** 手动记的少发 = 到货少（厂家 DO 写的比实际到的多） */
-export const issueKindLabel = (i: Pick<Issue, "kind" | "auto">) => (i.kind === "short" && !i.auto ? "到货少" : ISSUE_KIND_LABEL[i.kind]);
+/** 手动记的少发 = 到货少（厂家 DO 写的比实际到的多）；点货记的多发 = 多到（实际到的比厂家 DO 写的多） */
+export const issueKindLabel = (i: Pick<Issue, "kind" | "auto">) =>
+  (!i.auto && i.kind === "short" ? "到货少" : !i.auto && i.kind === "over" ? "多到" : ISSUE_KIND_LABEL[i.kind]);
 export const DECISION_LABEL: Record<IssueDecision, string> = { pending: "未决定", await: "厂家会补", cancelled: "取消（下次再订）" };
 export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = { open: "未处理", resolved: "已处理", void: "已作废" };
 export const DO_ETA_SOURCE_LABEL: Record<string, string> = { shipment: "货柜", do: "DO" };
 export const DO_ACTION_LABEL: Record<string, string> = {
   create: "建立", update: "改了内容", confirm: "确认（在路上）", reopen: "退回草稿", cancel: "取消", arrive: "标记到货",
-  issue_add: "记厂家问题",
+  receive: "点货（货到了）", issue_add: "记厂家问题",
 };
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
@@ -104,7 +161,10 @@ export const podo = {
   confirm: (id: number) => rpc<DoFull>("ops_po_do_confirm", { p_id: id }),
   reopen: (id: number, reason: string) => rpc<DoFull>("ops_po_do_reopen", { p_id: id, p_reason: reason }),
   cancel: (id: number, reason: string) => rpc<DoHeader>("ops_po_do_cancel", { p_id: id, p_reason: reason }),
-  arrive: (id: number, note: string) => rpc<DoHeader>("ops_po_do_arrive", { p_id: id, p_note: note }),
+  // 货到了一定要点货（ops_po_do_arrive 现在一律回「要先点货」）
+  receiveList: (p: Record<string, unknown> = {}) => rpc<RecvList>("ops_po_receive_list", { p }),
+  receiveGet: (id: number) => rpc<RecvFull>("ops_po_receive_get", { p_id: id }),
+  receive: (p: Record<string, unknown>) => rpc<RecvFull>("ops_po_do_receive", { p }),
   transit: (p: Record<string, unknown>) => rpc<Transit>("ops_po_transit", { p }),
   issues: (p: Record<string, unknown>) => rpc<Issue[]>("ops_po_issues", { p }),
   issueAdd: (p: Record<string, unknown>) => rpc<Issue>("ops_po_issue_add", { p }),

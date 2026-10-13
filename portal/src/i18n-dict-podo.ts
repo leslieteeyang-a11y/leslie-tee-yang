@@ -87,7 +87,6 @@ export const DICT_PODO: Record<string, string> = {
     "Excel (.xlsx / .xls / .csv) quantities are read automatically; PDFs and photos are kept as attachments — fill the quantities below: press \"All arrived\" for models that came in full, then change the ones that came short.",
   "找型号 / 品名…": "Find model / item…",
   "只看有出货的": "Only shipped items",
-  "显示全部分店": "Show all outlets",
   "全部填还可以出的数量": "Fill all with qty that can still ship",
   "全部清零": "Set all to 0",
   "照各分店未出数量分配": "Allocate by each outlet's open qty",

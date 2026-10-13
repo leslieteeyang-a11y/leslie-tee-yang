@@ -6,7 +6,7 @@ import { BRANCH_LABEL, fmtDate, fmtQty, Me, todayKL } from "../api";
 import { Empty, ErrorBox, Modal } from "../ui";
 import { getLang } from "../i18n";
 import {
-  dateKL, DECISION_LABEL, DoFull, DoHeader, Issue, ISSUE_KIND_LABEL, ISSUE_STATUS_LABEL, issueKindLabel, joinList, num, podo, ui,
+  dateKL, DECISION_LABEL, DoHeader, Issue, ISSUE_KIND_LABEL, ISSUE_STATUS_LABEL, issueKindLabel, joinList, num, podo, ui,
 } from "../podo-api";
 import { AskModal, IssueBadges } from "./common";
 
@@ -135,9 +135,15 @@ export function IssueTable({ rows, onChanged, showDo, picked, onPick }: {
 }
 
 // ------------------------------------------------------------------ 手动记：坏货 / 到货少 / 发错型号
-export function AddIssueModal({ doFull, onClose, onSaved }: { doFull?: DoFull; onClose: () => void; onSaved: () => void }) {
+/** 记问题要的那张 DO：DO 画面给整张 DoFull；点货画面（仓库看不到 ops_po_do_get）给点货资料的型号 */
+export interface IssueDo {
+  id: number;
+  items: { item_code: string | null; description: string; shipped: number }[];
+  candidates: { item_code: string }[];
+}
+export function AddIssueModal({ doFull, onClose, onSaved }: { doFull?: IssueDo; onClose: () => void; onSaved: () => void }) {
   const [dos, setDos] = useState<DoHeader[] | null>(null);
-  const [full, setFull] = useState<DoFull | null>(doFull ?? null);
+  const [full, setFull] = useState<IssueDo | null>(doFull ?? null);
   const [kind, setKind] = useState<"damaged" | "short" | "wrong">("damaged");
   const [f, setF] = useState({ item_code: "", received_code: "", description: "", qty: "", note: "" });
   const [error, setError] = useState("");

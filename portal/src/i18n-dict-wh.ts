@@ -2,6 +2,9 @@
 type T = (s: string) => string;
 
 export const DICT_WH: Record<string, string> = {
+  // 物流部主管（仓库可审批）看不到成本：差异审核只留这句说明（2026-10-14）
+  "差额 = 实盘 − 应有；应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动。":
+    "Difference = counted − expected; expected = AutoCount stock + moves not yet entered in AutoCount.",
   "仓库": "Warehouse",
   "查货（扫条码）、搬动登记、每日小盘点、差异审核、印条码": "Item lookup (scan), stock moves, daily cycle counts, variance review, barcode labels",
   "查货": "Lookup",
