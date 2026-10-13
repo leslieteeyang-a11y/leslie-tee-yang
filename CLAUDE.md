@@ -228,7 +228,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   （仓库 / 物流 / 总部开单员都可以）→ 分店按「已收到」；分店看得到总部仓库现货、在路上与 ETA、厂家问题，不看价格；Puchong 加进 ops.staff。
   **第三段**：AI 读 PDF / 照片的厂家 DO。使用者 2026-10-13 问「为什么要 API 金钥」后改口：不用 AI 读，从 PO 列出型号自己挑就好
   → **先不申请金钥、第三段搁置**（照片照样可上传当附件）。小地方还没改：新 DO 第一次存档前候选数量以今天计。
-  **2026-10-13 追加**（前端 `dpl_HBDgtB9UAMd1q44Mora2GeA7rNqT` = 全到；CS / 厂家隐私见下）：
+  **2026-10-13 追加**（前端 `dpl_HBDgtB9UAMd1q44Mora2GeA7rNqT` = 全到；CS 编号 + 厂家隐私 = `dpl_2Z8yEySjbRDKsA5KBTDNiA1t2xS6` READY，101 个档 uid 与本机一致）：
   ① 厂家到货每行「全到」按键（出货 = 还可以出，分配照各分店未出；`DoEditor.tsx` `fullRow`，「全部填」共用）。
   ② **CS 编号**：中国厂开在代理户口下（4000-M002 MULTI GLOBE 91 张未到 PO / 32 种 CS；MAIDEN SQUARE、CMG、SHADOW RHOMBUS 也是），
   CS 编号只写在 PO 厂家名称栏（常夹备注「CS028 (ETA)」「CS011(还没订）」）。`ops.podo_cs` 抽出（字首 CS、可有空白或 -、补到 3 位）；
