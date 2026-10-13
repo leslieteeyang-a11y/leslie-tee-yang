@@ -239,6 +239,25 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   首页「三天内到货」不给；在路上只列型号、数量、ETA，搜寻只找型号 / 品名。看得到厂家的人在路上每行还要看得到那张 DO 的公司
   （JB 采购看总部分给 JB 的货一样没有厂家 / DO 号 / PO 号）。migration `20261013b_ops_supplier_privacy.sql` = `ops_supplier_privacy`（两个都已套，
   12 个函数 md5 与本机一致）。**第二段注意**：Batu 员工现在 branch 也是 HOMEWORKSSB，规则分不出总部与 Batu；Batu 的人只要不是采购 / 仓库部就看不到厂家。
+- **订货 SOP + 仓库点货 + 开单部（2026-10-13 上线）**：migration `20261014_ops_po_receive.sql`（正式环境 `ops_po_receive_1`～`_3`）+
+  `20261015_ops_po_sop.sql`（`ops_po_sop_1`～`_9`，照「-- ====」切；**要先套 20261014，套过 20261015 之后不要再重跑 20261014**）；
+  套完 248 个 ops / public.ops_* 函数与本机比对，这两个 migration 碰到的全部一致（另外 9 个旧函数只差函数内的中文注解，正式环境当初套的是去掉注解的版本）。
+  前端部署 `DEPLOY_ID_PENDING`。使用者决定：
+  ① **只有订货部（采购）开厂家到货**（物流部改回订货「只看」、看不到厂家）；一步接一步：选 PO → 出货 → 分店（一打开就列四间分店；JB 账套只能分 JB，
+  触发器 `supplier_do_outlet_guard`）→ ETA → 确认（订货部）→ 点货（仓库部）→ 厂家问题（采购决定）→ 进货待开 GRN（开单部）；`ops.podo_json.sop`
+  回目前第几步、等哪个部门；草稿从开单起 24 小时没确认标红；首页提醒：`do_draft_stale`、`po_no_eta`（PO 没 ETA 要问厂家：中国货 ≥ 30 天、本地 ≥ 7 天、
+  ≤ 120 天、没厂家到货 / 没 ETA / 没货柜；上线当天正式环境 69 张）、`po_issues_todo`、`do_to_count`、`grn_pending`。
+  ② **「这批的问题」**（开单画面）：少发开单时就选厂家会补 / 取消 / 未决定（`items[].short_decision`）；来错的型号可搜我们的商品（`ops_po_item_search`）
+  或「不是我们的产品」+ 要厂家怎么处理（`supplier_issue.request`：replace / return / next / keep / other）；缺零件 kind = `part`（`supplier_do.parts`，
+  「下次补上」= 厂家会补）；厂家问题记 CS 工厂（`factory`）、`owed_qty`（厂家还欠）；问题页按厂家 → CS 工厂分组；**WhatsApp 讯息**中 / 英、写厂家 DO 号与我们的 PO 号、
+  不含价格（`podo/whatsapp.tsx`，wa.me 自己选联络人）。
+  ③ **仓库点货**（订货或仓库「可编辑」；不能再直接「标记到货」）：每个型号好货 / 坏货、改分店分配、来错的货；少 / 坏 / 多 / 来错自动记厂家问题。
+  ④ **点货后库存跟著变（不写 AutoCount）**：点货产生 `ops.wh_move` kind = `receive`（pending，仓位照 `ops.podo_recv_loc`：总部 = PO 行仓位、其他分店 = PRE (分店)），
+  `ops.wh_pending` 加进查商品 / 盘点「应有」；新部门 **开单部 `billing`**（仓库只看 + `ops.grn_can_mark`，看得到厂家）在「仓库 → 待开进货单」照单在 AutoCount 开 GRN、
+  按已输入填 GRN 号；AutoCount 已有新 GRN 只提示「可能已输入」（`grn_avail` 先出先到），不自动标；点货时 AutoCount 已经有 GRN 的记 `pre_grn`（不重复算库存）。
+  进货取消只有仓库「可审批」而且要写原因。单价只给订货「可编辑」与 admin（`ops.sees_prices`）。
+  **Supabase MCP 也挡 `drop function`**（apply_migration 卡 60 秒后 cancelled）：所以 `ops_wh_move_mark` 旧的 3 个参数版本留著转接、新的 4 个参数版本参数全必填。
+  **人手**（上线当天）：仓库部 1 位在职、开单部 0 位 → 开单部要先开账号（员工与权限 / 加入申请选「开单部」）才有人开 GRN；在那之前管理层（仓库可审批）也能标已输入。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
