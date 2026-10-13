@@ -59,7 +59,9 @@ export const DICT_PODO: Record<string, string> = {
   "（没填 DO 号）": "(no DO no.)",
   // 选厂家 / 选 PO
   "第 1 步：选厂家": "Step 1: pick the supplier",
-  "搜厂家名称或代号…": "Search supplier name or code…",
+  "搜厂家名称、代号或 CS 编号…": "Search supplier name, code or CS code…",
+  "找 PO 号或 CS 编号…": "Find PO no. or CS code…",
+  "搜型号或品名…": "Search model or item…",
   "没有还没到齐的 PO 的厂家。": "No suppliers with open POs.",
   "最近开单": "Latest PO",
   "「还可以出」= AutoCount 未到 − 已确认的厂家 DO 在路上。一张厂家 DO 可以包含好几张 PO。":

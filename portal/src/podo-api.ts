@@ -14,10 +14,14 @@ export interface Outlet { code: string; name: string; short_name: string; compan
 export interface DoSupplier {
   company: string; creditor_code: string; supplier_name: string; is_china: boolean; po_count: number; open_qty: number;
   last_po_date: string; drafts: number;
+  /** 未到 PO 的厂家名称栏里的 CS 编号（代理户口下的中国厂，大写去空白，例 CS028） */
+  factories: string[];
 }
 export interface DoPo {
   po_no: string; po_date: string; days_open: number; status: PoStatus; closed: boolean; eta: string; eta_source: string;
   lines: number; open_qty: number; in_transit: number; remaining: number; outlets: string[];
+  /** AutoCount PO 的厂家名称栏（订货员常写 CS 编号与备注）；factory = 里面的 CS 编号 */
+  creditor_name: string; factory: string | null;
   dos: { id: number; do_no: string; status: DoStatus }[];
 }
 export interface OutletQty { open: number; in_transit: number; remaining: number }
@@ -58,12 +62,14 @@ export interface Issue {
   created_at: string; created_by_name: string | null; decided_at: string | null; decided_by_name: string | null;
   resolved_at: string | null; resolved_by_name: string | null; resolved_auto: boolean; updated_at: string;
 }
+/** full = false（分行、门市等不是总部订货 / 仓库「可编辑」的人）：资料库不回厂家、DO 号、PO 号、货柜（都是 null / []） */
 export interface TransitRow {
-  do_id: number; do_no: string; do_date: string | null; company: string; creditor_code: string; supplier_name: string;
-  eta: string | null; eta_source: "shipment" | "do" | null; shipment_name: string | null; outlet: string; outlet_name: string;
-  item_code: string; description: string; uom: string; qty: number; po_nos: string[]; confirmed_at: string; can_arrive: boolean;
+  do_id: number; do_no: string | null; do_date: string | null; company: string | null; creditor_code: string | null;
+  supplier_name: string | null; eta: string | null; eta_source: "shipment" | "do" | null; shipment_name: string | null;
+  outlet: string; outlet_name: string; item_code: string; description: string; uom: string; qty: number; po_nos: string[];
+  confirmed_at: string; can_arrive: boolean;
 }
-export interface Transit { outlets: { code: string; name: string; short_name: string }[]; rows: TransitRow[] }
+export interface Transit { full: boolean; outlets: { code: string; name: string; short_name: string }[]; rows: TransitRow[] }
 
 export const DO_STATUS_LABEL: Record<DoStatus, string> = {
   draft: "草稿", confirmed: "在路上", arrived: "已到货", cancelled: "已取消",

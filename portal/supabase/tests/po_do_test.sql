@@ -223,6 +223,8 @@ do $$ declare t jsonb; begin
      and t -> 'rows' -> 0 ->> 'do_no' = 'FS-0901' and t -> 'rows' -> 0 ->> 'uom' = 'PCS'
      and t -> 'rows' -> 0 -> 'po_nos' = '["PO-F1"]'::jsonb and (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'row fields';
   assert pg_temp.no_price(t), 'transit no prices';
+  assert (t ->> 'full')::boolean, 'HQ buyer gets supplier / DO / PO';
+  assert jsonb_array_length(public.ops_po_transit('{"q":"foshan"}') -> 'rows') = 4, 'HQ buyer can search supplier';
   assert jsonb_array_length(public.ops_po_transit('{"outlet":"BATU"}') -> 'rows') = 1, 'outlet filter';
   assert jsonb_array_length(public.ops_po_transit('{"q":"tap"}') -> 'rows') = 2, 'search';
 end $$;
@@ -231,6 +233,13 @@ do $$ declare t jsonb := public.ops_po_transit(); begin
   assert t -> 'outlets' = '[{"code":"JB","name":"JB","short_name":"JB"}]'::jsonb, 'JB outlets: ' || (t -> 'outlets')::text;
   assert jsonb_array_length(t -> 'rows') = 1 and t -> 'rows' -> 0 ->> 'outlet' = 'JB' and (t -> 'rows' -> 0 ->> 'qty')::numeric = 4
      and t -> 'rows' -> 0 ->> 'eta' = '2026-11-01' and not (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'JB sees only JB: ' || t::text;
+  -- 分行不能知道厂家：厂家、DO 号、PO 号、货柜都不回
+  assert not (t ->> 'full')::boolean and t -> 'rows' -> 0 ->> 'supplier_name' is null and t -> 'rows' -> 0 ->> 'creditor_code' is null
+     and t -> 'rows' -> 0 ->> 'do_no' is null and t -> 'rows' -> 0 -> 'po_nos' = '[]'::jsonb and t -> 'rows' -> 0 ->> 'shipment_name' is null
+     and t -> 'rows' -> 0 ->> 'item_code' = 'BS100' and t -> 'rows' -> 0 ->> 'description' <> '', 'JB gets product / qty / ETA only: ' || t::text;
+  assert jsonb_array_length(public.ops_po_transit('{"q":"foshan"}') -> 'rows') = 0
+     and jsonb_array_length(public.ops_po_transit('{"q":"FS-0901"}') -> 'rows') = 0
+     and jsonb_array_length(public.ops_po_transit('{"q":"bs100"}') -> 'rows') = 1, 'JB search: product only';
   assert jsonb_array_length(public.ops_po_transit('{"outlet":"HQ"}') -> 'rows') = 0, 'JB cannot ask for HQ';
 end $$;
 select pg_temp.expect_error($q$select public.ops_po_do_list('{}')$q$, '编辑权限');
@@ -239,6 +248,8 @@ select pg_temp.expect_error($q$select public.ops_po_do_arrive((select id from t_
 select pg_temp.as_user('hqsales@example.com');
 do $$ declare t jsonb := public.ops_po_transit(); begin
   assert jsonb_array_length(t -> 'rows') = 4 and not (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'HQ sales sees all, cannot arrive';
+  assert not (t ->> 'full')::boolean and (select bool_and(x ->> 'supplier_name' is null and x ->> 'do_no' is null)
+                                          from jsonb_array_elements(t -> 'rows') x), 'HQ sales: no supplier / DO';
 end $$;
 select pg_temp.expect_error($q$select public.ops_po_do_candidates('', '4000-F001', array['PO-F1'])$q$, '编辑权限');
 select pg_temp.as_user('hr@example.com');
@@ -283,8 +294,8 @@ do $$ declare r jsonb; c jsonb; w jsonb; t jsonb; begin
 end $$;
 select pg_temp.as_user('jbsales@example.com');
 do $$ declare t jsonb := public.ops_po_transit(); begin
-  assert (select string_agg((x ->> 'do_no') || ':' || (x ->> 'item_code') || ':' || (x ->> 'qty'), ',') from jsonb_array_elements(t -> 'rows') x)
-         = 'FS-0901:BS100:4,FS-0902:BS100:2,FS-0902:WC300:4', 'JB rows only (Puchong hidden): ' || t::text;
+  assert (select string_agg((x ->> 'item_code') || ':' || (x ->> 'qty'), ',') from jsonb_array_elements(t -> 'rows') x)
+         = 'BS100:4,BS100:2,WC300:4', 'JB rows only (Puchong hidden): ' || t::text;
 end $$;
 
 -- 6. SK500 少发决定「取消（下次再订）」；然后 AutoCount 开了 GRN（101 收齐 10、109 收 4）
@@ -809,6 +820,34 @@ do $$ declare r jsonb; begin
     "items":[{"item_code":"A12","shipped":5,"alloc":{"HQ":5}}]}'));
   assert r ->> 'status' = 'confirmed' and jsonb_array_length(r -> 'candidates') = 1, 'null item_code line: ' || r::text;
 end $$;
+reset role;
+
+-- CS 编号（2026-10-13）：代理户口下的 PO，厂家名称栏写 CSxxx（有时带备注）；选厂家可以用 CS 编号找、选 PO 显示 CS 编号
+do $$ begin
+  assert ops.podo_cs('CS028') = 'CS028' and ops.podo_cs('CS028 (ETA)') = 'CS028' and ops.podo_cs('( cs 022 )') = 'CS022'
+     and ops.podo_cs('MAIDEN SQUARE SDN BHD (CS040)') = 'CS040' and ops.podo_cs('CS011(还没订）') = 'CS011'
+     and ops.podo_cs('FOSHAN') is null and ops.podo_cs(null) is null and ops.podo_cs('CS1') is null, 'podo_cs';
+end $$;
+insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, creditor_name, item_code, description,
+                             location, uom, qty, transferred_qty) values
+  ('HOMEWORKSSB', 3001, 'CS-P1', '2026-10-10', 'R20', 'CS028', 'A20', 'A20', 'HQ', 'PCS', 5, 0),
+  ('HOMEWORKSSB', 3002, 'CS-P2', '2026-10-12', 'R20', 'CS028 (ETA)', 'A20', 'A20', 'PRE (JB)', 'PCS', 3, 0),
+  ('HOMEWORKSSB', 3003, 'CS-P3', '2026-10-12', 'R20', '( CS022 )', 'A21', 'A21', 'HQ', 'PCS', 4, 0),
+  ('HOMEWORKSSB', 3004, 'CS-P4', '2026-10-12', 'R20', 'NOTE ONLY', 'A21', 'A21', 'HQ', 'PCS', 1, 0);
+select pg_temp.as_user('buyer@example.com');
+do $$ declare s jsonb; p jsonb; begin
+  select x into s from jsonb_array_elements(public.ops_po_do_suppliers('HOMEWORKSSB')) x where x ->> 'creditor_code' = 'R20';
+  assert s -> 'factories' = '["CS022", "CS028"]'::jsonb and (s ->> 'po_count')::int = 4, 'supplier factories: ' || s::text;
+  assert (select bool_and(jsonb_typeof(x -> 'factories') = 'array') from jsonb_array_elements(public.ops_po_do_suppliers('HOMEWORKSSB')) x),
+    'every supplier has factories array';
+  p := public.ops_po_do_pos('HOMEWORKSSB', 'R20');
+  assert (select string_agg((x ->> 'po_no') || '=' || coalesce(x ->> 'factory', '-') || '/' || (x ->> 'creditor_name'), ',' order by x ->> 'po_no')
+          from jsonb_array_elements(p) x) = 'CS-P1=CS028/CS028,CS-P2=CS028/CS028 (ETA),CS-P3=CS022/( CS022 ),CS-P4=-/NOTE ONLY',
+    'pos factory: ' || p::text;
+end $$;
+select pg_temp.as_user('jbsales@example.com');
+select pg_temp.expect_error($q$select public.ops_po_do_suppliers('HOMEWORKSSB')$q$, '编辑权限');
+select pg_temp.expect_error($q$select public.ops_po_do_pos('HOMEWORKSSB', 'R20')$q$, '编辑权限');
 reset role;
 
 select 'po_do_test ok';

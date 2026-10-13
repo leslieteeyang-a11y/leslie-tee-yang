@@ -52,14 +52,17 @@ function BackLink() {
 function DoNew({ me }: { me: Me }) {
   const [company, setCompany] = useState(me.staff.branch === "ALL" ? "HOMEWORKSSB" : me.staff.branch);
   const [sup, setSup] = useState<DoSupplier | null>(null);
+  const [factoryQ, setFactoryQ] = useState("");             // 用 CS 编号找到代理的：选 PO 时先只列这个 CS
   const [pos, setPos] = useState<string[] | null>(null);
-  if (!sup) return <><BackLink /><SupplierPicker me={me} company={company} onCompany={setCompany} onPick={setSup} /></>;
+  if (!sup)
+    return <><BackLink /><SupplierPicker me={me} company={company} onCompany={setCompany}
+                                         onPick={(s, fq) => { setSup(s); setFactoryQ(fq ?? ""); }} /></>;
   if (!pos)
     return (
       <>
         <BackLink />
         <PoPicker company={company} creditor={sup.creditor_code} supplierName={sup.supplier_name} selected={[]} okText="下一步"
-                  onOk={setPos} onBack={() => setSup(null)} />
+                  initialQ={factoryQ} onOk={setPos} onBack={() => setSup(null)} />
       </>
     );
   return <DoPage me={me} initial={null}

@@ -1,5 +1,6 @@
 // 在路上：已确认、还没到货的厂家 DO，按分店列出每个型号分给这间分店几件与 ETA。不含价格。
 // 总部 / 全部分店的人看全部分店；JB 的人只看 JB（资料库 ops_po_transit 已经过滤）。仓库可以在这里「货到了」。
+// 分行、门市等（data.full = false）不能知道厂家：资料库不回厂家 / DO 号 / PO 号 / 货柜，这里只列型号、数量、ETA。
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { BRANCH_LABEL, can, fmtQty, Me } from "../api";
 import { Empty, ErrorBox } from "../ui";
@@ -17,6 +18,7 @@ export default function TransitTab({ me }: { me: Me }) {
   const [error, setError] = useState("");
   const [arrive, setArrive] = useState<TransitRow | null>(null);
   const canOpen = can(me, "purchasing", "edit");
+  const full = data?.full ?? (canOpen && me.staff.branch !== "HOMEWORKSSOUTHERN");
 
   const load = useCallback(() => {
     setError("");
@@ -43,7 +45,7 @@ export default function TransitTab({ me }: { me: Me }) {
     <>
       <p className="muted">厂家已经出货、还没到的货（采购确认了厂家 DO）。数量是分给这间分店的件数；ETA 以货柜为准，没挂货柜就是厂家 DO 的 ETA。</p>
       <form className="toolbar" onSubmit={search}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜型号、品名、厂家、DO 号、PO 号…" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={full ? "搜型号、品名、厂家、DO 号、PO 号…" : "搜型号或品名…"} />
         <button>搜寻</button>
         {data && data.outlets.length > 1 && (
           <select value={outlet} onChange={(e) => setOutlet(e.target.value)}>
@@ -58,24 +60,39 @@ export default function TransitTab({ me }: { me: Me }) {
           <section key={g.code} className="podo-group">
             <div className="podo-group-head">
               <h3>{g.name}</h3>
-              <small className="muted">{`${g.dos.length} 张 DO · ${fmtQty(g.qty)} 件`}</small>
+              <small className="muted">{full ? `${g.dos.length} 张 DO · ${fmtQty(g.qty)} 件` : `${fmtQty(g.qty)} 件`}</small>
             </div>
             <div className="table-wrap">
-              <table>
-                <thead><tr><th>型号 / 品名</th><th className="num">数量</th><th className="hide-sm">PO</th></tr></thead>
-                <tbody>
-                  {g.dos.map((d) => (
-                    <DoRows key={d.do_id} d={d} canOpen={canOpen} showCompany={me.staff.branch === "ALL"} onArrive={setArrive} />
-                  ))}
-                </tbody>
-              </table>
+              {full ? (
+                <table>
+                  <thead><tr><th>型号 / 品名</th><th className="num">数量</th><th className="hide-sm">PO</th></tr></thead>
+                  <tbody>
+                    {g.dos.map((d) => (
+                      <DoRows key={d.do_id} d={d} canOpen={canOpen} showCompany={me.staff.branch === "ALL"} onArrive={setArrive} />
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <table>
+                  <thead><tr><th>型号 / 品名</th><th className="num">数量</th><th>ETA</th></tr></thead>
+                  <tbody>
+                    {g.dos.flatMap((d) => d.rows).map((r) => (
+                      <tr key={`${r.do_id}-${r.item_code}`}>
+                        <td><b>{r.item_code}</b><br /><small>{r.description}</small></td>
+                        <td className="num"><b>{fmtQty(r.qty)}</b> <small className="muted">{r.uom}</small></td>
+                        <td className="nowrap"><EtaText eta={r.eta} source={r.eta_source} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </section>
         ))
       )}
       {arrive && (
         <AskModal title="货到了" okText="标记到货" label="备注（可空白，例：少 1 箱、有破损已拍照）"
-                  message={`DO ${arrive.do_no || "#" + arrive.do_id}（${arrive.supplier_name}）整张标记到货，所有分店的「在路上」都会拿掉这张。`}
+                  message={`DO ${arrive.do_no || "#" + arrive.do_id}（${arrive.supplier_name ?? ""}）整张标记到货，所有分店的「在路上」都会拿掉这张。`}
                   onClose={() => setArrive(null)}
                   onOk={async (t) => { await podo.arrive(arrive.do_id, t); setArrive(null); load(); }} />
       )}
@@ -96,7 +113,7 @@ function DoRows({ d, canOpen, showCompany, onArrive }: {
             <span>
               {canOpen ? <a href={`#/purchasing/do/${h.do_id}`}><b>{`DO ${label}`}</b></a> : <b>{`DO ${label}`}</b>}
               <span className="muted">{` · ${h.supplier_name || h.creditor_code}`}</span>
-              {showCompany && <span className="tag">{BRANCH_LABEL[h.company]}</span>}
+              {showCompany && h.company && <span className="tag">{BRANCH_LABEL[h.company]}</span>}
               {h.shipment_name && <span className="tag">{`柜 ${h.shipment_name}`}</span>}
               <br />
               <span className="small">ETA <EtaText eta={h.eta} source={h.eta_source} /></span>

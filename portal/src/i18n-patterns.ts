@@ -111,6 +111,7 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^DO (.+) 补 ([\d.,]+)$/, (m) => `DO ${m[1]} sent ${m[2]}`],
   [/^出货 ([\d.,]+)$/, (m) => `shipped ${m[1]}`],
   [/^已选 (\d+) 笔$/, (m) => `${m[1]} selected`],
+  [/^已选 (\d+) 张$/, (m) => `${m[1]} selected`],
   [/^(\d+) 笔$/, (m) => `${m[1]} entr${m[1] === "1" ? "y" : "ies"}`],
   [/^(\d+) 笔少发：厂家不补了，标为已处理。$/, (m) => `${m[1]} shortage(s): the supplier won't send them; mark resolved.`],
   [/^在路上（(.+) · (.+) 确认）：分店在「在路上」看得到这张与 ETA。$/, (m) =>
