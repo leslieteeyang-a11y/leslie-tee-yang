@@ -118,6 +118,7 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
     `In transit (confirmed by ${m[1]} · ${m[2]}): outlets see this DO and its ETA under "In transit".`],
   [/^挂了货柜：分店看到的 ETA 是货柜的 (.+)。$/, (m) => `On a container: outlets see the container's ETA ${m[1]}.`],
   [/^这批出货（(\d+) 个型号）$/, (m) => `Shipped now (${m[1]} models)`],
+  [/^Excel 第 (\d+) 行 · (.+)$/, (m) => `Excel row ${m[1]} · ${m[2]}`],
   [/^Excel 第 (\d+) 行$/, (m) => `Excel row ${m[1]}`],
   [/^(.+) 第 (\d+) 行$/, (m) => `${m[1]} row ${m[2]}`],
   [/^厂家欠 ([\d.,]+)$/, (m) => `supplier owes ${m[1]}`],
@@ -144,6 +145,8 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^(少发|多发|发错型号)（(\d+)）$/, (m) =>
     `${({ 少发: "Short-shipped", 多发: "Over-shipped", 发错型号: "Wrong model" } as Record<string, string>)[m[1]]} (${m[2]})`],
   [/^还可以出 ([\d.,]+)$/, (m) => `can still ship ${m[1]}`],
+  [/^还可以出 ([\d.,]+) · 出 ([\d.,]+) · (少|多) ([\d.,]+)$/, (m) =>
+    `can still ship ${m[1]} · shipping ${m[2]} · ${m[3] === "少" ? "short" : "over"} ${m[4]}`],
   [/^出 ([\d.,]+)$/, (m) => `shipped ${m[1]}`],
   [/^还有 (\d+) 个$/, (m) => `${m[1]} more`],
   [/^已套用 Excel：对上 (\d+) 个型号(?:，对不上 (\d+) 行（在下面处理）)?。记得按「存草稿」。$/, (m) =>
