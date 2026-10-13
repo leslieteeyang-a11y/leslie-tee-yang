@@ -32,7 +32,8 @@ export interface ItemDetail {
   active: boolean; synced_at: string | null;
   stock: { location: string; qty: number; pending: number; unit_cost?: number | null }[];
   open_orders: { doc_no: string; doc_date: string; customer: string; qty: number }[];
-  incoming: { po_no: string; po_date: string; supplier: string; location: string; qty: number }[];
+  /** po_no / supplier：看不到厂家的人（不是采购、管理层、仓库部）是 null */
+  incoming: { po_no: string | null; po_date: string; supplier: string | null; location: string; qty: number }[];
   moves: Move[];
   counts: Count[];
   barcodes: string[];

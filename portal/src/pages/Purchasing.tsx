@@ -1,6 +1,6 @@
 import { FormEvent, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
-  api, BRANCH_LABEL, can, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
+  api, BRANCH_LABEL, can, seesSupplier, ETA_SOURCE_LABEL, fmtDate, fmtQty, fmtRM, ItemEta, Me, PO_STATUS_LABEL, PoDetail, PoRow,
   PoStatus, Shipment, SHIPMENT_STATUS_LABEL, ShipmentStatus,
 } from "../api";
 import { go } from "../router";
@@ -19,15 +19,19 @@ type Tab = "po" | "do" | "issues" | "transit" | "shipments" | "item";
 // #/purchasing/transit（在路上）、#/purchasing/shipments、#/purchasing/item、#/purchasing/po/<公司>/<PO 号>
 export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: string; arg1?: string; arg2?: string }) {
   const canEdit = can(me, "purchasing", "edit");
-  const tabs: [Tab, string][] = [["po", "未到货 PO"]];
+  // 看不到厂家的人（分行、门市、电商、物流）：没有未到货 PO / 货柜，只有在路上与查 SKU 到货（只显示产品、数量、ETA）
+  const sup = seesSupplier(me);
+  const tabs: [Tab, string][] = sup ? [["po", "未到货 PO"]] : [];
   if (canEdit) tabs.push(["do", "厂家到货"], ["issues", "厂家问题"]);
-  tabs.push(["transit", "在路上"], ["shipments", "货柜"], ["item", "查 SKU 到货"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "po";
+  tabs.push(["transit", "在路上"]);
+  if (sup) tabs.push(["shipments", "货柜"]);
+  tabs.push(["item", "查 SKU 到货"]);
+  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : tabs[0][0];
   return (
     <>
       <h1>订货与 ETA</h1>
       <div className="filters">
-        <Tabs value={tab} onChange={(t) => go(t === "po" ? "/purchasing" : `/purchasing/${t}`)} options={tabs} />
+        <Tabs value={tab} onChange={(t) => go(t === tabs[0][0] ? "/purchasing" : `/purchasing/${t}`)} options={tabs} />
       </div>
       {tab === "po" && <PoTab me={me} canEdit={canEdit} />}
       <Suspense fallback={<p className="muted">载入中…</p>}>
@@ -37,7 +41,7 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
       </Suspense>
       {tab === "shipments" && <ShipmentTab me={me} canEdit={canEdit} />}
       {tab === "item" && <ItemTab />}
-      {sub === "po" && arg1 && arg2 && (
+      {sup && sub === "po" && arg1 && arg2 && (
         <PoDetailModal company={decodeURIComponent(arg1)} poNo={decodeURIComponent(arg2)}
                        onClose={() => go("/purchasing")} />
       )}
@@ -515,10 +519,12 @@ function ItemTab() {
                 <ul className="list">
                   {i.incoming.map((x, n) => (
                     <li key={n}>
-                      <span>
-                        <a href={`#${poHref({ company: i.company, po_no: x.po_no })}`}>{x.po_no}</a>
-                        <span className="muted"> · {x.supplier_name}{x.shipment_name ? ` · 柜 ${x.shipment_name}` : ""} · {PO_STATUS_LABEL[x.status]}</span>
-                      </span>
+                      {x.po_no ? (
+                        <span>
+                          <a href={`#${poHref({ company: i.company, po_no: x.po_no })}`}>{x.po_no}</a>
+                          <span className="muted"> · {x.supplier_name}{x.shipment_name ? ` · 柜 ${x.shipment_name}` : ""} · {PO_STATUS_LABEL[x.status]}</span>
+                        </span>
+                      ) : <span>在途 <span className="muted">· {PO_STATUS_LABEL[x.status]}</span></span>}
                       <span className={x.overdue ? "late" : ""}>
                         {fmtQty(x.open_qty)} 件 · {x.eta}{x.overdue ? "（已过期，待确认）" : ""}
                       </span>

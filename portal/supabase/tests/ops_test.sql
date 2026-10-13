@@ -151,19 +151,36 @@ do $$ begin
   assert jsonb_array_length(public.ops_po_list('{"stale":true,"status":"all"}')) = 5, 'closed shown with all';
 end $$;
 
--- 业务：只看（无价格），不能改；可查 SKU 到货
+-- 业务：只看，不能改；看不到厂家（2026-10-13 使用者：分行、门市、电商、物流只看产品、数量、ETA）→
+-- 未到货 PO / 货柜打不开，查 SKU 到货不回 PO 号 / 厂家 / 货柜，首页没有到货提醒
 select pg_temp.as_user('boss@example.com');
 select public.ops_staff_save('{"email":"hqsales@example.com","name":"门市小美","department":"sales","branch":"HOMEWORKSSB"}');
 select pg_temp.as_user('hqsales@example.com');
-do $$ declare l jsonb; e jsonb; begin
-  l := public.ops_po_list('{}');
-  assert jsonb_array_length(l) = 4 and l->0->'open_amt' = 'null'::jsonb, 'sales sees no amount';
-  assert public.ops_po_get('HOMEWORKSSB', 'PO-1')->'items'->0->'unit_price' = 'null'::jsonb, 'sales no unit price';
+select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '只有采购、管理层与仓库部看得到');
+select pg_temp.expect_error($q$select public.ops_po_get('HOMEWORKSSB', 'PO-1')$q$, '只有采购、管理层与仓库部看得到');
+select pg_temp.expect_error($q$select public.ops_shipment_list()$q$, '只有采购、管理层与仓库部看得到');
+do $$ declare e jsonb; begin
   e := public.ops_item_eta('ST001');
   assert jsonb_array_length(e) = 1, 'sales sees only own branch item: ' || e::text;
   assert (e->0->>'on_hand')::numeric = 8 and jsonb_array_length(e->0->'incoming') = 4, 'stock + incoming';
-  assert (public.ops_home()->'po_overdue') = 'null'::jsonb, 'sales no po kpi';
+  assert (select bool_and(x->>'po_no' is null and x->>'supplier_name' is null and x->>'shipment_name' is null
+                          and (x->>'open_qty')::numeric > 0 and x->>'eta' is not null)
+          from jsonb_array_elements(e->0->'incoming') x), 'sales: incoming qty / ETA only: ' || e::text;
+  assert (public.ops_home()->'po_overdue') = 'null'::jsonb and (public.ops_home()->'po_arriving') = 'null'::jsonb, 'sales no po kpi';
 end $$;
+-- 仓库部（订货只看）照样看得到未到货 PO 与厂家，但没有价格
+select pg_temp.as_user('boss@example.com');
+select public.ops_staff_save('{"email":"hqwh@example.com","name":"仓库看PO","department":"warehouse","branch":"HOMEWORKSSB"}');
+select pg_temp.as_user('hqwh@example.com');
+do $$ declare l jsonb; e jsonb; begin
+  l := public.ops_po_list('{}');
+  assert jsonb_array_length(l) = 4 and l->0->'open_amt' = 'null'::jsonb and l->0->>'supplier_name' is not null, 'warehouse: POs, no amount';
+  assert public.ops_po_get('HOMEWORKSSB', 'PO-1')->'items'->0->'unit_price' = 'null'::jsonb, 'warehouse no unit price';
+  e := public.ops_item_eta('ST001');
+  assert e->0->'incoming'->0->>'po_no' is not null and e->0->'incoming'->0->>'supplier_name' is not null, 'warehouse sees PO / supplier';
+  assert jsonb_typeof(public.ops_shipment_list()) = 'array', 'warehouse sees shipments';
+end $$;
+select pg_temp.as_user('hqsales@example.com');
 select pg_temp.expect_error($q$select public.ops_po_update('HOMEWORKSSB', array['PO-1'], '{"status":"arrived"}')$q$, '编辑权限');
 
 -- 人事部没有订货模块

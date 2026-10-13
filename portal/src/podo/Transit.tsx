@@ -1,6 +1,7 @@
 // 在路上：已确认、还没到货的厂家 DO，按分店列出每个型号分给这间分店几件与 ETA。不含价格。
 // 总部 / 全部分店的人看全部分店；JB 的人只看 JB（资料库 ops_po_transit 已经过滤）。仓库可以在这里「货到了」。
 // 分行、门市等（data.full = false）不能知道厂家：资料库不回厂家 / DO 号 / PO 号 / 货柜，这里只列型号、数量、ETA。
+// full 的人（采购、仓库部）看别家公司的 DO（JB 看总部分给 JB 的货）：那几行一样没有厂家 / DO 号 / PO 号，也不能点开。
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { BRANCH_LABEL, can, fmtQty, Me } from "../api";
 import { Empty, ErrorBox } from "../ui";
@@ -18,7 +19,7 @@ export default function TransitTab({ me }: { me: Me }) {
   const [error, setError] = useState("");
   const [arrive, setArrive] = useState<TransitRow | null>(null);
   const canOpen = can(me, "purchasing", "edit");
-  const full = data?.full ?? (canOpen && me.staff.branch !== "HOMEWORKSSOUTHERN");
+  const full = data?.full ?? (canOpen || me.staff.department === "warehouse");
 
   const load = useCallback(() => {
     setError("");
@@ -111,8 +112,8 @@ function DoRows({ d, canOpen, showCompany, onArrive }: {
         <td colSpan={3}>
           <div className="podo-do-head">
             <span>
-              {canOpen ? <a href={`#/purchasing/do/${h.do_id}`}><b>{`DO ${label}`}</b></a> : <b>{`DO ${label}`}</b>}
-              <span className="muted">{` · ${h.supplier_name || h.creditor_code}`}</span>
+              {canOpen && h.company ? <a href={`#/purchasing/do/${h.do_id}`}><b>{`DO ${label}`}</b></a> : <b>{`DO ${label}`}</b>}
+              {(h.supplier_name || h.creditor_code) && <span className="muted">{` · ${h.supplier_name || h.creditor_code}`}</span>}
               {showCompany && h.company && <span className="tag">{BRANCH_LABEL[h.company]}</span>}
               {h.shipment_name && <span className="tag">{`柜 ${h.shipment_name}`}</span>}
               <br />

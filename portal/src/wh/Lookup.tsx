@@ -138,7 +138,15 @@ function ItemCard({ d, canEdit, onMove, onLabel }: { d: ItemDetail; canEdit: boo
       {d.incoming.length > 0 && (
         <>
           <h3>{`在途 PO（${d.incoming.length}）`}</h3>
-          <ul className="list">{d.incoming.map((o) => <li key={o.po_no + o.location}><span>{o.po_no}{" "}<span className="muted small">{`${o.po_date} · ${o.supplier} → ${o.location}`}</span></span><span>{qtyLabel(o.qty)}</span></li>)}</ul>
+          <ul className="list">{d.incoming.map((o, n) => (
+            <li key={n}>
+              <span>
+                {o.po_no ?? "在途"}{" "}
+                <span className="muted small">{o.supplier ? `${o.po_date} · ${o.supplier} → ${o.location}` : `${o.po_date} → ${o.location}`}</span>
+              </span>
+              <span>{qtyLabel(o.qty)}</span>
+            </li>
+          ))}</ul>
         </>
       )}
       {d.moves.length > 0 && (

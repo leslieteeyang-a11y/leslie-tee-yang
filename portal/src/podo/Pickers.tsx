@@ -7,7 +7,7 @@ import { outletName, useOutlets } from "./common";
 
 /** CS 编号比对（代理户口下的中国厂）：不分大小写、空白；cs28 = CS028；打一半（CS02）找开头相同的 */
 export function csMatch(code: string, q: string): boolean {
-  const k = q.toUpperCase().replace(/\s+/g, "");
+  const k = q.toUpperCase().replace(/[\s-]+/g, "");
   if (!/^CS\d/.test(k)) return false;
   if (code.startsWith(k)) return true;
   const n = /^CS0*(\d+)$/.exec(k)?.[1];
@@ -19,7 +19,7 @@ function nameNote(name: string, supplierName: string, factory: string | null): s
   if (!name) return "";
   let t = name.toUpperCase();
   if (supplierName) t = t.split(supplierName.toUpperCase()).join("");
-  if (factory) t = t.replace(/CS\s*\d+/g, "");
+  if (factory) t = t.replace(/\bCS[\s-]*\d+/g, "");
   return t.replace(/[\s()（）\-,.，。]/g, "") ? name : "";
 }
 
@@ -37,7 +37,7 @@ export function SupplierPicker({ me, company, onCompany, onPick }: {
   const shown = useMemo(() => {
     const k = q.trim().toLowerCase();
     return (rows ?? []).filter((s) => !k || s.supplier_name.toLowerCase().includes(k) || s.creditor_code.toLowerCase().includes(k)
-      || s.factories.some((f) => csMatch(f, q)));
+      || (s.factories ?? []).some((f) => csMatch(f, q)));
   }, [rows, q]);
 
   return (
@@ -59,7 +59,8 @@ export function SupplierPicker({ me, company, onCompany, onPick }: {
             <thead><tr><th>厂家</th><th className="num">PO</th><th className="num">未到</th><th className="hide-sm">最近开单</th></tr></thead>
             <tbody>
               {shown.map((s) => {
-                const hit = s.factories.filter((f) => csMatch(f, q));
+                const facs = s.factories ?? [];
+                const hit = facs.filter((f) => csMatch(f, q));
                 return (
                 <tr key={s.creditor_code} className="click" onClick={() => onPick(s, hit.length ? q.trim() : undefined)}>
                   <td>
@@ -68,10 +69,10 @@ export function SupplierPicker({ me, company, onCompany, onPick }: {
                     <br /><small className="muted">{s.creditor_code}</small>
                     {hit.length > 0
                       ? <div className="podo-tags">{hit.map((f) => <span key={f} className="tag cs hit">{f}</span>)}</div>
-                      : s.factories.length > 0 && (
+                      : facs.length > 0 && (
                         <div className="podo-tags">
-                          {s.factories.slice(0, 6).map((f) => <span key={f} className="tag cs">{f}</span>)}
-                          {s.factories.length > 6 && <small className="muted">{`+${s.factories.length - 6}`}</small>}
+                          {facs.slice(0, 6).map((f) => <span key={f} className="tag cs">{f}</span>)}
+                          {facs.length > 6 && <small className="muted">{`+${facs.length - 6}`}</small>}
                         </div>
                       )}
                   </td>
@@ -106,7 +107,7 @@ export function PoPicker({ company, creditor, supplierName, selected, okText, on
 
   const hidden = (p: DoPo) => !picked.has(p.po_no) && !old && (p.closed || p.days_open > 120);
   const k = q.trim().toLowerCase();
-  const hits = (rows ?? []).filter((p) => !k || p.po_no.toLowerCase().includes(k) || p.creditor_name.toLowerCase().includes(k)
+  const hits = (rows ?? []).filter((p) => !k || p.po_no.toLowerCase().includes(k) || (p.creditor_name ?? "").toLowerCase().includes(k)
     || (!!p.factory && csMatch(p.factory, q)));
   const shown = hits.filter((p) => !hidden(p));
   const nHidden = hits.length - shown.length;

@@ -101,6 +101,7 @@ export const DICT_PODO: Record<string, string> = {
   "不是数字": "Not a number",
   "照未出分": "Split by open qty",
   "全到": "All arrived",
+  "在途": "In transit",
   "Excel 里对不到所选 PO 的型号。是同一个型号只是厂家写法不同 → 选「就是…」；真的发错 → 留著，确认时记成「发错型号」；不是货品（备注、空行）→ 拿掉。":
     "Excel rows that match no model on the chosen POs. Same model written differently by the supplier → choose \"It is …\"; really the wrong model → keep it and it's logged as \"Wrong model\" on confirm; not goods (notes, blank lines) → remove.",
   "Excel 型号 / 品名": "Excel model / item",

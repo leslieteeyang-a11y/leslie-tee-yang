@@ -242,8 +242,9 @@ export interface ItemEta {
   uom: string;
   on_hand: number;
   by_loc: Record<string, number>;
-  incoming: { po_no: string; open_qty: number; eta: string; eta_source: string; status: PoStatus;
-              shipment_name: string | null; supplier_name: string; location: string; overdue: boolean }[];
+  /** po_no / supplier_name / shipment_name：看不到厂家的人是 null */
+  incoming: { po_no: string | null; open_qty: number; eta: string; eta_source: string; status: PoStatus;
+              shipment_name: string | null; supplier_name: string | null; location: string; overdue: boolean }[];
 }
 export const PO_STATUS_LABEL: Record<PoStatus, string> = {
   ordered: "已下单", confirmed: "供应商已确认", producing: "生产 / 备货中", shipped: "已出货", arrived: "已到港 / 到货中",
@@ -319,6 +320,12 @@ export const api = {
 export function can(me: Me, module: string, need: Level): boolean {
   const m = me.modules.find((x) => x.key === module);
   return !!m && LEVEL_RANK[m.level] >= LEVEL_RANK[need];
+}
+
+/** 看得到厂家（含 CS 编号）：订货「可编辑」（采购、管理层）或仓库部；同资料库 ops.sees_supplier。
+ *  其他人（分行、门市、电商、物流）只看产品、数量、ETA：未到货 PO、货柜不能开，查 SKU 到货不显示 PO 号 / 厂家。 */
+export function seesSupplier(me: Me): boolean {
+  return can(me, "purchasing", "edit") || me.staff.department === "warehouse";
 }
 
 export function fmtQty(n: number | null | undefined): string {

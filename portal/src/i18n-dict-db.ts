@@ -157,6 +157,8 @@ export const DICT_DB: Record<string, string> = {
   "只有已处理的问题可以重开。": "Only resolved issues can be reopened.",
   "自动产生的问题不能作废（DO 退回草稿时会自动撤回）；请改用「已处理」并写原因。":
     "Automatic issues can't be voided (they're withdrawn when the DO goes back to draft); mark it resolved and give a reason instead.",
+  "未到货 PO 与货柜有厂家资料，只有采购、管理层与仓库部看得到；要查货什么时候到，请用「查 SKU 到货」或「在路上」。":
+    "Open POs and containers show supplier details, so only purchasing, management and the warehouse team can open them. To check when goods arrive, use \"SKU arrivals\" or \"In transit\".",
   // 前端（podo-api.ts）的错误讯息
   "只能上传 Excel（.xlsx / .xls / .csv）、PDF 或照片。": "Only Excel (.xlsx / .xls / .csv), PDF or photos can be uploaded.",
 };

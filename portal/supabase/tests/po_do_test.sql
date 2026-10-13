@@ -245,6 +245,15 @@ end $$;
 select pg_temp.expect_error($q$select public.ops_po_do_list('{}')$q$, '编辑权限');
 select pg_temp.expect_error($q$select public.ops_po_issues('{}')$q$, '编辑权限');
 select pg_temp.expect_error($q$select public.ops_po_do_arrive((select id from t_do where k = 'do1'))$q$, '才能标记到货');
+-- JB 采购（看得到厂家，但只看得到自己公司）：用 DO 分组的画面，总部分给 JB 的那几行一样没有厂家 / DO 号 / PO 号，不能标到货
+select pg_temp.as_user('jbbuyer@example.com');
+do $$ declare t jsonb := public.ops_po_transit(); begin
+  assert (t ->> 'full')::boolean and jsonb_array_length(t -> 'rows') = 1 and t -> 'rows' -> 0 ->> 'supplier_name' is null
+     and t -> 'rows' -> 0 ->> 'do_no' is null and t -> 'rows' -> 0 ->> 'company' is null and t -> 'rows' -> 0 -> 'po_nos' = '[]'::jsonb
+     and not (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'JB buyer: HQ DO rows without supplier: ' || t::text;
+  assert jsonb_array_length(public.ops_po_transit('{"q":"foshan"}') -> 'rows') = 0
+     and jsonb_array_length(public.ops_po_transit('{"q":"FS-0901"}') -> 'rows') = 0, 'JB buyer cannot search HQ supplier / DO';
+end $$;
 select pg_temp.as_user('hqsales@example.com');
 do $$ declare t jsonb := public.ops_po_transit(); begin
   assert jsonb_array_length(t -> 'rows') = 4 and not (t -> 'rows' -> 0 ->> 'can_arrive')::boolean, 'HQ sales sees all, cannot arrive';
@@ -827,6 +836,9 @@ do $$ begin
   assert ops.podo_cs('CS028') = 'CS028' and ops.podo_cs('CS028 (ETA)') = 'CS028' and ops.podo_cs('( cs 022 )') = 'CS022'
      and ops.podo_cs('MAIDEN SQUARE SDN BHD (CS040)') = 'CS040' and ops.podo_cs('CS011(还没订）') = 'CS011'
      and ops.podo_cs('FOSHAN') is null and ops.podo_cs(null) is null and ops.podo_cs('CS1') is null, 'podo_cs';
+  assert ops.podo_cs('CS 28') = 'CS028' and ops.podo_cs('CS-028') = 'CS028' and ops.podo_cs('cs1000') = 'CS1000'
+     and ops.podo_cs('ABC PLASTICS 2020 SDN BHD') is null and ops.podo_cs('DOCS2026') is null
+     and ops.podo_cs('GUANGZHOU ELECTRONICS 88') is null, 'podo_cs word start / padding';
 end $$;
 insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, creditor_name, item_code, description,
                              location, uom, qty, transferred_qty) values
