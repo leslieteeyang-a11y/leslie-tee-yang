@@ -1,8 +1,8 @@
 -- 营运系统：订货 SOP — 一步接一步、这批的问题（少发决定 / 来错的型号 / 缺零件）、厂家还欠、点货后库存（进货待开 GRN）、开单部。
 -- 套用到 Supabase 的 migration 名称：ops_po_sop（要先套 20261014_ops_po_receive。约 141 KB，一次送会被挡：照「-- ====」分 9 段
 --   依序套用，每段 ≤ 24 KB：ops_po_sop_1 = 开头 + §1–2、_2 = §3、_3 = §4、_4 = §5、_5 = §6、_6 = §7–8、_7 = §9、_8 = §10、
---   _9 = §11–12；§12 的权限要在最后一段）。可以重复套用；不含会被 Supabase MCP 挡下的指令（没有 delete；
---   §10 的 drop function 是拿掉旧的 3 个参数的 ops_wh_move_mark，换成多 p_reason 的）。
+--   _9 = §11–12；§12 的权限要在最后一段）。可以重复套用；不含会被 Supabase MCP 挡下的指令（没有删除资料或拿掉函数的语句：
+--   §10 旧的 3 个参数的 ops_wh_move_mark 留著当转接，新的 4 个参数版本参数都必填，两个不会撞）。
 --
 -- 使用者 2026-10-13：
 --   B1 SOP：厂家到货单显示目前第几步、等哪个部门（ops.podo_json.sop）；草稿开了超过 24 小时还没确认标红；
@@ -1938,8 +1938,9 @@ end $$;
 --   取消只有仓库「可审批」（仓库主管、管理层、admin），一定要写原因（存在 note）：点货的人自己、开单部都不能取消
 --   （不然点到的货可以不进 AutoCount，绕过「仓库点货、开单部开 GRN」的分工）。
 -- 一般搬动照旧：仓库「可审批」标已输入 / 取消，登记的人可以取消自己的。
-drop function if exists public.ops_wh_move_mark(bigint[], text, text);
-create or replace function public.ops_wh_move_mark(p_ids bigint[], p_action text, p_ac_doc text default '', p_reason text default '')
+-- 4 个参数都必填（前端一律四个都送）；旧的 3 个参数版本（20261004，p_ac_doc 有预设）留著转接到这个、原因空白，
+-- 所以叫 2、3 个参数的是旧版、4 个参数的是这个，不会有两个都对得上的情况（Supabase MCP 不让拿掉函数）。
+create or replace function public.ops_wh_move_mark(p_ids bigint[], p_action text, p_ac_doc text, p_reason text)
 returns int
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -1987,6 +1988,12 @@ begin
   end loop;
   return n;
 end $$;
+
+-- 旧的 3 个参数版本（20261004）：转接到上面的 4 个参数版本，原因空白（旧版前端、测试只填 GRN 号的呼叫）
+create or replace function public.ops_wh_move_mark(p_ids bigint[], p_action text, p_ac_doc text default '') returns int
+language sql set search_path = '' as $$
+  select public.ops_wh_move_mark(p_ids, p_action, coalesce(p_ac_doc, ''), '')
+$$;
 
 -- 待开进货单（开单部、仓库「可审批」）：点货产生的进货待入 AutoCount，以厂家到货（DO）分组。
 -- p: company（空 = 看得到的全部）status（pending 预设 / done / all = 还没处理的 + 最近 days 天处理过的（已输入、已取消））
@@ -2221,7 +2228,8 @@ do $$
 declare
   f text;
 begin
-  foreach f in array array['ops_po_item_search(text,text)', 'ops_wh_grn_list(jsonb)', 'ops_wh_move_mark(bigint[],text,text,text)'] loop
+  foreach f in array array['ops_po_item_search(text,text)', 'ops_wh_grn_list(jsonb)', 'ops_wh_move_mark(bigint[],text,text,text)',
+                           'ops_wh_move_mark(bigint[],text,text)'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
