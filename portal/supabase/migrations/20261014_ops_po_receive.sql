@@ -1,18 +1,14 @@
--- 营运系统：订货升级 — 物流部开「厂家到货」、仓库部点货。套用到 Supabase 的 migration 名称：ops_po_receive
--- （要先套 20261012_ops_po_do / 20261013_ops_po_do_cs / 20261013b_ops_supplier_privacy。约 72 KB，一次送会被挡：照「-- ====」分 4 段
---   依序套用，每段 ≤ 24 KB：ops_po_receive_1 = 开头 + §1、ops_po_receive_2 = §2–3、ops_po_receive_3 = §4、ops_po_receive_4 = §5–7；
---   §7 的权限要在最后一段。）
+-- 营运系统：订货升级 — 仓库部点货。套用到 Supabase 的 migration 名称：ops_po_receive
+-- （要先套 20261012_ops_po_do / 20261013_ops_po_do_cs / 20261013b_ops_supplier_privacy；之后接著套 20261015_ops_po_sop。
+--   约 56 KB，一次送会被挡：照「-- ====」分 3 段依序套用，每段 ≤ 24 KB：ops_po_receive_1 = 开头 + §1–3、
+--   ops_po_receive_2 = §4、ops_po_receive_3 = §5–7；§7 的权限要在最后一段。）
 --
 -- 使用者 2026-10-13 决定：
---   * 「运输部」= 物流部（logistics）。厂家给 ETA 时，物流部同事直接在系统开「厂家到货」：选厂家 → 选 PO → 分给哪间分店 →
---     填 ETA → 确认，一整套 → 物流部改成订货「可编辑」（厂家到货、货柜、PO 跟进、厂家问题的既有函数不用改就能用；
---     ops.sees_supplier 也自动包含物流部：看得到厂家名称与 CS 编号，使用者同意）。
---   * 物流部看不到进货单价 / 金额（主控替使用者决定）：单价只给原本「订货可编辑」的部门（采购、管理层…）→ ops.sees_prices；
---     库存成本（仓库「可审批」看得到的平均成本、成本差额、旧货金额）同理 → ops.sees_cost（物流部主管会自动升仓库「可审批」）。
---     物流部主管也会自动升订货「可审批」= 可以把已确认的厂家 DO 退回草稿（没有挡；不要的话个人例外把订货设回「可编辑」）。
+--   * 厂家到货只有订货部（采购）开（使用者改口：原本想让物流部开，后来改成只有订货部；物流部维持订货「只看」、看不到厂家）。
 --   * 货到了由仓库部的人点货：每个型号填实际收到几件（好货、坏货）、来错的货另外记，点货的人自己改分给各分店的数量，
 --     然后才「货到了」。少 / 坏 / 多 / 来错自动记进「厂家问题」（auto = false），采购照清单追厂家。「标记到货」不能再直接按。
---     确认这张 DO 的人不能自己点（物流部记、仓库部点，少 / 坏才有人核对）；点过货的 DO，厂家问题只有采购 / 管理层可以作废。
+--     点货的人：订货或仓库「可编辑」、看得到那间公司（物流部有仓库「可编辑」也能点，但看不到厂家：清单 / 明细都遮掉）。
+--     确认 DO 的人自己也可以点（JB 人少、老板自己测试）。点过货的 DO，厂家问题只有采购 / 管理层可以作废。
 --   * 点货发现的到货少、坏货跟以前手动记的一样从「在路上」扣掉（ops.podo_pool 规则不变），扣的件数 = 好货比出货少的件数：
 --     确认后已经手动记的坏货 / 到货少先算进去（不重复记）；好货已经够了还有坏的 = 多寄的坏件，记在「多到」。多到只是纪录。
 --   * 点货改的分店分配：点货纪录（supplier_do.receipt.alloc）+ 每行 PO 分配少到的好货（supplier_do_apply.recv_less）。
@@ -21,219 +17,13 @@
 --   * 厂家 DO 的分店：总部账套（HOMEWORKSSB）的 PO 替四间分店订；其他账套（HOMEWORKSSOUTHERN = JB）只能分给同公司的分店（JB）。
 --   * AutoCount 仍只读：这里不写 bi.*。
 
--- ==================================================================== 1. 物流部 = 订货可编辑；单价 / 成本只给原本的采购 / 管理层 / 仓库主管
-insert into ops.dept_module (department, module, level) values ('logistics', 'purchasing', 'edit')
-on conflict (department, module) do update set level = excluded.level;
-
--- 看得到进货单价 / 金额：订货「可编辑」以上，但物流部不算（主管自动升「可审批」也一样）；admin 一律看得到。前端 seesPrices 同规则。
+-- ==================================================================== 1. 单价只给订货「可编辑」（采购、管理层）
+-- 看得到进货单价 / 金额：订货「可编辑」以上；admin 一律看得到（与 ops_po_list / ops_po_get 的 prices 同规则）。
+-- 点过货的 DO，厂家问题只有这些人能作废（ops_po_issue_set）；首页「厂家问题要处理」也只给他们。
 create or replace function ops.sees_prices(p_staff ops.staff) returns boolean
 language sql stable set search_path = '' as $$
-  select coalesce(p_staff.role = 'admin'
-                  or (ops.level_rank(ops.module_level(p_staff, 'purchasing')) >= 2 and p_staff.department <> 'logistics'), false)
+  select coalesce(p_staff.role = 'admin' or ops.level_rank(ops.module_level(p_staff, 'purchasing')) >= 2, false)
 $$;
-
--- 看得到库存成本（平均进货成本、盘点成本差额、旧货金额）：仓库「可审批」，但物流部不算（物流部有仓库「可编辑」登记搬动，
--- 主管自动升「可审批」；成本 ≈ 进货单价）。前端照资料库有没有回成本决定显示。
-create or replace function ops.sees_cost(p_staff ops.staff) returns boolean
-language sql stable set search_path = '' as $$
-  select coalesce(p_staff.role = 'admin'
-                  or (ops.level_rank(ops.module_level(p_staff, 'warehouse')) >= 3 and p_staff.department <> 'logistics'), false)
-$$;
-
--- 以下两个照抄 20261013b_ops_supplier_privacy.sql，只改 prices := ops.sees_prices(me)
-create or replace function public.ops_po_list(p jsonb default '{}'::jsonb) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare
-  me ops.staff;
-  prices boolean;
-  v_q text := nullif(trim(coalesce(p ->> 'q', '')), '');
-begin
-  me := ops.require_level('purchasing', 'view');
-  perform ops.require_supplier(me);
-  prices := ops.sees_prices(me);
-  return (
-    select coalesce(jsonb_agg(ops.po_row_json(me, r.x, prices)
-                              order by ((r.x).status = 'closed'), (r.x).days_late desc nulls last, (r.x).po_no),
-                    '[]'::jsonb)
-    from (select x from ops.v_po_open x
-          where ops.sees_company(me, x.company)
-            and (nullif(p ->> 'company', '') is null or x.company = p ->> 'company')
-            and case coalesce(nullif(p ->> 'status', ''), 'open')
-                  when 'open' then x.status <> 'closed'
-                  when 'all' then true
-                  else x.status = p ->> 'status' end
-            and (coalesce((p ->> 'stale')::boolean, false) or x.days_open <= 120 or x.status <> 'ordered'
-                 or x.po_eta is not null or x.shipment_id is not null)
-            and (not coalesce((p ->> 'overdue')::boolean, false) or x.days_late > 0)
-            and case coalesce(p ->> 'china', '') when 'china' then x.is_china when 'local' then not x.is_china
-                                                 else true end
-            and (v_q is null
-                 or x.po_no ilike '%' || v_q || '%' or x.supplier_name ilike '%' || v_q || '%'
-                 or x.creditor_name ilike '%' || v_q || '%' or coalesce(x.shipment_name, '') ilike '%' || v_q || '%'
-                 or exists (select 1 from ops.v_po_open_line l where l.company = x.company and l.po_no = x.po_no
-                            and (l.item_code ilike '%' || v_q || '%' or l.description ilike '%' || v_q || '%')))
-          limit 1000) r
-  );
-end $$;
-
-create or replace function public.ops_po_get(p_company text, p_po_no text) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare
-  me ops.staff;
-  prices boolean;
-  po ops.v_po_open;
-begin
-  me := ops.require_level('purchasing', 'view');
-  perform ops.require_supplier(me);
-  prices := ops.sees_prices(me);
-  select * into po from ops.v_po_open v where v.company = p_company and v.po_no = p_po_no;
-  if po.po_no is null or not ops.sees_company(me, po.company) then
-    raise exception '找不到这张 PO（可能已全部到货，或不是你分店的单）。' using errcode = 'P0002';
-  end if;
-  return ops.po_row_json(me, po, prices) || jsonb_build_object(
-    'can_edit', ops.level_rank(ops.module_level(me, 'purchasing')) >= 2,
-    'items', (select coalesce(jsonb_agg(jsonb_build_object(
-                'item_code', l.item_code, 'description', l.description, 'uom', l.uom, 'location', l.location,
-                'qty', l.qty, 'received', l.transferred_qty, 'open_qty', l.open_qty,
-                'unit_price', case when prices then l.unit_price end,
-                'open_amt', case when prices then l.open_amt end) order by l.dtl_key), '[]'::jsonb)
-              from ops.v_po_open_line l where l.company = po.company and l.po_no = po.po_no),
-    'receipts', (select coalesce(jsonb_agg(jsonb_build_object('doc_no', r.doc_no, 'src', r.src, 'rcv_date', r.rcv_date,
-                                                              'item_code', r.item_code, 'qty', r.qty)
-                                           order by r.rcv_date desc), '[]'::jsonb)
-                 from bi.fact_po_receipt r where r.company = po.company and r.po_no = po.po_no),
-    'history', (select coalesce(jsonb_agg(jsonb_build_object('at', a.at, 'staff_name', s.name, 'data', a.data)
-                                          order by a.id desc), '[]'::jsonb)
-                from ops.audit_log a left join ops.staff s on s.id = a.staff_id
-                where a.entity = 'po' and a.data ->> 'company' = po.company and a.data ->> 'po_no' = po.po_no));
-end $$;
-
--- 盘点纪录（照抄 20261004_ops_warehouse.sql）：系统数量照旧给仓库「可审批」（p_full），成本只给 ops.sees_cost 的人
-create or replace function ops.wh_count_json(c ops.wh_count, p_full boolean) returns jsonb
-language sql stable security definer set search_path = '' as $$
-  select jsonb_build_object(
-    'id', c.id, 'company', c.company, 'location', c.location, 'item_code', c.item_code, 'qty', c.qty,
-    'attempt', c.attempt, 'status', c.status, 'note', c.note, 'counted_at', c.counted_at, 'count_date', c.count_date,
-    'counted_by_name', (select s.name from ops.staff s where s.id = c.counted_by),
-    'description', (select i.description from bi.dim_item i where i.company = c.company and i.item_code = c.item_code),
-    'uom', (select i.base_uom from bi.dim_item i where i.company = c.company and i.item_code = c.item_code),
-    'reviewed_by_name', (select s.name from ops.staff s where s.id = c.reviewed_by),
-    'reviewed_at', c.reviewed_at, 'review_note', c.review_note, 'ac_doc', c.ac_doc)
-  || case when p_full then jsonb_build_object(
-    'system_qty', c.system_qty, 'pending_qty', c.pending_qty, 'expected_qty', c.system_qty + c.pending_qty,
-    'diff', c.qty - (c.system_qty + c.pending_qty), 'synced_at', c.synced_at) else '{}'::jsonb end
-  || case when p_full and ops.sees_cost(ops.current_staff()) then jsonb_build_object(
-    'unit_cost', c.unit_cost,
-    'diff_value', round((c.qty - (c.system_qty + c.pending_qty)) * coalesce(c.unit_cost, 0), 2)) else '{}'::jsonb end
-$$;
-
--- 仓库查商品（照抄 20261013b_ops_supplier_privacy.sql）：只改平均成本给 ops.sees_cost 的人
-create or replace function public.ops_wh_item(p_company text, p_code text) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare
-  me ops.staff;
-  c text;
-  code text;
-  full_access boolean;
-  cost boolean;
-  it record;
-  sup boolean;
-begin
-  me := ops.require_level('warehouse', 'view');
-  sup := ops.sees_supplier(me);
-  c := ops.wh_company(me, p_company);
-  code := ops.wh_resolve(c, p_code);
-  select * into it from bi.dim_item i where i.company = c and i.item_code = code;
-  if it.item_code is null then
-    return jsonb_build_object('found', false, 'scanned', trim(coalesce(p_code, '')));
-  end if;
-  full_access := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;
-  cost := ops.sees_cost(me);
-  return jsonb_build_object(
-    'found', true, 'company', c, 'item_code', it.item_code, 'description', it.description, 'uom', it.base_uom,
-    'item_group', it.item_group, 'item_type', it.item_type, 'active', it.is_active,
-    'synced_at', ops.wh_synced_at(c),
-    'stock', (select coalesce(jsonb_agg(jsonb_build_object(
-                'location', l.loc, 'qty', coalesce(f.qty, 0), 'pending', ops.wh_pending(c, it.item_code, l.loc),
-                'unit_cost', case when cost and f.qty > 0 then round(f.total_cost / f.qty, 2) end)
-                order by coalesce(wl.sort, 50), l.loc), '[]'::jsonb)
-              from (select f2.location as loc from bi.fact_stock f2 where f2.company = c and f2.item_code = it.item_code
-                    union select m.from_loc from ops.wh_move m where m.company = c and m.item_code = it.item_code
-                      and m.status = 'pending' and m.from_loc is not null
-                    union select m.to_loc from ops.wh_move m where m.company = c and m.item_code = it.item_code
-                      and m.status = 'pending' and m.to_loc is not null) l
-              left join bi.fact_stock f on f.company = c and f.item_code = it.item_code and f.location = l.loc
-              left join ops.wh_location wl on wl.company = c and wl.code = l.loc),
-    'open_orders', (select coalesce(jsonb_agg(jsonb_build_object('doc_no', o.doc_no, 'doc_date', o.doc_date,
-                      'customer', o.debtor_name, 'qty', o.outstanding_qty) order by o.doc_date), '[]'::jsonb)
-                    from bi.fact_open_order o where o.company = c and o.item_code = it.item_code and o.outstanding_qty > 0),
-    'incoming', (select coalesce(jsonb_agg(jsonb_build_object('po_no', case when sup then l.po_no end, 'po_date', l.po_date,
-                   'supplier', case when sup then l.creditor_name end, 'location', l.location, 'qty', l.qty - l.transferred_qty) order by l.po_date), '[]'::jsonb)
-                 from bi.fact_po_line l where l.company = c and l.item_code = it.item_code and not l.cancelled
-                   and l.qty > l.transferred_qty and l.po_date > current_date - 365),
-    'moves', (select coalesce(jsonb_agg(ops.wh_move_json(m) order by m.created_at desc), '[]'::jsonb) from (
-                select * from ops.wh_move m where m.company = c and m.item_code = it.item_code
-                order by (m.status = 'pending') desc, m.created_at desc limit 10) m),
-    'counts', (select coalesce(jsonb_agg(ops.wh_count_json(k, full_access) order by k.counted_at desc), '[]'::jsonb) from (
-                 select * from ops.wh_count k where k.company = c and k.item_code = it.item_code
-                 order by k.counted_at desc limit 10) k),
-    'barcodes', (select coalesce(jsonb_agg(b.barcode order by b.barcode), '[]'::jsonb)
-                 from ops.wh_barcode b where b.company = c and b.item_code = it.item_code));
-end $$;
-
--- 旧货清单（照抄 20261007_ops_todo_aged.sql）：金额只给 ops.sees_cost 的人；填处理方式照旧给仓库「可审批」
-create or replace function public.ops_wh_aged(p jsonb default '{}'::jsonb) returns jsonb
-language plpgsql stable security definer set search_path = '' as $$
-declare
-  me ops.staff;
-  c text := coalesce(nullif(p->>'company', ''), 'HOMEWORKSSB');
-  kind text := coalesce(nullif(p->>'kind', ''), 'both');
-  act text := coalesce(p->>'action', '');
-  q text := upper(trim(coalesce(p->>'q', '')));
-  cost boolean;
-  edit boolean;
-begin
-  me := ops.require_level('warehouse', 'view');
-  if not ops.sees_company(me, c) then
-    raise exception '你看不到这间公司的库存。' using errcode = '42501';
-  end if;
-  cost := ops.sees_cost(me);
-  edit := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;
-  return (
-    with r as (
-      select x.*, coalesce(w.action, 'none') as action, w.note, w.owner_id, o.name as owner_name, w.updated_at as action_at
-      from ops.wh_aged_rows(c) x
-      left join ops.wh_aged_action w on w.company = x.company and w.item_code = x.item_code
-      left join ops.staff o on o.id = w.owner_id
-      where (x.is_old or x.no_sale)),
-    f as (
-      select * from r
-      where (kind = 'both' and r.is_old and r.no_sale or kind = 'old' and r.is_old or kind = 'nosale' and r.no_sale)
-        and (act = '' or r.action = act)
-        and (q = '' or position(q in upper(r.item_code || ' ' || r.description || ' ' || r.item_group)) > 0))
-    select jsonb_build_object(
-      'company', c, 'show_cost', cost, 'can_edit', edit,
-      'summary', (select jsonb_build_object(
-          'old_n', count(*) filter (where r.is_old), 'nosale_n', count(*) filter (where r.no_sale),
-          'both_n', count(*) filter (where r.is_old and r.no_sale),
-          'both_open', count(*) filter (where r.is_old and r.no_sale and r.action = 'none'),
-          'old_v', case when cost then round(sum(r.stock_value) filter (where r.is_old), 2) end,
-          'nosale_v', case when cost then round(sum(r.stock_value) filter (where r.no_sale), 2) end,
-          'both_v', case when cost then round(sum(r.stock_value) filter (where r.is_old and r.no_sale), 2) end)
-        from r),
-      'total', (select count(*) from f),
-      'rows', coalesce((select jsonb_agg(jsonb_build_object(
-          'item_code', f.item_code, 'description', f.description, 'item_group', f.item_group, 'item_type', f.item_type,
-          'last_receipt', f.last_receipt, 'months', f.months, 'on_hand', f.on_hand,
-          'stock_value', case when cost then f.stock_value end, 'sold12', f.sold12, 'last_sale_month', f.last_sale_month,
-          'is_old', f.is_old, 'no_sale', f.no_sale, 'action', f.action, 'note', coalesce(f.note, ''),
-          'owner_id', f.owner_id, 'owner_name', f.owner_name, 'action_at', f.action_at,
-          'locations', (select coalesce(jsonb_agg(jsonb_build_object('location', fs.location, 'qty', fs.qty) order by fs.qty desc), '[]'::jsonb)
-                        from bi.fact_stock fs where fs.company = c and fs.item_code = f.item_code and fs.qty > 0))
-          order by case when cost then f.stock_value else f.on_hand end desc, f.item_code)
-        from (select * from f order by case when cost then f.stock_value else f.on_hand end desc, f.item_code limit 300) f), '[]'::jsonb)
-    ) from (select 1) one);
-end $$;
 
 -- ==================================================================== 2. 分店规则、点货栏位、在路上落在哪间分店、DO 表头
 -- 厂家 DO 可以分给哪间分店：总部账套（HOMEWORKSSB）的 PO 替四间分店订；其他账套（HOMEWORKSSOUTHERN）整本属于同公司的分店（JB）
@@ -343,40 +133,8 @@ language sql stable set search_path = '' as $$
   left join bi.dim_item i on i.company = p_company and i.item_code = s.item_code
 $$;
 
--- DO 表头（照抄 20261012_ops_po_do.sql）：can_arrive（「点货」按钮）不给确认这张的人；多回 confirmed_by_me
-create or replace function ops.podo_json(p_me ops.staff, d ops.supplier_do) returns jsonb
-language sql stable set search_path = '' as $$
-  select jsonb_build_object(
-    'id', d.id, 'company', d.company, 'creditor_code', d.creditor_code, 'supplier_name', d.supplier_name,
-    'do_no', d.do_no, 'do_date', d.do_date, 'eta', d.eta, 'shipment_id', d.shipment_id,
-    'shipment_name', s.name, 'shipment_eta', s.eta, 'eta_effective', coalesce(s.eta, d.eta),
-    'eta_source', case when s.eta is not null then 'shipment' when d.eta is not null then 'do' end,
-    'status', d.status, 'po_nos', to_jsonb(d.po_nos), 'remark', d.remark, 'files', d.files,
-    'item_count', (select count(*) from jsonb_array_elements(d.items) x where x ->> 'item_code' is not null),
-    'unmatched_count', (select count(*) from jsonb_array_elements(d.items) x where x ->> 'item_code' is null),
-    'shipped_total', (select coalesce(sum((x ->> 'shipped')::numeric), 0) from jsonb_array_elements(d.items) x),
-    'issue_open', (select count(*) from ops.supplier_issue i where i.do_id = d.id and i.status = 'open'),
-    'created_by_name', ops.podo_who(d.created_by), 'created_at', d.created_at,
-    'updated_by_name', ops.podo_who(d.updated_by), 'updated_at', d.updated_at,
-    'confirmed_by_name', ops.podo_who(d.confirmed_by), 'confirmed_at', d.confirmed_at,
-    'confirmed_by_me', coalesce(d.confirmed_by = p_me.id, false),
-    'arrived_by_name', ops.podo_who(d.arrived_by), 'arrived_at', d.arrived_at, 'arrive_note', d.arrive_note,
-    'cancelled_by_name', ops.podo_who(d.cancelled_by), 'cancelled_at', d.cancelled_at, 'cancel_reason', d.cancel_reason,
-    'can_edit', coalesce(d.status = 'draft' and k.po >= 2 and k.sees, false),
-    'can_edit_info', coalesce(d.status <> 'cancelled' and k.po >= 2 and k.sees, false),
-    'can_reopen', coalesce(d.status = 'confirmed' and k.po >= 3 and k.sees, false),
-    'can_arrive', coalesce(d.status = 'confirmed' and (k.po >= 2 or k.wh >= 2) and k.sees
-                           and d.confirmed_by is distinct from p_me.id, false),
-    'can_add_issue', coalesce(d.status in ('confirmed', 'arrived') and k.po >= 2 and k.sees, false))
-  from (select ops.level_rank(ops.module_level(p_me, 'purchasing')) as po,
-               ops.level_rank(ops.module_level(p_me, 'warehouse')) as wh,
-               ops.sees_company(p_me, d.company) as sees) k
-  left join ops.shipment s on s.id = d.shipment_id and s.status <> 'cancelled'
-$$;
-
 -- ==================================================================== 3. 谁能点货、清单 / 明细
--- 能点货：订货或仓库「可编辑」，而且看得到那间公司（货到总部仓库：JB 的人不点总部的 DO）。
--- 确认这张 DO 的人看得到，但不能自己点（ops_po_do_receive 另外挡）。
+-- 能点货：订货或仓库「可编辑」，而且看得到那间公司（货到总部仓库：JB 的人不点总部的 DO）。确认这张 DO 的人自己也可以点。
 create or replace function ops.podo_can_receive(p_staff ops.staff, p_company text) returns boolean
 language sql stable set search_path = '' as $$
   select coalesce((ops.level_rank(ops.module_level(p_staff, 'purchasing')) >= 2
@@ -401,7 +159,7 @@ end $$;
 -- 不回厂家、DO 号、PO 号、货柜名称。不含价格。summary 只有点过货的才有（件数）：
 --   short / damaged / over / wrong = 点货纪录；mismatch = 点货前手动记的坏货 + 到货少比点到的缺口多几件（要采购核对、作废）；
 --   later = 点完货之后才补记的（坏货、到货少、来错）。
-create or replace function ops.podo_recv_head(d ops.supplier_do, p_sup boolean, p_me bigint) returns jsonb
+create or replace function ops.podo_recv_head(d ops.supplier_do, p_sup boolean) returns jsonb
 language sql stable set search_path = '' as $$
   select jsonb_build_object(
     'id', d.id, 'company', d.company, 'status', d.status, 'do_date', d.do_date,
@@ -421,7 +179,6 @@ language sql stable set search_path = '' as $$
     'outlets', (select coalesce(jsonb_agg(o.code order by o.sort, o.code), '[]'::jsonb) from ops.outlet o
                 where exists (select 1 from ops.supplier_do_apply a where a.do_id = d.id and not a.void and a.outlet = o.code)),
     'confirmed_at', d.confirmed_at, 'confirmed_by_name', ops.podo_who(d.confirmed_by),
-    'self_confirmed', coalesce(d.confirmed_by = p_me, false),
     'arrived_at', d.arrived_at, 'arrived_by_name', ops.podo_who(d.arrived_by),
     'summary', case when d.receipt is not null then (
       select jsonb_build_object(
@@ -468,7 +225,7 @@ begin
   sup := ops.sees_supplier(me);
   return jsonb_build_object(
     'days', v_days,
-    'todo', (select coalesce(jsonb_agg(ops.podo_recv_head(r.x, sup, me.id) order by r.eta nulls last, (r.x).confirmed_at, (r.x).id),
+    'todo', (select coalesce(jsonb_agg(ops.podo_recv_head(r.x, sup) order by r.eta nulls last, (r.x).confirmed_at, (r.x).id),
                              '[]'::jsonb)
              from (select x, coalesce(s.eta, x.eta) as eta from ops.supplier_do x
                    left join ops.shipment s on s.id = x.shipment_id and s.status <> 'cancelled'
@@ -476,7 +233,7 @@ begin
                      and (nullif(p ->> 'company', '') is null or x.company = p ->> 'company')
                      and ops.podo_recv_match(x, sup, v_q)
                    order by coalesce(s.eta, x.eta) nulls last, x.id limit 500) r),
-    'done', (select coalesce(jsonb_agg(ops.podo_recv_head(r.x, sup, me.id) order by (r.x).arrived_at desc, (r.x).id desc), '[]'::jsonb)
+    'done', (select coalesce(jsonb_agg(ops.podo_recv_head(r.x, sup) order by (r.x).arrived_at desc, (r.x).id desc), '[]'::jsonb)
              from (select x from ops.supplier_do x
                    where x.status = 'arrived' and x.arrived_at >= now() - make_interval(days => v_days)
                      and ops.sees_company(me, x.company)
@@ -501,13 +258,13 @@ begin
     raise exception '找不到这张厂家 DO。' using errcode = 'P0002';
   end if;
   sup := ops.sees_supplier(me);
-  h := ops.podo_recv_head(d, sup, me.id);
+  h := ops.podo_recv_head(d, sup);
   return h || jsonb_build_object(
     'alloc_outlets', h -> 'outlets',
     'remark', case when sup then d.remark else '' end,
     'files', case when sup then d.files else '[]'::jsonb end,
     'arrive_note', d.arrive_note, 'receipt', d.receipt,
-    'can_receive', coalesce(d.status = 'confirmed' and d.confirmed_by is distinct from me.id, false),
+    'can_receive', d.status = 'confirmed',
     'outlets', (select coalesce(jsonb_agg(jsonb_build_object('code', o.code, 'name', o.name, 'short_name', o.short_name,
                                                              'company', o.company) order by o.sort, o.code), '[]'::jsonb)
                 from ops.outlet o where o.active and ops.podo_outlet_ok(d.company, o.code)),
@@ -547,7 +304,7 @@ end $$;
 
 -- ==================================================================== 4. 点货（货到了）
 -- p: {id, items:[{item_code, received, damaged, alloc{分店: 好货}, note}], wrong:[{received_code, description, expected_code, qty, note}], note}
---   items 要刚好是这张 DO 有型号、出货 > 0 的那些；好货一定要分完（各分店合计 = 好货），坏货不分配。确认这张的人不能自己点。
+--   items 要刚好是这张 DO 有型号、出货 > 0 的那些；好货一定要分完（各分店合计 = 好货），坏货不分配。
 --   每个型号：缺口 = 出货 − 好货（> 0 才有）= 这张这个型号要从「在路上」扣的件数。点货前已经手动记的坏货 / 到货少（没作废）
 --   先算进缺口，不够才补记：坏货（最多到点到的坏货）、其余记到货少。已记的比缺口还多 = 跟点货结果不一致：不动它，
 --   receipt 记 prior、清单显示要采购核对。坏货比缺口多（好货已经够了）= 多寄的坏件：不记坏货，算在「多到」的件数与备注。
@@ -612,9 +369,6 @@ begin
   end if;
   if d.status <> 'confirmed' then
     raise exception '还没确认的 DO 不能点货。' using errcode = '22023';
-  end if;
-  if d.confirmed_by = me.id then
-    raise exception '这张厂家 DO 是你确认的：请另一位同事（仓库部）点货，少了、坏了才有人核对。' using errcode = '42501';
   end if;
   if (p ? 'items' and jsonb_typeof(p -> 'items') not in ('array', 'null'))
      or (p ? 'wrong' and jsonb_typeof(p -> 'wrong') not in ('array', 'null')) then
@@ -888,7 +642,7 @@ begin
 end $$;
 
 -- 处理问题（照抄 20261012_ops_po_do.sql）：只多一条——点过货的 DO（有点货纪录），厂家问题只有采购 / 管理层（ops.sees_prices）
--- 可以作废：物流部也是订货「可编辑」，不能把仓库点出来的到货少 / 坏货作废掉（作废会让「在路上 / 还可以出」又算回来）。
+-- 可以作废（作废会让「在路上 / 还可以出」又算回来）。现在要订货「可编辑」才叫得到这个函数，这条是防以后权限放宽。
 create or replace function public.ops_po_issue_set(p_ids bigint[], p_action text, p_note text default null) returns int
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -987,8 +741,8 @@ $$;
 
 -- ==================================================================== 6. 首页
 -- 照抄 20261013b_ops_supplier_privacy.sql，多三个：
---   do_to_count：订货或仓库「可编辑」的人，看得到的公司里已确认、还没点货、有效 ETA（货柜 > DO）在三天内或已过（不算自己确认的）；
---   do_no_eta：订货「可编辑」的人（物流部、采购），已确认还没填 ETA 的厂家 DO（分店看到「未填」）；
+--   do_to_count：订货或仓库「可编辑」的人，看得到的公司里已确认、还没点货、有效 ETA（货柜 > DO）在三天内或已过；
+--   do_no_eta：订货「可编辑」的人（采购、管理层），已确认还没填 ETA 的厂家 DO（分店看到「未填」）；
 --   po_issues_todo：采购 / 管理层（ops.sees_prices），还没决定的少发 + 7 天内新记、还没处理的厂家问题（点货记的会出现在这里）。
 create or replace function public.ops_home() returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -1024,7 +778,6 @@ begin
                     (select count(*) from ops.supplier_do d
                      left join ops.shipment s on s.id = d.shipment_id and s.status <> 'cancelled'
                      where d.status = 'confirmed' and ops.sees_company(me, d.company)
-                       and d.confirmed_by is distinct from me.id
                        and coalesce(s.eta, d.eta) <= ops.today() + 3) end,
     'do_no_eta', case when po >= 2 then
                     (select count(*) from ops.supplier_do d
@@ -1074,12 +827,11 @@ begin
   end loop;
 end $$;
 revoke all on function ops.sees_prices(ops.staff) from public, anon, authenticated;
-revoke all on function ops.sees_cost(ops.staff) from public, anon, authenticated;
 revoke all on function ops.podo_outlet_ok(text, text) from public, anon, authenticated;
 revoke all on function ops.podo_outlet_msg(text, text[]) from public, anon, authenticated;
 revoke all on function ops.supplier_do_outlet_guard() from public, anon, authenticated;
 revoke all on function ops.podo_can_receive(ops.staff, text) from public, anon, authenticated;
 revoke all on function ops.podo_require_receive() from public, anon, authenticated;
-revoke all on function ops.podo_recv_head(ops.supplier_do, boolean, bigint) from public, anon, authenticated;
+revoke all on function ops.podo_recv_head(ops.supplier_do, boolean) from public, anon, authenticated;
 revoke all on function ops.podo_recv_match(ops.supplier_do, boolean, text) from public, anon, authenticated;
 revoke all on all functions in schema ops from public, anon, authenticated;

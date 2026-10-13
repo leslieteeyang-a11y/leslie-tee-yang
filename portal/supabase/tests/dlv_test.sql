@@ -208,8 +208,8 @@ do $$ begin
   assert (select name from ops.department where code = 'logistics') = '物流部', 'logistics dept';
   assert (select name from ops.department where code = 'delivery') = '送货部', 'delivery renamed';
   assert (select string_agg(module || ':' || level, ',' order by module) from ops.dept_module where department = 'logistics')
-       = 'approvals:edit,attendance:edit,dashboard:view,delivery:edit,leave:edit,purchasing:edit,tasks:edit,warehouse:edit',
-    'logistics modules (purchasing = edit since 20261014: 物流部开厂家到货)';
+       = 'approvals:edit,attendance:edit,dashboard:view,delivery:edit,leave:edit,purchasing:view,tasks:edit,warehouse:edit',
+    'logistics modules';
 end $$;
 set role authenticated;
 select pg_temp.as_user('boss@example.com');
@@ -219,7 +219,7 @@ select pg_temp.as_user('logi@example.com');
 do $$ declare m jsonb := public.ops_dlv_meta(); me jsonb := public.ops_me(); r jsonb; v_id bigint; begin
   assert m->>'level' = 'edit', 'logistics can plan: ' || m::text;
   assert exists (select 1 from jsonb_array_elements(me->'modules') x where x->>'key' = 'warehouse' and x->>'level' = 'edit'), 'warehouse edit';
-  assert exists (select 1 from jsonb_array_elements(me->'modules') x where x->>'key' = 'purchasing' and x->>'level' = 'edit'), 'purchasing edit (20261014)';
+  assert exists (select 1 from jsonb_array_elements(me->'modules') x where x->>'key' = 'purchasing' and x->>'level' = 'view'), 'purchasing view';
   assert exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'kind' = 'staff' and d->>'name' = '物流阿华'
                  and d->>'phone' = '60165551234'), 'logistics staff listed as driver: ' || (m->'drivers')::text;
   assert exists (select 1 from jsonb_array_elements(m->'drivers') d where d->>'name' = '司机阿强'), 'delivery staff still drivers';

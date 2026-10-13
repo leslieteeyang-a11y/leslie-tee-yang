@@ -1,19 +1,25 @@
-// 点货：厂家的货到了，仓库（或订货「可编辑」的人；确认这张 DO 的人除外）点每个型号实际收到几件（好货、坏货），来错的货另外记，
+// 点货：厂家的货到了，仓库（或订货「可编辑」的人；确认这张 DO 的人自己也可以）点每个型号实际收到几件（好货、坏货），来错的货另外记，
 // 好货分给各分店的数量由点货的人自己改（没动过分配的型号，好货一改就自动「少的先扣总部、多的放总部」），按「点完，货到了」→
 // 这张 DO 算到货（各分店的「在路上」拿掉）；到货少 / 坏货 / 多到 / 来错自动记进「厂家问题」（采购照清单找厂家）。点完不能撤回。
 // 预设：点货前已经记的坏货 / 到货少先填进去（好货 = 应到 − 已记的），资料库也只补记比已记的多出来的。
 // #/purchasing/receive：待点货（ETA 近的在前）+ 最近点过（14 / 30 / 90 / 365 天、可搜寻）；#/purchasing/receive/<DO id>：点一张，或看点货纪录。
 // 不含价格。看不到厂家的人（资料库已遮）：没有厂家、DO 号、PO 号、货柜、附件。分店栏由资料库给：总部账套四间、JB 账套只有 JB。
+// 点完货：好货进仓库库存（进货待入 AutoCount，仓库搬动 kind = receive；查货、盘点的「应有」算进去），开单部开 GRN 后标已输入。
+// 来错的货：搜我们的型号（进选的仓位）或「不是我们的产品」（不进库存）；要厂家怎么处理。开单时每行的备注显示给仓库看。
+// 开单时记的来错型号（厂家 DO 对不上 PO 的行）预先带进「来错的货」（do_row：资料库跟确认时记的那笔对上，不重复记）：
+// 是我们的型号的照点到的数量进库存；没认出来的要选我们的型号或「不是我们的产品」；没收到就拿掉。
+// 点货的备注（每个型号、来错的货）会带进厂家问题、印在给厂家的清单 / 讯息上；内部的话写在「整张备注」。
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BRANCH_LABEL, can, fmtDate, fmtQty, Me, seesSupplier } from "../api";
+import { BRANCH_LABEL, can, canGrn, fmtDate, fmtQty, Me, seesSupplier } from "../api";
 import { go, setLeaveGuard } from "../router";
 import { Empty, ErrorBox, Modal } from "../ui";
 import {
-  DECISION_LABEL, issueKindLabel, ISSUE_STATUS_LABEL, joinList, num, podo, Receipt, RecvFull, RecvItem, RecvList, RecvRow,
-  RecvSummary, ui,
+  IssueRequest, joinList, num, podo, Receipt, RecvFull, RecvItem, RecvList, RecvMove, RecvRow, RecvSummary, requestLabel, ui,
 } from "../podo-api";
-import { DoStatusBadge, ErrorLines, EtaText, FileList, outletName, useOutlets } from "./common";
-import { AddIssueModal } from "./Issues";
+import {
+  DoStatusBadge, ErrorLines, EtaText, FileList, IssueBadges, NOT_PICKED, OurItemPicker, outletName, Picked, RequestSelect, useOutlets,
+} from "./common";
+import { AddIssueModal, issueModel } from "./Issues";
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const sumOf = (xs: number[]) => r3(xs.reduce((s, x) => s + x, 0));
@@ -88,13 +94,14 @@ function RecvListView({ me }: { me: Me }) {
 }
 
 /** 点货结果的小标签（清单、DO 画面共用）：点货时的到货少 / 坏货 / 多到 / 来错；已记的比点到的多；点完之后才补记的 */
-export function SummaryTags({ s }: { s: RecvSummary }) {
+export function SummaryTags({ s, unmatched = 0 }: { s: RecvSummary; unmatched?: number }) {
   const n = Number(s.short) + Number(s.damaged) + Number(s.over) + Number(s.wrong);
   const later = s.later ?? { damaged: 0, short: 0, wrong: 0 };
   const laterN = Number(later.damaged) + Number(later.short) + Number(later.wrong);
   return (
     <>
-      {n === 0 && <span className="okc">{laterN ? "点货时全部到齐" : "全部到齐"}</span>}
+      {n === 0 && !unmatched && <span className="okc">{laterN ? "点货时全部到齐" : "全部到齐"}</span>}
+      {n === 0 && unmatched > 0 && <span className="tag warn">{`开单时记了来错的型号 ${unmatched} 行`}</span>}
       {Number(s.short) > 0 && <span className="tag warn">{`到货少 ${fmtQty(s.short)}`}</span>}
       {Number(s.damaged) > 0 && <span className="tag warn">{`坏货 ${fmtQty(s.damaged)}`}</span>}
       {Number(s.over) > 0 && <span className="tag transit">{`多到 ${fmtQty(s.over)}`}</span>}
@@ -137,11 +144,9 @@ function RecvTable({ rows, me, outlets, todo }: { rows: RecvRow[]; me: Me; outle
                 {fmtQty(d.shipped_total)}<br /><small className="muted">{`${d.item_count} 个型号`}</small>
               </td>
               <td className="nowrap">
-                {todo ? (d.self_confirmed
-                  ? <small className="muted">你确认的：请仓库同事点</small>
-                  : <button className="small" onClick={(e) => { e.stopPropagation(); go(`/purchasing/receive/${d.id}`); }}>点货</button>) : (
+                {todo ? <button className="small" onClick={(e) => { e.stopPropagation(); go(`/purchasing/receive/${d.id}`); }}>点货</button> : (
                   <>
-                    {d.summary && <SummaryTags s={d.summary} />}
+                    {d.summary && <SummaryTags s={d.summary} unmatched={d.unmatched_count} />}
                     <br /><small className="muted">{`${d.arrived_by_name ?? ""} · ${fmtDate(d.arrived_at)}`}</small>
                   </>
                 )}
@@ -214,11 +219,25 @@ interface Line {
   touched: boolean;              // 分配自己改过：好货改了也不自动跟
   note: string; showNote: boolean;
 }
-interface Wrong { key: string; received_code: string; description: string; qty: string; expected_code: string; note: string }
+/** 来错的货：pick = 收到的型号（我们的商品 own = true，进 location 仓位的库存；不是我们的产品 own = false，不进库存）。
+ *  do_row = 开单时 DO 上的那一行（预先带进来的；资料库跟确认时记的那笔对上，不重复记）；seed = 开单时的写法；doNote = 开单备注 */
+interface Wrong {
+  key: string; pick: Picked; qty: string; expected_code: string; note: string; request: IssueRequest | ""; location: string;
+  do_row?: number; seed?: { code: string; desc: string }; doNote?: string;
+}
 let wseq = 0;
 const wkey = () => `w${++wseq}`;
-const blankWrong = (): Wrong => ({ key: wkey(), received_code: "", description: "", qty: "", expected_code: "", note: "" });
-const isBlankWrong = (w: Wrong) => !w.received_code.trim() && !w.description.trim() && !w.qty.trim() && !w.expected_code && !w.note.trim();
+const blankWrong = (loc: string): Wrong => ({ key: wkey(), pick: NOT_PICKED, qty: "", expected_code: "", note: "", request: "", location: loc });
+const isBlankWrong = (w: Wrong) => !w.do_row && w.pick.own === null && !w.qty.trim() && !w.expected_code && !w.note.trim() && !w.request;
+/** 开单时记的来错型号 → 「来错的货」一行（数量预设 = DO 上的数量；没认出来的要选） */
+function fromDo(u: RecvFull["unmatched"][number], loc: string): Wrong {
+  const pick: Picked = u.own === true ? { own: true, code: u.src_code, desc: u.src_desc }
+    : u.own === false ? { own: false, code: u.src_code, desc: u.src_desc } : NOT_PICKED;
+  return {
+    key: wkey(), pick, qty: String(r3(Number(u.shipped))), expected_code: u.expected_code ?? "", note: "", request: u.request ?? "",
+    location: loc, do_row: u.row, seed: u.own == null ? { code: u.src_code, desc: u.src_desc } : undefined, doNote: u.note,
+  };
+}
 
 const strAlloc = (a: Record<string, number>) =>
   Object.fromEntries(Object.entries(a ?? {}).filter(([, v]) => Number(v) > 0).map(([k, v]) => [k, String(r3(Number(v)))]));
@@ -349,7 +368,9 @@ function RecvForm({ d, onDone, onRace }: {
   const outlets = d.outlets;
   const order = outlets.map((o) => o.code);
   const [lines, setLines] = useState<Record<string, Line>>(() => Object.fromEntries(d.items.map((it) => [it.item_code, defaultLine(it, order)])));
-  const [wrong, setWrong] = useState<Wrong[]>([]);
+  const mainLoc = d.main_location || "HQ";
+  // 开单时记的来错型号先带进来（是我们的型号才会进库存；不是我们的产品照样只记问题）
+  const [wrong, setWrong] = useState<Wrong[]>(() => d.unmatched.filter((u) => u.row).map((u) => fromDo(u, mainLoc)));
   const [note, setNote] = useState("");
   const [dirty, setDirty] = useState(false);
   const [q, setQ] = useState("");
@@ -401,7 +422,8 @@ function RecvForm({ d, onDone, onRace }: {
     }
     wrong.forEach((w, i) => {
       if (isBlankWrong(w)) return;
-      if (!w.received_code.trim() && !w.note.trim()) out.push(`来错的货第 ${i + 1} 行请填收到的型号或备注。`);
+      if (w.pick.own === null) out.push(`来错的货第 ${i + 1} 行：请从清单选我们的型号，或按「不是我们的产品」。`);
+      else if (w.pick.own === false && !w.pick.desc.trim()) out.push(`来错的货第 ${i + 1} 行「不是我们的产品」请填品名。`);
       else if (Number.isNaN(num(w.qty))) out.push(`来错的货第 ${i + 1} 行的数量不是数字。`);
       else if (!(num(w.qty) > 0)) out.push(`来错的货第 ${i + 1} 行请填数量。`);
     });
@@ -416,9 +438,11 @@ function RecvForm({ d, onDone, onRace }: {
         return { item_code: it.item_code, received: num(l.received), damaged: num(l.damaged) || 0, alloc: cleanAlloc(l.alloc), note: l.note.trim() };
       }),
       // 整行空白的也送（资料库略过），「第几行」才跟画面一样
-      wrong: wrong.map((w) => ({
-        received_code: w.received_code.trim(), description: w.description.trim(), expected_code: w.expected_code || null,
-        qty: w.qty.trim() === "" ? null : num(w.qty), note: w.note.trim(),
+      wrong: wrong.map((w) => isBlankWrong(w) ? { received_code: "", description: "", qty: null, note: "" } : ({
+        received_code: w.pick.code.trim(), description: w.pick.desc.trim(), expected_code: w.expected_code || null,
+        qty: w.qty.trim() === "" ? null : num(w.qty), note: w.note.trim(), request: w.request || null,
+        ...(w.pick.own === null ? {} : { own: w.pick.own }), ...(w.pick.own ? { location: w.location || mainLoc } : {}),
+        ...(w.do_row ? { do_row: w.do_row } : {}),
       })),
       note: note.trim(),
     };
@@ -438,6 +462,7 @@ function RecvForm({ d, onDone, onRace }: {
       <div className="card podo-items">
         <h3>{`点货（${d.items.length} 个型号）`}</h3>
         <p className="muted small">好货预设 = 应到；有坏的填坏货（坏货不分给分店）。好货一定要分完：各分店合计 = 好货。灰字「原」是确认时的分配。</p>
+        <p className="muted small">每行的「＋ 备注」会带进厂家问题（到货少 / 坏货 / 多到），印在给厂家的清单与 WhatsApp 讯息上；只给自己人看的写在最下面的「整张备注」。</p>
         <p className="muted small">好货改少了，没动过分配的型号会自动从总部先扣（多了放总部）；要别的分法直接改分店的数字。</p>
         {hasPrior && <p className="small amber">有型号点货前已经记了坏货 / 到货少：已先填进好货、坏货，实际不同请改。</p>}
         <div className="toolbar">
@@ -469,6 +494,7 @@ function RecvForm({ d, onDone, onRace }: {
                     <td className="sticky">
                       <b>{code}</b> <small className="muted">{it.uom}</small><br />
                       <small>{it.description}</small>
+                      {it.note && <small className="pre recv-do-note">{`开单备注：${it.note}`}</small>}
                       {(priorD(it) > 0 || priorS(it) > 0) && (
                         <div className="podo-tags">
                           {priorD(it) > 0 && <span className="tag warn">{`已记坏货 ${fmtQty(priorD(it))}`}</span>}
@@ -485,7 +511,8 @@ function RecvForm({ d, onDone, onRace }: {
                         )}
                       </div>
                       {!l.showNote && <button type="button" className="text-btn small" onClick={() => setLine(code, (x) => ({ ...x, showNote: true }))}>＋ 备注</button>}
-                      {l.showNote && <input className="podo-note" value={l.note} placeholder="备注（例：外箱压坏、有拍照）" onChange={(e) => setLine(code, (x) => ({ ...x, note: e.target.value }))} />}
+                      {l.showNote && <input className="podo-note" value={l.note} placeholder="备注（会给厂家看，例：外箱压坏、有拍照）" title="会带进厂家问题、印在给厂家的清单 / 讯息上"
+                                            onChange={(e) => setLine(code, (x) => ({ ...x, note: e.target.value }))} />}
                     </td>
                     <td className="num"><b>{fmtQty(it.shipped)}</b></td>
                     <td className="num">
@@ -532,30 +559,49 @@ function RecvForm({ d, onDone, onRace }: {
       {/* 来错的货：一行一张小卡（手机也看得到全部栏位） */}
       <div className="card podo-items">
         <h3>{`来错的货（${wrong.length}）`}</h3>
-        <p className="muted small">收到不是这张 DO 的型号（例：订白色收到黑色）：一种一行，填收到的型号和数量；知道本来应该是哪个型号就选。会记成「发错型号」给采购找厂家。</p>
+        <p className="muted small">收到不是这张 DO 的型号（例：订白色收到黑色）：一种一行，搜我们的型号（会进仓库库存）或按「不是我们的产品」，填数量；知道本来应该是哪个型号就选。会记成「发错型号」给采购找厂家；备注会印在给厂家的清单 / 讯息上。</p>
         {d.unmatched.length > 0 && (
-          <p className="muted small">{`确认时已记成发错型号（厂家 DO 对不上 PO 的行）：${joinList(d.unmatched.map((u) => `${u.src_code || u.src_desc} × ${fmtQty(u.shipped)}`))}。点到的是这些就不用再填。`}</p>
+          <p className="small amber">{`开单时记的来错型号（${d.unmatched.length} 行）已经带进下面：请照实际点到的数量改；是我们的型号会进仓库库存，没认出来的请选我们的型号或「不是我们的产品」；没收到就拿掉。`}</p>
         )}
         {wrong.map((w, i) => (
           <div key={w.key} className="recv-wrong-card">
             <div className="recv-wrong-head">
               <b className="small">{`第 ${i + 1} 行`}</b>
+              {w.do_row && <span className="tag">开单时记的</span>}
               <button type="button" className="small ghost danger" onClick={() => { setWrong(wrong.filter((x) => x.key !== w.key)); touch(); }}>拿掉</button>
             </div>
-            <label>收到的型号<input value={w.received_code} placeholder="收到的型号" aria-label="收到的型号" onChange={(e) => setW(w.key, { received_code: e.target.value })} /></label>
+            {w.do_row && w.pick.own === null && (
+              <p className="wide small amber">
+                {`开单时没认出来：${[w.seed?.code, w.seed?.desc].filter(Boolean).join(" ") || "（厂家写的型号）"}。请选我们的型号，或按「不是我们的产品」；没收到就拿掉。`}
+              </p>
+            )}
+            {w.doNote && <small className="wide muted pre">{`开单备注：${w.doNote}`}</small>}
+            <div className="wide pick-field">
+              <span className="pick-label">收到的型号</span>
+              <OurItemPicker company={d.company} value={w.pick} onChange={(v) => setW(w.key, { pick: v })} seed={w.seed} />
+            </div>
             <label>数量<input className="podo-num" inputMode="decimal" value={w.qty} aria-label="来错数量" onChange={(e) => setW(w.key, { qty: e.target.value })} /></label>
+            {w.pick.own && (
+              <label>放哪个仓位
+                <select value={w.location} aria-label="放哪个仓位" onChange={(e) => setW(w.key, { location: e.target.value })}>
+                  {(d.locations?.length ? d.locations : [mainLoc]).map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </label>
+            )}
             <label>本来应该是
               <select value={w.expected_code} aria-label="本来应该是" onChange={(e) => setW(w.key, { expected_code: e.target.value })}>
                 <option value="">—</option>
                 {d.items.map((it) => <option key={it.item_code} value={it.item_code}>{it.item_code}</option>)}
               </select>
             </label>
-            <label>品名<input value={w.description} placeholder="品名" aria-label="品名" onChange={(e) => setW(w.key, { description: e.target.value })} /></label>
-            <label className="wide">备注<input value={w.note} placeholder="例：订白色收到黑色" aria-label="备注" onChange={(e) => setW(w.key, { note: e.target.value })} /></label>
+            <label>要厂家怎么处理
+              <RequestSelect kind="wrong" value={w.request} onChange={(v) => setW(w.key, { request: v })} />
+            </label>
+            <label className="wide">备注（会印在给厂家的清单 / 讯息上）<input value={w.note} placeholder="例：订白色收到黑色" aria-label="备注" onChange={(e) => setW(w.key, { note: e.target.value })} /></label>
           </div>
         ))}
-        <button type="button" className="small ghost" onClick={() => { setWrong([...wrong, blankWrong()]); touch(); }}>＋ 加一行来错的货</button>
-        <label className="recv-note">整张备注（可空白）
+        <button type="button" className="small ghost" onClick={() => { setWrong([...wrong, blankWrong(mainLoc)]); touch(); }}>＋ 加一行来错的货</button>
+        <label className="recv-note">整张备注（可空白，只给自己人看）
           <textarea rows={2} value={note} onChange={(e) => { setNote(e.target.value); touch(); }} placeholder="例：外箱湿了、司机晚到" />
         </label>
       </div>
@@ -591,7 +637,10 @@ function RecvForm({ d, onDone, onRace }: {
                        setDirty(false);
                        setLeaveGuard(null);
                        const n = next.receipt?.issue_ids.length ?? 0;
-                       onDone(next, n ? `已点完货：${n} 笔记进厂家问题。` : "已点完货：全部到齐。");
+                       // 没有新记的问题：可能是真的全部到齐，也可能是同样的问题之前已经记过（例：来错的型号确认时就记了）
+                       const noted = wrong.some((w) => !isBlankWrong(w)) || d.unmatched.length > 0
+                         || d.items.some((it) => !rowOk(calc(it, lines[it.item_code])));
+                       onDone(next, n ? `已点完货：${n} 笔记进厂家问题。` : noted ? "已点完货：这些问题之前已经记过，没有新增。" : "已点完货：全部到齐。");
                      }} />
       )}
     </>
@@ -614,7 +663,7 @@ function RecvConfirm({ d, lines, wrong, onClose, onOk }: {
   const moved = rows.filter((x) => splitChanged(lines[x.it.item_code], x.it));
   const byOutlet = d.outlets.map((o) => ({ o, n: sumOf(d.items.map((it) => num(lines[it.item_code].alloc[o.code]) || 0)) })).filter((x) => x.n > 0);
   const good = sumOf(rows.map((x) => x.c.r));
-  const nothing = rows.every((x) => x.c.gap === 0 && x.c.over === 0 && x.c.mismatch === 0) && !wrong.length;
+  const nothing = rows.every((x) => x.c.gap === 0 && x.c.over === 0 && x.c.mismatch === 0) && !wrong.length && !d.unmatched.length;
 
   async function ok() {
     setBusy(true);
@@ -643,7 +692,8 @@ function RecvConfirm({ d, lines, wrong, onClose, onOk }: {
         {`好货共 ${fmtQty(good)} 件。`}
         {byOutlet.map((x) => <span key={x.o.code} className="tag outlet">{`${x.o.short_name || x.o.name} ${fmtQty(x.n)}`}</span>)}
       </p>
-      <p className="muted small">确定后：这张 DO 算到货（各分店的「在路上」拿掉这张），下面的问题记进「厂家问题」给采购找厂家。点完不能撤回；AutoCount 仍要照常开 GRN。</p>
+      <p className="muted small">确定后：这张 DO 算到货（各分店的「在路上」拿掉这张），下面的问题记进「厂家问题」给采购找厂家。点完不能撤回。</p>
+      <p className="muted small">好货（和来错的我们的型号）马上算进仓库库存（查货、盘点的「应有」），开单部在 AutoCount 开好进货单（GRN）后按「已输入」。坏货不进库存。</p>
       {nothing && <div className="ok">全部照 DO 到齐，没有要记的厂家问题。</div>}
       {shorts.length > 0 && <><h3>{`到货少（${shorts.length}）`}</h3>{list(shorts, (x) => `应到 ${fmtQty(x.c.s)} · 好货 ${fmtQty(x.c.r)} · 坏货 ${fmtQty(x.c.d)} · 少 ${fmtQty(x.c.newShort)}`)}</>}
       {dmgs.length > 0 && <><h3>{`坏货（${dmgs.length}）`}</h3>{list(dmgs, (x) => `坏 ${fmtQty(x.c.newDmg)}`)}</>}
@@ -665,7 +715,11 @@ function RecvConfirm({ d, lines, wrong, onClose, onOk }: {
           <ul className="list small">
             {wrong.map((w) => (
               <li key={w.key}>
-                <span>{w.received_code || w.note}{w.expected_code ? <small className="muted">{` · 本来应该是 ${w.expected_code}`}</small> : null}</span>
+                <span>{w.pick.code || w.pick.desc || w.note}
+                  {w.do_row ? <small className="muted">{" · 开单时记的"}</small> : null}
+                  {w.pick.own ? <small className="muted">{` · 进 ${w.location || d.main_location || "HQ"}`}</small> : w.pick.own === false ? <small className="muted">{" · 不是我们的产品"}</small> : null}
+                  {w.expected_code ? <small className="muted">{` · 本来应该是 ${w.expected_code}`}</small> : null}
+                  {w.request ? <small className="muted">{` · 要厂家：${requestLabel("wrong", w.request)}`}</small> : null}</span>
                 <span>{fmtQty(num(w.qty))}</span>
               </li>
             ))}
@@ -690,6 +744,7 @@ function RecvConfirm({ d, lines, wrong, onClose, onOk }: {
 // ------------------------------------------------------------------ 点货纪录（唯读）
 function ReceiptView({ me, d, flash, onChanged }: { me: Me; d: RecvFull; flash: string; onChanged: () => void }) {
   const [addIssue, setAddIssue] = useState(false);
+  const [stockMsg, setStockMsg] = useState("");
   const r: Receipt | null = d.receipt;
   const canAdd = d.status === "arrived" || d.status === "confirmed";
   return (
@@ -698,35 +753,31 @@ function ReceiptView({ me, d, flash, onChanged }: { me: Me; d: RecvFull; flash: 
       {flash.startsWith("!") && (
         <>
           <div className="error">{flash.slice(1)}</div>
-          <p className="small">你点的数字跟下面的纪录不一样的话，用「＋ 记坏货 / 到货少 / 来错货」补记。</p>
+          <p className="small">你点的数字跟下面的纪录不一样的话，用「＋ 记坏货 / 到货少 / 来错货」补记（会跟著调整进货待入 AutoCount）。</p>
         </>
-      )}
-      {d.status === "confirmed" && d.self_confirmed && (
-        <div className="podo-sum warn">这张厂家 DO 是你确认的：请仓库的同事点货（确认和点货分开，少了、坏了才有人核对）。</div>
       )}
       {d.status === "draft" && <div className="error">这张厂家 DO 还没确认（草稿），不能点货。</div>}
       {d.status === "cancelled" && <div className="error">这张厂家 DO 已取消。</div>}
       {d.status === "arrived" && (
         <div className="ok">{`已点货 · ${d.arrived_by_name ?? ""} · ${fmtDate(d.arrived_at)}${d.arrive_note ? " · " + d.arrive_note : ""}`}</div>
       )}
-      {d.status === "arrived" && d.summary && <p className="small recv-sum-line"><SummaryTags s={d.summary} /></p>}
+      {d.status === "arrived" && d.summary && <p className="small recv-sum-line"><SummaryTags s={d.summary} unmatched={d.unmatched_count} /></p>}
       {d.status === "arrived" && !r && <p className="muted">这张是以前直接「标记到货」的，没有点货纪录。</p>}
       {r && <ReceiptTable d={d} r={r} />}
+      {(d.moves ?? []).length > 0 && <MovesView me={me} moves={d.moves!} />}
       {d.status === "arrived" && (
         <>
           <div className="podo-group-head">
             <h3>{`厂家问题（${d.issues.length}）`}</h3>
-            {canAdd && <button className="small" onClick={() => setAddIssue(true)}>＋ 记坏货 / 到货少 / 来错货</button>}
+            {canAdd && <button className="small" onClick={() => setAddIssue(true)}>＋ 记坏货 / 到货少 / 来错货 / 缺零件</button>}
           </div>
           {d.issues.length === 0 ? <p className="muted small">这张没有厂家问题。</p> : (
             <ul className="list recv-issues">
               {d.issues.map((i) => (
                 <li key={i.id}>
                   <span>
-                    <span className={"isk " + i.kind}>{issueKindLabel(i)}</span>
-                    {i.kind === "short" && i.decision && <span className={"isd " + i.decision}>{DECISION_LABEL[i.decision]}</span>}
-                    {i.status !== "open" && <span className={"iss " + i.status}>{ISSUE_STATUS_LABEL[i.status]}</span>}
-                    <b>{i.kind === "wrong" ? (i.received_code || i.item_code || "—") : i.item_code}</b>
+                    <IssueBadges i={i} />
+                    <b>{i.kind === "wrong" ? (i.received_code || i.item_code || "—") : i.kind === "part" ? issueModel(i) : i.item_code}</b>
                     {i.kind === "wrong" && i.item_code && i.received_code ? <small className="muted">{` · 本来应该是 ${i.item_code}`}</small> : null}
                     {i.from_receipt && <span className="tag">点货时记的</span>}
                     {i.after_receipt && <span className="tag">点货后补记</span>}
@@ -737,14 +788,23 @@ function ReceiptView({ me, d, flash, onChanged }: { me: Me; d: RecvFull; flash: 
               ))}
             </ul>
           )}
+          {stockMsg && <div className="podo-sum warn">{stockMsg}</div>}
+          <p className="muted small">点完货之后补记：坏货 / 到货少会从还没输入 AutoCount 的进货扣掉；来错的货（我们的型号）会多一笔进货。补记的备注会印在给厂家的清单 / 讯息上。</p>
           {can(me, "purchasing", "edit") && d.issues.length > 0 && (
             <p className="small"><a href="#/purchasing/issues">到「厂家问题」处理（厂家会补 / 取消 / 已处理）→</a></p>
           )}
         </>
       )}
       {addIssue && (
-        <AddIssueModal doFull={{ id: d.id, items: d.items, candidates: d.items }} onClose={() => setAddIssue(false)}
-                       onSaved={() => { setAddIssue(false); onChanged(); }} />
+        <AddIssueModal doFull={{ id: d.id, company: d.company, items: d.items, candidates: d.items, status: d.status,
+                                 locations: d.locations, main_location: d.main_location }}
+                       onClose={() => setAddIssue(false)}
+                       onSaved={(r) => {
+                         setAddIssue(false);
+                         const left = Number(r?.stock_left ?? 0);
+                         setStockMsg(left > 0 ? `这 ${fmtQty(left)} 件已经输入 AutoCount（或点货时 AutoCount 就有），扣不到：请仓库主管在 AutoCount 调整库存（例：登记「报坏」）。` : "");
+                         onChanged();
+                       }} />
       )}
     </>
   );
@@ -757,6 +817,7 @@ function ReceiptTable({ d, r }: { d: RecvFull; r: Receipt }) {
   const mism = (x: Receipt["items"][number]) =>
     r3(Math.max(0, Number(x.prior?.damaged ?? 0) + Number(x.prior?.short ?? 0) - Math.max(0, Number(x.shipped) - Number(x.received))));
   const anyMism = r.items.some((x) => mism(x) > 0);
+  const doNote = new Map(d.items.filter((x) => x.note).map((x) => [x.item_code, x.note!]));
   return (
     <div className="card podo-items">
       <h3>{`点货纪录（${r.items.length} 个型号）`}</h3>
@@ -777,6 +838,7 @@ function ReceiptTable({ d, r }: { d: RecvFull; r: Receipt }) {
                 <tr key={x.item_code} className={short || over || dm || mm ? "recv-diff" : ""}>
                   <td className="sticky">
                     <b>{x.item_code}</b> <small className="muted">{x.uom}</small><br /><small>{x.description}</small>
+                    {doNote.get(x.item_code) && <small className="pre recv-do-note">{`开单备注：${doNote.get(x.item_code)}`}</small>}
                     {x.note && <><br /><small className="pre">{`备注：${x.note}`}</small></>}
                   </td>
                   <td className="num">{fmtQty(s)}</td>
@@ -823,7 +885,9 @@ function ReceiptTable({ d, r }: { d: RecvFull; r: Receipt }) {
               <li key={n}>
                 <span>
                   <b>{w.received_code || "—"}</b> <small>{w.description}</small>
+                  {w.own ? <small className="muted">{` · 进 ${w.location || "HQ"}`}</small> : w.own === false ? <small className="muted">{" · 不是我们的产品"}</small> : null}
                   {w.expected_code && <small className="muted">{` · 本来应该是 ${w.expected_code}`}</small>}
+                  {w.request && <small className="muted">{` · 要厂家：${requestLabel("wrong", w.request)}`}</small>}
                   {w.note && <small className="muted">{` · ${w.note}`}</small>}
                 </span>
                 <span>{fmtQty(w.qty)}</span>
@@ -833,6 +897,48 @@ function ReceiptTable({ d, r }: { d: RecvFull; r: Receipt }) {
         </>
       )}
       {r.note && <p className="small pre">{`整张备注：${r.note}`}</p>}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ 点货后：进货待入 AutoCount（仓库库存已算进去，等开单部开 GRN）
+function MovesView({ me, moves }: { me: Me; moves: RecvMove[] }) {
+  const pending = moves.filter((m) => m.status === "pending").length;
+  return (
+    <div className="card podo-items">
+      <h3>{`进货待入 AutoCount（${moves.length}）`}</h3>
+      <p className="muted small">
+        {pending ? `这些货已经算进仓库库存（查货、盘点的「应有」）；开单部在 AutoCount 开好进货单（GRN）后按「已输入」。还有 ${pending} 笔没输入。`
+          : "都已经输入 AutoCount。"}
+      </p>
+      <div className="table-wrap flat">
+        <table>
+          <thead><tr><th>型号 / 品名</th><th>仓位</th><th className="num">数量</th><th className="hide-sm">PO</th><th>状态</th></tr></thead>
+          <tbody>
+            {moves.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  <b>{m.item_code}</b> <small>{m.description}</small>
+                  {m.recv_wrong && <span className="tag warn">来错的货</span>}
+                  {m.po_no && <><br /><small className="muted show-sm">{`PO ${m.po_no}`}</small></>}
+                  {m.status === "pending" && m.pre_grn && <><br /><small className="amber">{`点货时 AutoCount 已经有（GRN ${m.pre_grn}），没有重复算库存`}</small></>}
+                  {m.note && <><br /><small className="muted">{m.note}</small></>}
+                </td>
+                <td>{m.location}</td>
+                <td className="num">{fmtQty(m.qty)}</td>
+                <td className="hide-sm small">{m.po_no ?? (m.recv_wrong ? "" : "—")}</td>
+                <td className="small">
+                  <span className={"ap " + (m.status === "pending" ? "pending" : m.status === "done" ? "approved" : "cancelled")}>
+                    {m.status === "pending" ? "待开 GRN" : m.status === "done" ? "已输入" : "已取消"}
+                  </span>
+                  {m.ac_doc && <div className="muted">{m.ac_doc}</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {canGrn(me) && pending > 0 && <p className="small"><a href="#/warehouse/grn">到「待开进货单」输入 GRN →</a></p>}
     </div>
   );
 }

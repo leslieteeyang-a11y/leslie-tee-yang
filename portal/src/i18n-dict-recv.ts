@@ -70,7 +70,6 @@ export const DICT_RECV: Record<string, string> = {
   "最近几天": "How many days back",
   "点货时全部到齐": "All arrived at the count",
   "点货时全部照 DO 到齐": "Everything arrived as per the DO at the count",
-  "你确认的：请仓库同事点": "You confirmed it — ask a warehouse colleague to count it",
   "点货后补记": "added after the count",
   "好货改少了，没动过分配的型号会自动从总部先扣（多了放总部）；要别的分法直接改分店的数字。":
     "When you lower Good, models whose split you haven't touched take the shortfall from HQ first (extras go to HQ); to split differently, just change the outlet numbers.",

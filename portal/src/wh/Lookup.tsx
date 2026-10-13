@@ -113,7 +113,7 @@ function ItemCard({ d, canEdit, onMove, onLabel }: { d: ItemDetail; canEdit: boo
       </div>
       <div className="table-wrap flat">
         <table>
-          <thead><tr><th>仓位</th><th className="num">AutoCount</th>{hasPending && <th className="num">未输入的搬动</th>}{hasPending && <th className="num">应有</th>}{showCost && <th className="num hide-sm">单位成本</th>}</tr></thead>
+          <thead><tr><th>仓位</th><th className="num">AutoCount</th>{hasPending && <th className="num">未输入（搬动 / 进货）</th>}{hasPending && <th className="num">应有</th>}{showCost && <th className="num hide-sm">单位成本</th>}</tr></thead>
           <tbody>
             {d.stock.map((s) => (
               <tr key={s.location}>

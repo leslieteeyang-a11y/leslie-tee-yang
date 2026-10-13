@@ -227,4 +227,13 @@ export const PATTERNS: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^(\d+) 笔厂家问题等处理$/, (m) => `${m[1]} supplier issue${m[1] === "1" ? "" : "s"} to handle`],
   [/^(\d+) 批厂家货三天内到（含已过 ETA），到了要点货$/, (m) =>
     `${m[1]} supplier deliver${m[1] === "1" ? "y" : "ies"} due within 3 days (incl. past ETA) — count them in when they arrive`],
+  // 资料库错误讯息（20261015_ops_po_sop）
+  [/^「要厂家怎么处理」不对：(.*)。$/, (m) => `Invalid "what the supplier should do": ${m[1]}.`],
+  [/^型号 (.+) 的少发要选「厂家会补」「取消（下次再订）」或「未决定」。$/, (m) =>
+    `Model ${m[1]}: for the shortage choose "Supplier will send", "Cancel (reorder later)" or "Undecided".`],
+  [/^来错的型号：找不到我们的型号 (.+)。$/, (m) => `Wrong model: we have no model ${m[1]}.`],
+  [/^找不到我们的型号 (.+)。$/, (m) => `We have no model ${m[1]}.`],
+  [/^来错的货第 (\d+) 行：找不到我们的型号 (.+)。$/, (m) => `Wrong items row ${m[1]}: we have no model ${m[2]}.`],
+  [/^来错的货第 (\d+) 行：没有这个仓位 (.+)。$/, (m) => `Wrong items row ${m[1]}: no such location ${m[2]}.`],
+  [/^未知的状态：(.+)$/, (m) => `Unknown status: ${m[1]}`],
 ];

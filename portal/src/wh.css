@@ -49,3 +49,19 @@ button.kpi { border: 2px solid transparent; text-align: left; cursor: pointer; f
 button.kpi span, button.kpi small { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 button.kpi.on { border-color: var(--blue); }
 .kpi small { color: var(--muted); font-size: .8rem; }
+
+/* 进货待入 AutoCount / 待开进货单（2026-10-15） */
+.wh-recv h3 { margin: 12px 0 6px; }
+.grn-card { margin-bottom: 14px; }
+.grn-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.grn-card p { margin: 4px 0 8px; }
+.grn-hint { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 4px; }
+.grn-card tr.inactive-soft td { color: var(--muted); }
+.grn-card .tag.warn { background: var(--red-soft); color: var(--red); }
+.wh-recv .tag.warn { background: var(--red-soft); color: var(--red); }
+.amber { color: var(--amber); }
+/* 进货待入 AutoCount：一批（一张厂家到货）一组，收合 */
+.wh-recv-group { border: 1px solid var(--line); border-radius: 8px; margin: 6px 0; background: var(--card, transparent); }
+.wh-recv-group > summary { cursor: pointer; padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.wh-recv-group[open] > summary { border-bottom: 1px solid var(--line); }
+.wh-recv-group .table-wrap { margin: 0; }

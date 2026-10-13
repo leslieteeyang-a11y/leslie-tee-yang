@@ -27,7 +27,7 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
   }
   const toggle = (id: number) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const sum = (rows || []).reduce((a, r) => a + Number(r.diff_value || 0), 0);
-  // 成本（成本差额）只给资料库回了的人：仓库「可审批」但物流部不算（物流部主管看不到进货成本）
+  // 成本（成本差额）只给资料库回了的人（仓库「可审批」）：没回就把栏位藏起来
   const showCost = (rows || []).some((r) => r.diff_value != null);
 
   function csv() {

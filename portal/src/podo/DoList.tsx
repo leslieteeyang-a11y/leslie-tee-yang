@@ -1,10 +1,11 @@
 // 厂家到货清单：草稿 / 在路上 / 已到货 / 已取消。点一张进编辑画面（#/purchasing/do/<id>）。
+// 每张显示 SOP 目前第几步、等哪个部门；草稿开了超过 24 小时还没确认标红。
 import { useCallback, useEffect, useState } from "react";
 import { BRANCH_LABEL, fmtDate, fmtQty, Me } from "../api";
 import { go } from "../router";
 import { Empty, ErrorBox } from "../ui";
 import { DO_STATUS_LABEL, DoHeader, joinList, podo } from "../podo-api";
-import { DoStatusBadge, EtaText } from "./common";
+import { DoStatusBadge, EtaText, SopLine } from "./common";
 
 export default function DoList({ me }: { me: Me }) {
   const [q, setQ] = useState("");
@@ -25,9 +26,9 @@ export default function DoList({ me }: { me: Me }) {
     <>
       <div className="page-head">
         <p className="muted">
-          {"厂家出货时开一张：选厂家 → 选 PO → 上传厂家 DO / 装箱单（Excel 自动读数量；PDF、照片当附件，数量自己填）→ 每个型号分给各分店 → 确认。"}
-          <br />{"确认后分店在「在路上」看得到 ETA；少发、多发、发错型号自动记到「厂家问题」。"}
-          <br />{"货到了由仓库在「点货」填实际收到几件；到货少、坏货、来错也会记到「厂家问题」。"}
+          {"厂家出货时由订货部开一张：① 选 PO → ② 出货数量（上传厂家 DO / 装箱单：Excel 自动读数量；PDF、照片当附件）→ ③ 分配分店 → ④ ETA → ⑤ 确认。"}
+          <br />{"确认后分店在「在路上」看得到 ETA；少发、多发、发错型号、缺零件自动记到「厂家问题」，可以 WhatsApp 发给厂家。"}
+          <br />{"⑥ 货到了由仓库在「点货」填实际收到几件；⑦ 采购在「厂家问题」决定厂家会补或取消。"}
         </p>
         <button onClick={() => go("/purchasing/do/new")}>＋ 新厂家到货</button>
       </div>
@@ -59,7 +60,8 @@ export default function DoList({ me }: { me: Me }) {
             </thead>
             <tbody>
               {rows.map((d) => (
-                <tr key={d.id} className={"click" + (d.status === "cancelled" ? " inactive" : "")} onClick={() => go(`/purchasing/do/${d.id}`)}>
+                <tr key={d.id} className={"click" + (d.status === "cancelled" ? " inactive" : "") + (d.sop?.draft_overdue ? " podo-overdue" : "")}
+                    onClick={() => go(`/purchasing/do/${d.id}`)}>
                   <td>
                     <b>{d.do_no || "（没填 DO 号）"}</b>
                     {me.staff.branch === "ALL" && <span className="tag">{BRANCH_LABEL[d.company]}</span>}
@@ -71,7 +73,7 @@ export default function DoList({ me }: { me: Me }) {
                     <EtaText eta={d.eta_effective} source={d.eta_source} arrived={d.status !== "confirmed"} />
                     {d.shipment_name && <><br /><small className="muted">{`柜 ${d.shipment_name}`}</small></>}
                   </td>
-                  <td><DoStatusBadge status={d.status} /></td>
+                  <td><DoStatusBadge status={d.status} /><SopLine sop={d.sop} /></td>
                   <td className="hide-sm small">{joinList(d.po_nos)}</td>
                   <td className="num">
                     {fmtQty(d.shipped_total)}<br />

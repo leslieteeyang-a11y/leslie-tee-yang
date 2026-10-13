@@ -1,4 +1,5 @@
--- 物流部开厂家到货、仓库部点货测试（20261014_ops_po_receive，接在 po_do_test.sql 之后跑）。
+-- 采购开厂家到货、仓库部点货测试（20261014_ops_po_receive，接在 po_do_test.sql 之后跑）。
+-- 使用者 2026-10-13 改口：只有订货部开厂家到货；物流部维持订货「只看」、看不到厂家，但有仓库「可编辑」= 可以点货（遮掉厂家）。
 -- 资料：厂家 4000-R100（RECV FACTORY；PO 厂家名称栏写 CS101）
 --   RV-P1：6001 RA HQ 10、6002 RA PRE (JB) 5、6003 RB HQ 20、6004 RC SRGADING 8、6005 RD HQ 4
 --   RV-P2：6006 RE HQ 10；RV-P3：6007 RF HQ 6；HOMEWORKSSOUTHERN RV-J1：6101 RA 3（整本 = JB）
@@ -80,9 +81,9 @@ insert into bi.fact_po_line (company, dtl_key, po_no, po_date, creditor_code, cr
   ('HOMEWORKSSB', 6007, 'RV-P3', current_date - 20, '4000-R100', 'CS101 RECV', 'RF', 'SHOWER RF', 'HQ', 'PCS', 6, 0, 40),
   ('HOMEWORKSSOUTHERN', 6101, 'RV-J1', current_date - 10, '4000-R100', 'CS101 RECV', 'RA', 'BASIN RA', 'HQ', 'PCS', 3, 0, 10);
 
--- 0. 物流部 = 订货可编辑（部门预设）；单价规则
+-- 0. 物流部维持订货「只看」；单价规则
 do $$ begin
-  assert (select level from ops.dept_module where department = 'logistics' and module = 'purchasing') = 'edit', 'logistics purchasing edit';
+  assert (select level from ops.dept_module where department = 'logistics' and module = 'purchasing') = 'view', 'logistics purchasing view';
   assert (select level from ops.dept_module where department = 'warehouse' and module = 'purchasing') = 'view', 'warehouse unchanged';
 end $$;
 
@@ -94,19 +95,17 @@ select public.ops_staff_save('{"email":"wh.r@example.com","name":"仓库小李",
 select public.ops_staff_save('{"email":"wh.jb@example.com","name":"JB 仓库","department":"warehouse","branch":"HOMEWORKSSOUTHERN"}');
 -- 门市员工开了个人例外「仓库可编辑」（帮忙点货）：看不到厂家
 select public.ops_staff_save('{"email":"helper@example.com","name":"门市帮手","department":"sales","branch":"HOMEWORKSSB","overrides":{"warehouse":"edit"}}');
--- 物流部主管：订货、仓库都自动升「可审批」，一样看不到单价与库存成本
+-- 物流部主管：仓库自动升「可审批」（看得到库存成本，原本的规则）；订货还是「只看」：看不到厂家、单价
 select public.ops_staff_save('{"email":"logi.boss@example.com","name":"物流主管","department":"logistics","branch":"HOMEWORKSSB","role":"manager"}');
 reset role;
 do $$ declare s ops.staff; begin
   select * into s from ops.staff where email = 'logi.boss@example.com';
-  assert ops.module_level(s, 'purchasing') = 'approve' and ops.module_level(s, 'warehouse') = 'approve', 'logistics manager levels';
-  assert ops.sees_supplier(s) and not ops.sees_prices(s) and not ops.sees_cost(s), 'logistics manager: no prices, no cost';
+  assert ops.module_level(s, 'purchasing') = 'view' and ops.module_level(s, 'warehouse') = 'approve', 'logistics manager levels';
+  assert not ops.sees_supplier(s) and not ops.sees_prices(s), 'logistics manager: no supplier, no prices';
   select * into s from ops.staff where email = 'whmgr@example.com';
-  assert ops.sees_cost(s) and not ops.sees_prices(s), 'warehouse manager: cost yes';
-  select * into s from ops.staff where email = 'picker@example.com';
-  assert not ops.sees_cost(s), 'warehouse edit: no cost';
+  assert ops.sees_supplier(s) and not ops.sees_prices(s), 'warehouse manager: supplier yes, prices no';
   select * into s from ops.staff where email = 'logi.r@example.com';
-  assert ops.sees_supplier(s) and not ops.sees_prices(s), 'logistics: supplier yes, prices no';
+  assert not ops.sees_supplier(s) and not ops.sees_prices(s), 'logistics: neither';
   select * into s from ops.staff where email = 'buyer@example.com';
   assert ops.sees_prices(s), 'buyer prices';
   select * into s from ops.staff where email = 'boss@example.com';
@@ -115,53 +114,52 @@ do $$ declare s ops.staff; begin
   assert ops.sees_supplier(s) and not ops.sees_prices(s), 'warehouse: supplier yes, prices no';
   select * into s from ops.staff where email = 'helper@example.com';
   assert not ops.sees_supplier(s) and not ops.sees_prices(s), 'helper: neither';
-  assert not ops.sees_prices(null::ops.staff) and not ops.sees_cost(null::ops.staff), 'null staff';
+  assert not ops.sees_prices(null::ops.staff), 'null staff';
+  assert to_regprocedure('ops.sees_cost(ops.staff)') is null, 'sees_cost removed (warehouse approve = cost, as before)';
 end $$;
 set role authenticated;
 
--- 0b. 库存成本：物流部主管（仓库「可审批」）看得到系统数量，看不到平均成本 / 成本差额 / 旧货金额；仓库主管照旧看得到
+-- 0b. 库存成本照原本规则：仓库「可审批」就看得到（物流部主管也是）；物流部主管打不开未到货 PO（没有厂家权限）
 select pg_temp.as_user('logi.boss@example.com');
-do $$ declare w jsonb; c jsonb; g jsonb; begin
-  w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
-  assert (w ->> 'found')::boolean and not exists (select 1 from jsonb_array_elements(w -> 'stock') x where x -> 'unit_cost' <> 'null'::jsonb),
-    'logistics manager: no unit cost: ' || (w -> 'stock')::text;
-  c := public.ops_wh_counts('{"status":"all"}');
-  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'system_qty' and not x ? 'unit_cost' and not x ? 'diff_value')
-                                        from jsonb_array_elements(c) x), 'logistics manager counts: qty yes, cost no: ' || c::text;
-  g := public.ops_wh_aged('{}');
-  assert not (g ->> 'show_cost')::boolean and (g ->> 'can_edit')::boolean and g -> 'summary' -> 'both_v' = 'null'::jsonb,
-    'logistics manager aged: no cost, can edit';
-  assert pg_temp.item(public.ops_po_get('HOMEWORKSSB', 'RV-P1') -> 'items', 'RA') -> 'unit_price' = 'null'::jsonb
-     and (select x -> 'open_amt' from jsonb_array_elements(public.ops_po_list('{}')) x where x ->> 'po_no' = 'RV-P1') = 'null'::jsonb,
-    'logistics manager: no PO prices';
-end $$;
-select pg_temp.as_user('whmgr@example.com');
 do $$ declare w jsonb; c jsonb; begin
   w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
   assert (select (x ->> 'unit_cost')::numeric from jsonb_array_elements(w -> 'stock') x where x ->> 'location' = 'HQ') = 10,
-    'warehouse manager unit cost: ' || (w -> 'stock')::text;
+    'logistics manager unit cost: ' || (w -> 'stock')::text;
   c := public.ops_wh_counts('{"status":"all"}');
-  assert (select bool_and(x ? 'unit_cost' and x ? 'diff_value') from jsonb_array_elements(c) x), 'warehouse manager counts cost';
-  assert (public.ops_wh_aged('{}') ->> 'show_cost')::boolean, 'warehouse manager aged cost';
+  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'unit_cost' and x ? 'diff_value') from jsonb_array_elements(c) x),
+    'logistics manager counts cost';
+  assert (public.ops_wh_aged('{}') ->> 'show_cost')::boolean and (public.ops_wh_aged('{}') ->> 'can_edit')::boolean, 'aged cost';
+end $$;
+select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '只有采购、管理层与仓库部看得到');
+select pg_temp.as_user('picker@example.com');
+do $$ declare w jsonb; begin
+  w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
+  assert not exists (select 1 from jsonb_array_elements(w -> 'stock') x where x -> 'unit_cost' <> 'null'::jsonb), 'warehouse edit: no cost';
 end $$;
 
--- 1. 物流部：看得到 PO（没有价格）、厂家与 CS 编号；开厂家到货、货柜、确认
+-- 1. 物流部不能开厂家到货（订货只看、看不到厂家）；采购开、确认
 select pg_temp.as_user('logi.r@example.com');
+select pg_temp.expect_error($q$select public.ops_po_do_suppliers()$q$, '编辑权限');
+select pg_temp.expect_error($q$select public.ops_po_do_save('{"creditor_code":"4000-R100"}')$q$, '编辑权限');
+select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '只有采购、管理层与仓库部看得到');
+do $$ begin
+  assert not public.ops_po_file_ok('HOMEWORKSSB/2026-10/rv0001.pdf', true), 'logistics cannot upload';
+  assert not (public.ops_po_transit() ->> 'full')::boolean, 'logistics transit: no supplier';
+end $$;
+select pg_temp.as_user('buyer@example.com');
 select pg_temp.upload('HOMEWORKSSB/2026-10/rv0001.pdf');
 do $$ declare me jsonb := public.ops_me(); l jsonb; g jsonb; s jsonb; c jsonb; r jsonb; v bigint; sh jsonb; begin
   assert exists (select 1 from jsonb_array_elements(me -> 'modules') x where x ->> 'key' = 'purchasing' and x ->> 'level' = 'edit'),
-    'logistics purchasing edit';
+    'buyer purchasing edit';
   l := (select x from jsonb_array_elements(public.ops_po_list('{}')) x where x ->> 'po_no' = 'RV-P1');
-  assert l is not null and l -> 'open_amt' = 'null'::jsonb and l ->> 'supplier_name' = 'RECV FACTORY', 'logistics po list no amount: ' || coalesce(l::text, 'null');
+  assert l is not null and (l ->> 'open_amt')::numeric = 810 and l ->> 'supplier_name' = 'RECV FACTORY', 'buyer po list: ' || coalesce(l::text, 'null');
   g := public.ops_po_get('HOMEWORKSSB', 'RV-P1');
-  assert g -> 'open_amt' = 'null'::jsonb and (g ->> 'can_edit')::boolean
-     and (select bool_and(x -> 'unit_price' = 'null'::jsonb and x -> 'open_amt' = 'null'::jsonb) from jsonb_array_elements(g -> 'items') x),
-    'logistics po get no prices: ' || g::text;
+  assert (g ->> 'can_edit')::boolean and (pg_temp.item(g -> 'items', 'RB') ->> 'unit_price')::numeric = 5, 'buyer po get: ' || g::text;
   s := (select x from jsonb_array_elements(public.ops_po_do_suppliers()) x where x ->> 'creditor_code' = '4000-R100');
-  assert s -> 'factories' = '["CS101"]'::jsonb and (s ->> 'po_count')::int = 3, 'logistics sees supplier + CS: ' || coalesce(s::text, 'null');
+  assert s -> 'factories' = '["CS101"]'::jsonb and (s ->> 'po_count')::int = 3, 'buyer sees supplier + CS: ' || coalesce(s::text, 'null');
   c := public.ops_po_do_candidates('', '4000-R100', array['RV-P1']);
   assert jsonb_array_length(c -> 'outlets') = 4 and jsonb_array_length(c -> 'items') = 4 and pg_temp.no_price(c), 'candidates: ' || c::text;
-  assert public.ops_po_file_ok('HOMEWORKSSB/2026-10/rv0001.pdf', true), 'logistics can upload';
+  assert public.ops_po_file_ok('HOMEWORKSSB/2026-10/rv0001.pdf', true), 'buyer can upload';
 
   v := pg_temp.mkdo('{"creditor_code":"4000-R100","po_nos":["RV-P1"],"do_no":"RV-0001","do_date":"2026-10-15","eta":"2026-10-22",
     "files":[{"path":"HOMEWORKSSB/2026-10/rv0001.pdf","name":"RV-0001.pdf","size":2048,"type":"application/pdf"}],
@@ -172,7 +170,7 @@ do $$ declare me jsonb := public.ops_me(); l jsonb; g jsonb; s jsonb; c jsonb; r
              {"src_code":"ZZ-7","src_desc":"WRONG TAP","shipped":1,"expected_code":"RD"}]}');
   perform pg_temp.keep('a', v);
   r := public.ops_po_do_confirm(v);
-  assert r ->> 'status' = 'confirmed' and r ->> 'confirmed_by_name' = '物流阿明', 'logistics confirmed: ' || r::text;
+  assert r ->> 'status' = 'confirmed' and r ->> 'confirmed_by_name' = 'buyer' and not r ? 'confirmed_by_me', 'buyer confirmed: ' || r::text;
   assert pg_temp.iss_of('4000-R100') = 'short:RD/=4*,wrong:RD/ZZ-7=1*', 'confirm issues: ' || pg_temp.iss_of('4000-R100');
 
   perform pg_temp.keep('b', pg_temp.mkdo('{"creditor_code":"4000-R100","po_nos":["RV-P2"],"do_no":"RV-DRAFT",
@@ -186,15 +184,11 @@ do $$ declare me jsonb := public.ops_me(); l jsonb; g jsonb; s jsonb; c jsonb; r
     "items":[{"item_code":"RF","shipped":6,"alloc":{"HQ":6}}]}');
   perform pg_temp.keep('f', v);
   perform public.ops_po_do_confirm(v);
-  assert (public.ops_po_transit() ->> 'full')::boolean, 'logistics transit full';
-  assert jsonb_array_length(public.ops_po_issues('{"creditor_code":"4000-R100"}')) = 2, 'logistics sees issues';
+  assert (public.ops_po_transit() ->> 'full')::boolean, 'buyer transit full';
+  assert jsonb_array_length(public.ops_po_issues('{"creditor_code":"4000-R100"}')) = 2, 'buyer sees issues';
 end $$;
--- 采购、管理层照样看得到金额
 select pg_temp.as_user('buyer@example.com');
-do $$ declare l jsonb; begin
-  l := (select x from jsonb_array_elements(public.ops_po_list('{}')) x where x ->> 'po_no' = 'RV-P1');
-  assert (l ->> 'open_amt')::numeric = 10 * 15 + 5 * 20 + 20 * 8 + 100 * 4, 'buyer sees amount: ' || l::text;
-  assert (pg_temp.item(public.ops_po_get('HOMEWORKSSB', 'RV-P1') -> 'items', 'RB') ->> 'unit_price')::numeric = 5, 'buyer unit price';
+do $$ begin
   -- 货还在路上时采购先记了 RB 坏货 1 件（厂家拍照说的）
   perform public.ops_po_issue_add(jsonb_build_object('do_id', pg_temp.do_id('a'), 'item_code', 'RB', 'qty', 1, 'note', '厂家说破了一个'));
 end $$;
@@ -222,15 +216,19 @@ do $$ begin
   -- DO-C（货柜 10/18，已过）+ DO-A（10/22）；DO-F（10/30）不算、草稿不算
   assert pg_temp.todo_count() = 2, 'warehouse do_to_count: ' || (public.ops_home() ->> 'do_to_count');
 end $$;
--- 物流阿明三张都是自己确认的（不能自己点）：不提醒；三张都有 ETA → 不算进 do_no_eta（前面的测试留下一些没 ETA 的，记下基数）
+-- 采购三张都是自己确认的：确认的人也可以点货，一样提醒；三张都有 ETA → 不算进 do_no_eta（前面的测试留下一些没 ETA 的，记下基数）
+select pg_temp.as_user('buyer@example.com');
+do $$ declare h jsonb := public.ops_home(); begin
+  assert pg_temp.todo_count() = 2 and (h ->> 'do_no_eta')::int >= 0 and h -> 'po_issues_todo' <> 'null'::jsonb, 'buyer home: ' || h::text;
+  perform pg_temp.keep('noeta', (h ->> 'do_no_eta')::bigint);
+end $$;
+-- 物流部（仓库可编辑 = 可以点货）：提醒点货；没有补 ETA、厂家问题的提醒
 select pg_temp.as_user('logi.r@example.com');
 do $$ declare h jsonb := public.ops_home(); begin
-  assert pg_temp.todo_count() = 0 and (h ->> 'do_no_eta')::int >= 0, 'logistics home: ' || h::text;
-  perform pg_temp.keep('noeta', (h ->> 'do_no_eta')::bigint);
-  assert h -> 'po_issues_todo' = 'null'::jsonb, 'logistics: no supplier-issue reminder';
+  assert pg_temp.todo_count() = 2 and h -> 'do_no_eta' = 'null'::jsonb and h -> 'po_issues_todo' = 'null'::jsonb, 'logistics home: ' || h::text;
 end $$;
 select pg_temp.as_user('logi.boss@example.com');
-do $$ begin assert pg_temp.todo_count() = 2, 'logistics manager (did not confirm) do_to_count'; end $$;
+do $$ begin assert pg_temp.todo_count() = 2, 'logistics manager do_to_count'; end $$;
 select pg_temp.as_user('wh.r@example.com');
 do $$ declare h jsonb := public.ops_home(); begin
   assert h -> 'do_no_eta' = 'null'::jsonb and h -> 'po_issues_todo' = 'null'::jsonb, 'warehouse home: ' || h::text;
@@ -258,7 +256,7 @@ do $$ declare l jsonb; a jsonb; c jsonb; g jsonb; it jsonb; begin
 
   g := public.ops_po_receive_get(pg_temp.do_id('a'));
   assert g ->> 'status' = 'confirmed' and (g ->> 'can_receive')::boolean and g -> 'receipt' = 'null'::jsonb
-     and g ->> 'confirmed_by_name' = '物流阿明' and g -> 'alloc_outlets' = '["HQ","BATU","JB"]'::jsonb, 'get header: ' || g::text;
+     and g ->> 'confirmed_by_name' = 'buyer' and g -> 'alloc_outlets' = '["HQ","BATU","JB"]'::jsonb, 'get header: ' || g::text;
   assert (select string_agg(x ->> 'code', ',') from jsonb_array_elements(g -> 'outlets') x) = 'HQ,BATU,JB,PUCHONG', 'four outlets';
   assert (select string_agg(x ->> 'item_code', ',') from jsonb_array_elements(g -> 'items') x) = 'RA,RB,RC', 'items (RD shipped 0 left out)';
   it := pg_temp.item(g -> 'items', 'RA');
@@ -279,21 +277,27 @@ do $$ declare l jsonb; a jsonb; c jsonb; g jsonb; it jsonb; begin
 end $$;
 select pg_temp.expect_error($q$select public.ops_po_issues('{}')$q$, '编辑权限');
 select pg_temp.expect_error(format('select public.ops_po_do_get(%s)', pg_temp.do_id('a')), '编辑权限');
--- 物流部也能看点货明细；但这张是物流阿明自己确认的：不能自己点（物流部记、仓库部点）
+-- 物流部（仓库可编辑）：可以点，但看不到厂家、DO 号、PO 号、货柜、附件，也不能用厂家名称搜
 select pg_temp.as_user('logi.r@example.com');
-do $$ declare g jsonb := public.ops_po_receive_get(pg_temp.do_id('a')); begin
-  assert not (g ->> 'can_receive')::boolean and (g ->> 'self_confirmed')::boolean and g ->> 'status' = 'confirmed', 'self confirmed: ' || g::text;
-  assert (public.ops_po_receive_list() -> 'todo' -> 1 ->> 'self_confirmed')::boolean, 'list self_confirmed';
-  assert not (public.ops_po_do_get(pg_temp.do_id('a')) ->> 'can_arrive')::boolean
-     and (public.ops_po_do_get(pg_temp.do_id('a')) ->> 'confirmed_by_me')::boolean, 'do_get: no receive button for confirmer';
+do $$ declare l jsonb; g jsonb; begin
+  l := public.ops_po_receive_list();
+  g := public.ops_po_receive_get(pg_temp.do_id('a'));
+  assert (g ->> 'can_receive')::boolean and not g ? 'self_confirmed' and g ->> 'status' = 'confirmed', 'logistics can receive: ' || g::text;
+  assert (select bool_and(x -> 'supplier_name' = 'null'::jsonb and x -> 'do_no' = 'null'::jsonb and x -> 'creditor_code' = 'null'::jsonb
+                          and x -> 'po_nos' = '[]'::jsonb and x -> 'shipment_name' = 'null'::jsonb and not x ? 'self_confirmed')
+          from jsonb_array_elements(l -> 'todo') x), 'logistics list masked: ' || l::text;
+  assert g -> 'supplier_name' = 'null'::jsonb and g -> 'do_no' = 'null'::jsonb and g -> 'files' = '[]'::jsonb and g ->> 'remark' = ''
+     and jsonb_array_length(g -> 'items') = 3, 'logistics get masked: ' || g::text;
+  assert not public.ops_po_file_ok('HOMEWORKSSB/2026-10/rv0001.pdf', false), 'logistics cannot read supplier files';
+  assert jsonb_array_length(public.ops_po_receive_list('{"q":"RECV FACTORY"}') -> 'todo') = 0, 'logistics cannot search supplier';
+  assert jsonb_array_length(public.ops_po_receive_list('{"q":"tap rb"}') -> 'todo') = 1, 'logistics item search';
 end $$;
-select pg_temp.expect_error($q$select pg_temp.rcv('[{"item_code":"RA","received":15,"alloc":{"HQ":10,"JB":5}},
-  {"item_code":"RB","received":20,"alloc":{"HQ":20}},{"item_code":"RC","received":8,"alloc":{"HQ":6,"BATU":2}}]')$q$,
-  '这张厂家 DO 是你确认的');
-select pg_temp.as_user('logi.boss@example.com');
-do $$ declare g jsonb := public.ops_po_receive_get(pg_temp.do_id('a')); begin
-  assert (g ->> 'can_receive')::boolean and not (g ->> 'self_confirmed')::boolean, 'another logistics person can receive';
-  assert (public.ops_po_do_get(pg_temp.do_id('a')) ->> 'can_arrive')::boolean, 'do_get: receive button for others';
+select pg_temp.expect_error(format('select public.ops_po_do_get(%s)', pg_temp.do_id('a')), '编辑权限');
+-- 确认这张的采购自己也可以点（JB 人少、老板自己测试）
+select pg_temp.as_user('buyer@example.com');
+do $$ declare g jsonb := public.ops_po_receive_get(pg_temp.do_id('a')); d jsonb := public.ops_po_do_get(pg_temp.do_id('a')); begin
+  assert (g ->> 'can_receive')::boolean and g ->> 'confirmed_by_name' = 'buyer', 'confirmer can receive: ' || g::text;
+  assert (d ->> 'can_arrive')::boolean and not d ? 'confirmed_by_me', 'do_get: receive button for the confirmer';
 end $$;
 -- 门市帮手（个人例外仓库可编辑）：可以点，但看不到厂家、DO 号、PO 号、货柜、附件
 select pg_temp.as_user('helper@example.com');
@@ -468,16 +472,15 @@ do $$ declare s jsonb; b jsonb; r jsonb; v bigint; begin
 end $$;
 select pg_temp.as_user('pomgr@example.com');
 select pg_temp.expect_error(format('select public.ops_po_do_reopen(%s)', pg_temp.do_id('a')), '已到货的 DO 不能退回草稿');
--- 点过货的 DO：物流部（订货可编辑）不能把厂家问题作废；采购可以
+-- 物流部没有订货「可编辑」：厂家问题不能处理；点过货的 DO 采购可以作废、加备注
 select pg_temp.as_user('logi.r@example.com');
-select pg_temp.expect_error($q$select public.ops_po_issue_set(array[(select (x ->> 'id')::bigint
-  from jsonb_array_elements(public.ops_po_issues('{"creditor_code":"4000-R100","kind":"wrong"}')) x where x ->> 'received_code' = 'PP-9')],
-  'void', '搞错了')$q$, '点过货的厂家 DO，厂家问题只有采购或管理层可以作废');
+select pg_temp.expect_error($q$select public.ops_po_issue_set(array[1::bigint], 'void', '搞错了')$q$, '编辑权限');
+select pg_temp.expect_error($q$select public.ops_po_issues('{}')$q$, '编辑权限');
+select pg_temp.as_user('buyer@example.com');
 do $$ begin
-  -- 已处理 / 备注照旧可以
   assert public.ops_po_issue_set(array[(select (x ->> 'id')::bigint
     from jsonb_array_elements(public.ops_po_issues('{"creditor_code":"4000-R100","kind":"wrong"}')) x where x ->> 'received_code' = 'PP-9')],
-    'note', '已拍照') = 1, 'logistics can still add a note';
+    'note', '已拍照') = 1, 'buyer adds a note';
 end $$;
 select pg_temp.as_user('buyer@example.com');
 do $$ begin
@@ -508,11 +511,15 @@ do $$ declare l jsonb; r jsonb; begin
     'JB DO: only JB column';
   perform pg_temp.expect_error(format($q$select public.ops_po_do_receive('{"id":%s,"items":[{"item_code":"RA","received":3,"alloc":{"HQ":3}}]}')$q$,
     pg_temp.do_id('j')), 'JB 账套的货只能分给 JB（不能分给 总部）。');
-  r := public.ops_po_do_receive(jsonb_build_object('id', pg_temp.do_id('j'),
-         'items', '[{"item_code":"RA","received":3,"alloc":{"JB":3}}]'::jsonb));
-  assert r ->> 'status' = 'arrived' and r -> 'receipt' -> 'issue_ids' = '[]'::jsonb, 'JB received: ' || r::text;
   assert public.ops_po_file_ok('HOMEWORKSSOUTHERN/2026-10/a.pdf', false) and not public.ops_po_file_ok('HOMEWORKSSOUTHERN/2026-10/a.pdf', true),
     'JB warehouse reads own company files';
+end $$;
+-- JB 人少：确认的 JB 采购自己点
+select pg_temp.as_user('jbbuyer@example.com');
+do $$ declare r jsonb; begin
+  r := public.ops_po_do_receive(jsonb_build_object('id', pg_temp.do_id('j'),
+         'items', '[{"item_code":"RA","received":3,"alloc":{"JB":3}}]'::jsonb));
+  assert r ->> 'status' = 'arrived' and r -> 'receipt' -> 'issue_ids' = '[]'::jsonb and r ->> 'arrived_by_name' = 'JB采购', 'JB received: ' || r::text;
 end $$;
 -- 管理层看两间公司的点货清单
 select pg_temp.as_user('boss@example.com');
@@ -545,7 +552,7 @@ create or replace function pg_temp.grn2(p_key bigint, p_tr numeric) returns void
 $$;
 grant execute on all functions in schema pg_temp to authenticated, anon;
 set role authenticated;
-select pg_temp.as_user('logi.r@example.com');
+select pg_temp.as_user('buyer@example.com');
 do $$ declare v bigint; begin
   v := pg_temp.mkdo('{"creditor_code":"4000-R200","po_nos":["RV2-P1"],"do_no":"RV2-1",
     "items":[{"item_code":"SA","shipped":20,"alloc":{"HQ":10,"JB":10}},{"item_code":"SB","shipped":10,"alloc":{"HQ":10}},
@@ -556,8 +563,8 @@ do $$ declare v bigint; begin
   perform pg_temp.keep('noeta', (public.ops_home() ->> 'do_no_eta')::bigint);
   perform public.ops_po_do_confirm(v);
   assert pg_temp.iss_of('4000-R200') = 'wrong:SF/QQ-9=1*', 'R200 confirm: ' || pg_temp.iss_of('4000-R200');
-  -- 没填 ETA：物流部首页提醒补 ETA；仓库的「三天内到」不算它
-  assert (public.ops_home() ->> 'do_no_eta')::int = pg_temp.do_id('noeta') + 1, 'logistics do_no_eta';
+  -- 没填 ETA：采购首页提醒补 ETA；仓库的「三天内到」不算它
+  assert (public.ops_home() ->> 'do_no_eta')::int = pg_temp.do_id('noeta') + 1, 'buyer do_no_eta';
 end $$;
 select pg_temp.as_user('buyer@example.com');
 do $$ begin

@@ -6,7 +6,9 @@ import { getLang, tr } from "./i18n";
 import type { PoStatus } from "./api";
 
 export type DoStatus = "draft" | "confirmed" | "arrived" | "cancelled";
-export type IssueKind = "short" | "over" | "wrong" | "damaged";
+export type IssueKind = "short" | "over" | "wrong" | "damaged" | "part";
+/** 要厂家怎么处理（少发不用：少发看 decision） */
+export type IssueRequest = "replace" | "return" | "next" | "keep" | "other";
 export type IssueDecision = "pending" | "await" | "cancelled";
 export type IssueStatus = "open" | "resolved" | "void";
 
@@ -36,6 +38,20 @@ export interface Candidate {
 export interface DoItem {
   item_code: string | null; description: string; uom: string; shipped: number; alloc: Record<string, number>;
   src_code: string; src_desc: string; src_row: number | null; expected_code: string | null; note: string;
+  /** 对上 PO 的行：少发先决定（只存 await / cancelled；确认时套到自动产生的少发） */
+  short_decision?: "await" | "cancelled";
+  /** 对不上 PO 的行（来错的型号）：true = 收到的是我们的商品、false = 不是我们的产品；request = 要厂家怎么处理 */
+  own?: boolean; request?: IssueRequest;
+}
+/** 开单时记的缺零件 / 其他要补的（确认时变成厂家问题 kind = part） */
+export interface DoPart { item_code: string | null; part_name: string; qty: number; request: IssueRequest; note: string }
+/** SOP：① 选 PO ② 出货数量 ③ 分配分店 ④ ETA ⑤ 确认（订货部）→ ⑥ 点货（仓库部）→ ⑦ 厂家问题（采购）→ 8 都做完；取消的是 null */
+export interface DoSop {
+  step: number | null; owner: "purchasing" | "warehouse" | "billing" | null;
+  done: { po: boolean; shipped: boolean; alloc: boolean; eta: boolean; confirmed: boolean; received: boolean; decided: boolean };
+  /** 这张还没决定的少发 + 缺零件 */ decide_n: number;
+  /** 点货产生、开单部还没在 AutoCount 开进货单（GRN）的笔数（第 8 步还有 = 等开单部） */ grn_n?: number;
+  /** 草稿从开单起超过 24 小时还没确认 */ draft_overdue: boolean;
 }
 export interface DoFile { path: string; name: string; size: number | null; type: string }
 export interface DoHeader {
@@ -45,14 +61,17 @@ export interface DoHeader {
   files: DoFile[]; item_count: number; unmatched_count: number; shipped_total: number; issue_open: number;
   created_by_name: string | null; created_at: string; updated_by_name: string | null; updated_at: string;
   confirmed_by_name: string | null; confirmed_at: string | null; arrived_by_name: string | null; arrived_at: string | null;
-  /** 这张是我确认的：不能自己点货（can_arrive = false） */
-  confirmed_by_me?: boolean;
   arrive_note: string; cancelled_by_name: string | null; cancelled_at: string | null; cancel_reason: string;
   can_edit: boolean; can_edit_info: boolean; can_reopen: boolean; can_arrive: boolean; can_add_issue: boolean;
+  sop?: DoSop;
 }
 export interface Applied { item_code: string; outlet: string; qty: number; po_no: string | null; dtl_key: number | null; line_outlet: string | null }
 export interface DoFull extends DoHeader {
   items: DoItem[]; outlets: Outlet[]; candidates: Candidate[]; applied: Applied[]; issues: Issue[];
+  /** 开单时记的缺零件（草稿可改；确认后已变成厂家问题） */
+  parts?: DoPart[];
+  /** 这间公司的主要仓位（总部账套 HQ、JB 账套 JB）：点货后补记来错的货（我们的型号）进这里 */
+  main_location?: string;
   /** 点货纪录（仓库点完货才有；旧版直接「标记到货」的是 null） */
   receipt?: Receipt | null;
   history: { at: string; action: string; staff_name: string | null; data: Record<string, unknown> }[];
@@ -65,6 +84,8 @@ export interface Issue {
   resolutions: { do_id: number; do_no: string; qty: number; at: string }[];
   created_at: string; created_by_name: string | null; decided_at: string | null; decided_by_name: string | null;
   resolved_at: string | null; resolved_by_name: string | null; resolved_auto: boolean; updated_at: string;
+  /** 要厂家怎么处理（少发没有）；part_name = 缺的零件 / 东西（只有 part）；factory = CS 工厂；owed_qty = 厂家还欠 */
+  request: IssueRequest | null; part_name: string; factory: string | null; owed_qty: number;
 }
 /** full = false（分行、门市等不是总部订货 / 仓库「可编辑」的人）：资料库不回厂家、DO 号、PO 号、货柜（都是 null / []） */
 export interface TransitRow {
@@ -91,8 +112,6 @@ export interface RecvRow {
   /** 这张分到的分店代号（照分店顺序） */
   outlets: string[];
   confirmed_at: string | null; confirmed_by_name: string | null; arrived_at: string | null; arrived_by_name: string | null;
-  /** 这张是我确认的：不能自己点（物流部记、仓库部点） */
-  self_confirmed: boolean;
   summary: RecvSummary | null;
 }
 export interface RecvList { todo: RecvRow[]; done: RecvRow[]; days?: number }
@@ -100,6 +119,7 @@ export interface RecvList { todo: RecvRow[]; done: RecvRow[]; days?: number }
 export interface RecvItem {
   item_code: string; description: string; uom: string; shipped: number; alloc: Record<string, number>;
   prior: { damaged: number; short: number; over: number; wrong: number };
+  /** 开单时这行的备注（给仓库看） */ note?: string;
 }
 export interface ReceiptItem {
   item_code: string; description: string; uom: string; shipped: number; received: number; damaged: number;
@@ -108,12 +128,27 @@ export interface ReceiptItem {
   /** 点货前已经手动记的坏货 / 到货少（旧纪录没有） */ prior?: { damaged: number; short: number };
   note: string;
 }
-export interface ReceiptWrong { received_code: string; description: string; expected_code: string | null; qty: number; note: string }
-export interface Receipt { items: ReceiptItem[]; wrong: ReceiptWrong[]; note: string; issue_ids: number[] }
+export interface ReceiptWrong {
+  received_code: string; description: string; expected_code: string | null; qty: number; note: string;
+  /** true = 我们的型号（进了 location 仓位的库存）；false = 不是我们的产品 */
+  own?: boolean; request?: IssueRequest; location?: string;
+}
+export interface Receipt { items: ReceiptItem[]; wrong: ReceiptWrong[]; note: string; issue_ids: number[]; move_ids?: number[] }
+/** 点货产生的「进货待入 AutoCount」（仓库搬动 kind = receive）：开单部在 AutoCount 开 GRN 后标已输入。
+ *  po_no：看不到厂家的人是 null */
+export interface RecvMove {
+  id: number; item_code: string; description: string; location: string; qty: number; po_no: string | null; outlet: string | null;
+  recv_wrong: boolean; status: "pending" | "done" | "cancelled"; ac_doc: string; done_at: string | null; done_by_name: string | null;
+  /** 点货时 AutoCount 已经有的进货单号（没有重复算库存） */ pre_grn?: string | null;
+  /** 取消原因、点货后补记等 */ note?: string;
+}
 export interface RecvIssue {
   id: number; kind: IssueKind; item_code: string | null; received_code: string; description: string; qty: number; auto: boolean;
   status: IssueStatus; decision: IssueDecision | null; note: string; from_receipt: boolean;
   /** 点完货之后才补记的 */ after_receipt?: boolean; created_at?: string;
+  request?: IssueRequest | null; part_name?: string; owed_qty?: number;
+  /** 看不到厂家的人：[] / null */ po_nos?: string[]; factory?: string | null;
+  /** 收到的型号是我们的商品（看不到厂家的人：不是我们的型号 received_code 是空的） */ ours?: boolean;
 }
 export interface RecvFull extends Omit<RecvRow, "outlets"> {
   alloc_outlets: string[];
@@ -123,24 +158,56 @@ export interface RecvFull extends Omit<RecvRow, "outlets"> {
   receipt: Receipt | null; can_receive: boolean;
   items: RecvItem[];
   /** 确认时 Excel 对不上 PO 的行（已记成发错型号） */
-  unmatched: { src_code: string; src_desc: string; shipped: number; expected_code: string | null; note: string }[];
+  unmatched: { src_code: string; src_desc: string; shipped: number; expected_code: string | null; note: string;
+               own?: boolean | null; request?: IssueRequest | null;
+               /** 在 DO 的第几行：点货时带 do_row 回去，跟确认时记的那笔发错型号对上（不重复记） */ row?: number }[];
   issues: RecvIssue[];
+  /** 这张点货产生的进货待入 AutoCount */ moves?: RecvMove[];
+  /** 来错的货（我们的型号）可以放的仓位（这间公司的仓位 + 主要仓位） */ locations?: string[];
+  /** 来错的货预设仓位：总部账套 HQ、JB 账套 JB */ main_location?: string;
 }
+/** 搜我们的商品（来错的型号「收到的型号」）：只有型号、品名、单位 */
+export interface OurItem { item_code: string; description: string; uom: string }
 
 export const DO_STATUS_LABEL: Record<DoStatus, string> = {
   draft: "草稿", confirmed: "在路上", arrived: "已到货", cancelled: "已取消",
 };
-export const ISSUE_KIND_LABEL: Record<IssueKind, string> = { short: "少发", over: "多发", wrong: "发错型号", damaged: "坏货" };
+export const ISSUE_KIND_LABEL: Record<IssueKind, string> = {
+  short: "少发", over: "多发", wrong: "发错型号", damaged: "坏货", part: "缺零件",
+};
 /** 手动记的少发 = 到货少（厂家 DO 写的比实际到的多）；点货记的多发 = 多到（实际到的比厂家 DO 写的多） */
 export const issueKindLabel = (i: Pick<Issue, "kind" | "auto">) =>
   (!i.auto && i.kind === "short" ? "到货少" : !i.auto && i.kind === "over" ? "多到" : ISSUE_KIND_LABEL[i.kind]);
 export const DECISION_LABEL: Record<IssueDecision, string> = { pending: "未决定", await: "厂家会补", cancelled: "取消（下次再订）" };
+
+/** 要厂家怎么处理：每种问题可以选的（少发没有，看 decision）。第一个是预设 */
+const REQUEST_OPTIONS: Partial<Record<IssueKind, IssueRequest[]>> = {
+  wrong: ["replace", "return", "next", "keep", "other"],
+  part: ["next", "other"],
+  damaged: ["replace", "next", "return", "other"],
+  over: ["keep", "return", "other"],
+};
+const REQUEST_TEXT: Record<IssueRequest, string> = {
+  replace: "换成正确的型号", return: "退回厂家", next: "下次补上", keep: "我们留下（照价算）", other: "其他（写在备注）",
+};
+export function requestOptions(kind: IssueKind): IssueRequest[] {
+  return REQUEST_OPTIONS[kind] ?? [];
+}
+/** 「要厂家：…」的文字：来错的型号「下次补正确的」、坏货「换新的」 */
+export function requestLabel(kind: IssueKind, r: IssueRequest | null | undefined): string {
+  if (!r) return "";
+  if (kind === "wrong" && r === "next") return "下次补正确的";
+  if (kind === "damaged" && r === "replace") return "换新的";
+  return REQUEST_TEXT[r];
+}
 export const ISSUE_STATUS_LABEL: Record<IssueStatus, string> = { open: "未处理", resolved: "已处理", void: "已作废" };
 export const DO_ETA_SOURCE_LABEL: Record<string, string> = { shipment: "货柜", do: "DO" };
 export const DO_ACTION_LABEL: Record<string, string> = {
   create: "建立", update: "改了内容", confirm: "确认（在路上）", reopen: "退回草稿", cancel: "取消", arrive: "标记到货",
   receive: "点货（货到了）", issue_add: "记厂家问题",
 };
+export const SOP_STEPS = ["选 PO", "出货数量", "分配分店", "ETA", "确认", "点货", "厂家问题"];
+export const SOP_OWNER_LABEL: Record<string, string> = { purchasing: "等订货部", warehouse: "等仓库部", billing: "等开单部" };
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
@@ -167,9 +234,12 @@ export const podo = {
   receive: (p: Record<string, unknown>) => rpc<RecvFull>("ops_po_do_receive", { p }),
   transit: (p: Record<string, unknown>) => rpc<Transit>("ops_po_transit", { p }),
   issues: (p: Record<string, unknown>) => rpc<Issue[]>("ops_po_issues", { p }),
-  issueAdd: (p: Record<string, unknown>) => rpc<Issue>("ops_po_issue_add", { p }),
+  /** 已点货的 DO：补记坏货 / 到货少会扣还没输入 AutoCount 的进货（stock_left = 扣不到的件数）；补记来错的货（我们的型号）多一笔进货（move_id） */
+  issueAdd: (p: Record<string, unknown>) => rpc<Issue & { stock_left?: number; move_id?: number | null }>("ops_po_issue_add", { p }),
   issueSet: (ids: number[], action: string, note?: string | null) =>
     rpc<number>("ops_po_issue_set", { p_ids: ids, p_action: action, p_note: note ?? null }),
+  /** 搜我们的商品（型号或品名，最多 20 笔）：订货或仓库「可编辑」；company 空 = 自己分店的公司 */
+  itemSearch: (company: string | null, q: string) => rpc<OurItem[]>("ops_po_item_search", { p_company: company || null, p_q: q }),
 };
 
 // ------------------------------------------------------------ 档案

@@ -3,22 +3,164 @@ import { FormEvent, useEffect, useState } from "react";
 import { todayKL } from "../api";
 import { ErrorBox, Modal } from "../ui";
 import {
-  DECISION_LABEL, DO_ETA_SOURCE_LABEL, DO_STATUS_LABEL, DoFile, DoStatus, fileExt, fmtSize, Issue, issueKindLabel,
-  ISSUE_STATUS_LABEL, isSheet, openDoFile, Outlet, podo,
+  DECISION_LABEL, DO_ETA_SOURCE_LABEL, DO_STATUS_LABEL, DoFile, DoSop, DoStatus, fileExt, fmtSize, Issue, IssueKind, issueKindLabel,
+  IssueRequest, ISSUE_STATUS_LABEL, isSheet, openDoFile, Outlet, OurItem, podo, requestLabel, requestOptions, SOP_OWNER_LABEL,
+  SOP_STEPS,
 } from "../podo-api";
 
 export function DoStatusBadge({ status }: { status: DoStatus }) {
   return <span className={"dos " + status}>{DO_STATUS_LABEL[status]}</span>;
 }
 
-export function IssueBadges({ i }: { i: Issue }) {
+export function IssueBadges({ i }: { i: Pick<Issue, "kind" | "auto" | "decision" | "status"> & { request?: IssueRequest | null } }) {
   return (
     <>
       <span className={"isk " + i.kind}>{issueKindLabel(i)}</span>
-      {i.kind === "short" && i.decision && i.status !== "void" && (
+      {(i.kind === "short" || i.kind === "part") && i.decision && i.status !== "void" && (
         <span className={"isd " + i.decision}>{DECISION_LABEL[i.decision]}</span>
       )}
       {i.status !== "open" && <span className={"iss " + i.status}>{ISSUE_STATUS_LABEL[i.status]}</span>}
+      {i.request && i.status !== "void" && <span className="isr">{`要厂家：${requestLabel(i.kind, i.request)}`}</span>}
+    </>
+  );
+}
+
+/** 要厂家怎么处理（少发没有：少发看「厂家会补 / 取消」）。空 = 还没指定 */
+export function RequestSelect({ kind, value, onChange, disabled, label = "要厂家怎么处理" }: {
+  kind: IssueKind; value: IssueRequest | "" | null | undefined; onChange: (v: IssueRequest | "") => void; disabled?: boolean; label?: string;
+}) {
+  return (
+    <select value={value ?? ""} disabled={disabled} aria-label={label} onChange={(e) => onChange(e.target.value as IssueRequest | "")}>
+      <option value="">—</option>
+      {requestOptions(kind).map((r) => <option key={r} value={r}>{requestLabel(kind, r)}</option>)}
+    </select>
+  );
+}
+
+/** 「收到的型号」：打型号或品名搜我们的商品（选了 own = true、带出品名）；或按「不是我们的产品」（own = false，自己打型号 / 品名，品名必填）。
+ *  own = null = 还没选（打的字不算，要从清单选）。seed = 开单时厂家 DO 上的写法（搜寻框先填型号；按「不是我们的产品」带进去）。
+ *  在搜寻框按 Enter 不会送出表单：只有一笔结果就选那笔。 */
+export interface Picked { own: boolean | null; code: string; desc: string }
+export const NOT_PICKED: Picked = { own: null, code: "", desc: "" };
+export function OurItemPicker({ company, value, onChange, disabled, seed }: {
+  company: string | null; value: Picked; onChange: (v: Picked) => void; disabled?: boolean; seed?: { code: string; desc: string };
+}) {
+  const [q, setQ] = useState(() => seed?.code || "");
+  const [hits, setHits] = useState<OurItem[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (value.own !== null) return;
+    const k = q.trim();
+    if (!k) { setHits(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      podo.itemSearch(company, k).then((r) => { if (live) setHits(r); }).catch((e: Error) => { if (live) setError(e.message); });
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [q, company, value.own]);
+
+  if (value.own === true)
+    return (
+      <div className="our-pick chosen">
+        <span><b>{value.code}</b> <small>{value.desc}</small></span>
+        {!disabled && <button type="button" className="text-btn small" onClick={() => { setQ(value.code); setHits(null); onChange(NOT_PICKED); }}>改选</button>}
+      </div>
+    );
+  if (value.own === false)
+    return (
+      <div className="our-pick">
+        <span className="our-pick-head">
+          <span className="tag warn">不是我们的产品</span>
+          {!disabled && <button type="button" className="text-btn small" onClick={() => { setQ(value.code); onChange(NOT_PICKED); }}>改成我们的型号</button>}
+        </span>
+        <input value={value.code} disabled={disabled} placeholder="厂家写的型号（可空白）" aria-label="厂家写的型号"
+               onChange={(e) => onChange({ ...value, code: e.target.value })} />
+        <input value={value.desc} disabled={disabled} placeholder="品名（必填）" aria-label="品名（必填）"
+               onChange={(e) => onChange({ ...value, desc: e.target.value })} />
+      </div>
+    );
+  return (
+    <div className="our-pick">
+      <input value={q} disabled={disabled} placeholder="打型号或品名找我们的商品…" aria-label="收到的型号"
+             onChange={(e) => { setQ(e.target.value); setError(""); }}
+             onKeyDown={(e) => {
+               if (e.key !== "Enter") return;
+               e.preventDefault();          // 在表单里按 Enter / 手机「前往」不要送出整张表单
+               if (hits && hits.length === 1) onChange({ own: true, code: hits[0].item_code, desc: hits[0].description });
+             }} />
+      {hits && hits.length > 0 && (
+        <ul className="our-pick-list">
+          {hits.map((h) => (
+            <li key={h.item_code}>
+              <button type="button" disabled={disabled} onClick={() => onChange({ own: true, code: h.item_code, desc: h.description })}>
+                <b>{h.item_code}</b> <small>{h.description}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hits && hits.length === 0 && (
+        <small className="muted">找不到我们的商品。AutoCount 今天才开的新型号要等隔天同步后才搜得到：请先联络开单部，不要急著选「不是我们的产品」（选了不会进库存）。</small>
+      )}
+      <button type="button" className="text-btn small our-pick-not" disabled={disabled}
+              onClick={() => onChange({ own: false, code: q.trim() || seed?.code || "", desc: seed?.desc ?? "" })}>不是我们的产品</button>
+      <ErrorBox error={error} />
+    </div>
+  );
+}
+
+/** SOP：现在在第几步、等哪个部门；做完的打勾。草稿超过 24 小时还没确认标红 */
+const STEP_DEPT = ["订货部", "订货部", "订货部", "订货部", "订货部", "仓库部", "订货部"];
+export function SopSteps({ sop }: { sop: DoSop }) {
+  if (sop.step == null) return null;
+  const d = sop.done;
+  const done = [d.po, d.shipped, d.alloc, d.eta, d.confirmed, d.received, d.received && d.decided];
+  const cur = sop.step;
+  const grn = Number(sop.grn_n ?? 0);
+  return (
+    <div className={"card sop" + (sop.draft_overdue ? " overdue" : "")}>
+      <ol className="sop-steps">
+        {SOP_STEPS.map((label, i) => (
+          <li key={i} className={(done[i] ? "done" : cur > i + 1 ? "skip" : "") + (cur === i + 1 ? " cur" : "")}>
+            <span className="n">{done[i] ? "✓" : String(i + 1)}</span>
+            <span className="t">{label}</span>
+            <small className="muted">{STEP_DEPT[i]}</small>
+          </li>
+        ))}
+      </ol>
+      <p className="small sop-now">
+        {cur >= 8 && grn > 0 ? (
+          <>
+            <b>{`第 8 步：开进货单（GRN）`}</b>
+            <span className="tag">{SOP_OWNER_LABEL.billing}</span>
+            <span className="amber">{`开单部还有 ${grn} 笔进货要在 AutoCount 开进货单（GRN）`}</span>
+          </>
+        ) : cur >= 8 ? <span className="okc">都做完了</span> : (
+          <>
+            <b>{`第 ${cur} 步：${SOP_STEPS[cur - 1]}`}</b>
+            {sop.owner && <span className="tag">{SOP_OWNER_LABEL[sop.owner]}</span>}
+            {cur === 7 && sop.decide_n > 0 && <span className="late">{`还有 ${sop.decide_n} 个少发 / 缺零件要决定（厂家会补或取消）`}</span>}
+            {cur === 5 && !d.eta && <span className="amber">还没填 ETA（可以先确认，之后再补）</span>}
+            {cur === 7 && grn > 0 && <span className="muted">{`开单部还有 ${grn} 笔进货要开 GRN`}</span>}
+          </>
+        )}
+        {sop.draft_overdue && <span className="late">草稿开了超过 24 小时还没确认</span>}
+      </p>
+    </div>
+  );
+}
+
+/** 清单里的一行小字：第几步 · 等哪个部门 */
+export function SopLine({ sop }: { sop?: DoSop }) {
+  if (!sop || sop.step == null) return null;
+  return (
+    <>
+      <br />
+      <small className={sop.draft_overdue ? "late" : "muted"}>
+        {sop.step >= 8 ? (Number(sop.grn_n ?? 0) > 0 ? "第 8 步：开进货单（GRN）" : "都做完了") : `第 ${sop.step} 步：${SOP_STEPS[sop.step - 1]}`}
+      </small>
+      {sop.owner && (sop.step < 8 || Number(sop.grn_n ?? 0) > 0) && <><br /><small className="muted">{SOP_OWNER_LABEL[sop.owner]}</small></>}
+      {sop.draft_overdue && <><br /><span className="tag warn">超过 24 小时没确认</span></>}
     </>
   );
 }

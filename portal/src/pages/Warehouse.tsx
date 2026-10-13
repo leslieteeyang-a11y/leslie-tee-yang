@@ -1,7 +1,7 @@
-// 仓库：查货（扫码）、每日小盘点、搬动登记、差异审核、印条码。路由 #/warehouse/<分页>
+// 仓库：查货（扫码）、每日小盘点、搬动登记、待开进货单（开单部）、差异审核、印条码。路由 #/warehouse/<分页>
 // 对 AutoCount 仍是只读：搬动与盘点差异都变成清单，负责人在 AutoCount 输入后回来标「已输入 / 已调整」。
 import { useEffect, useState } from "react";
-import { BRANCH_LABEL, Me } from "../api";
+import { BRANCH_LABEL, canCancelReceive, canGrn, Me } from "../api";
 import { go } from "../router";
 import { ErrorBox, Tabs } from "../ui";
 import "../att.css";
@@ -12,9 +12,10 @@ import { MovesTab } from "../wh/Moves";
 import { CountTab } from "../wh/Count";
 import { ReviewTab } from "../wh/Review";
 import { AgedTab } from "../wh/Aged";
+import { GrnTab } from "../wh/Grn";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "count" | "moves" | "review" | "aged" | "labels";
+type Tab = "lookup" | "count" | "moves" | "grn" | "review" | "aged" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
 export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
@@ -30,6 +31,8 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
   const tabs: [Tab, string][] = [["lookup", "查货"]];
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
+  // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
+  if (canGrn(me)) tabs.push(["grn", "待开进货单"]);
   if (canApprove) tabs.push(["review", "差异审核"]);
   tabs.push(["aged", "旧货"]);
   tabs.push(["labels", "印条码"]);
@@ -51,6 +54,7 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
       {tab === "lookup" && <Lookup me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} />}
       {tab === "count" && <CountTab company={co} locs={locs.filter((l) => l.counting).map((l) => l.code)} />}
       {tab === "moves" && <MovesTab me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} canApprove={canApprove} />}
+      {tab === "grn" && <GrnTab company={co} multi={meta.companies.length > 1} canCancel={canCancelReceive(me)} />}
       {tab === "review" && <ReviewTab company={co} meta={meta} onMeta={setMeta} />}
       {tab === "aged" && <AgedTab company={co} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}

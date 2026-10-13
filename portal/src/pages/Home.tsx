@@ -58,7 +58,7 @@ function AttCard({ a }: { a: HomeAtt }) {
 type TodoHome = Home & { corrections_waiting?: number; leave_waiting?: number; wh_moves_pending?: number | null;
   wh_variances?: number | null; wh_counted_today?: number | null; po_arriving?: number | null; hr_gaps?: number | null;
   holidays_ahead?: number | null; join_pending?: number | null; do_to_count?: number | null; do_no_eta?: number | null;
-  po_issues_todo?: number | null };
+  po_issues_todo?: number | null; do_draft_stale?: number | null; po_no_eta?: number | null; grn_pending?: number | null };
 function Todo({ h }: { h: TodoHome }) {
   const items: [boolean, string, string, boolean][] = [
     [!!h.join_pending, `${h.join_pending} 个新员工申请加入`, "#/admin/join", true],
@@ -68,13 +68,19 @@ function Todo({ h }: { h: TodoHome }) {
     [!!h.my_overdue, `${h.my_overdue} 个任务已逾期`, "#/tasks", true],
     [!!h.wh_variances, `${h.wh_variances} 项盘点差异等你审核`, "#/warehouse/review", true],
     [!!h.wh_moves_pending, `${h.wh_moves_pending} 笔搬动还没输入 AutoCount`, "#/warehouse/moves", false],
+    // 开单部（与仓库可审批）：点完货的厂家到货，要在 AutoCount 开进货单（GRN）
+    [!!h.grn_pending, `${h.grn_pending} 批厂家货待开进货单（GRN）`, "#/warehouse/grn", false],
     [h.wh_counted_today === 0, "今天还没盘点", "#/warehouse/count", false],
     [!!h.po_arriving, `${h.po_arriving} 张 PO 三天内到货，准备收货`, "#/purchasing", false],
     // 厂家已出货（确认了厂家 DO）、ETA 在三天内或已过、还没点货：订货或仓库可编辑的人才有
     [!!h.do_to_count, `${h.do_to_count} 批厂家货三天内到（含已过 ETA），到了要点货`, "#/purchasing/receive", false],
-    // 已确认的厂家到货还没填 ETA（分店看到「未填」）：订货可编辑的人（物流部、采购）补
+    // 订货部：厂家到货草稿开了超过 24 小时还没确认（SOP 第 5 步卡住）
+    [!!h.do_draft_stale, `${h.do_draft_stale} 张厂家到货草稿超过 24 小时还没确认`, "#/purchasing/do", true],
+    // 已确认的厂家到货还没填 ETA（分店看到「未填」）：订货可编辑的人（采购）补
     [!!h.do_no_eta, `${h.do_no_eta} 批厂家到货还没填 ETA`, "#/purchasing/do", false],
-    // 采购 / 管理层：还没决定的少发 + 7 天内新记的厂家问题（仓库点货记的会出现在这里）
+    // 订货部：PO 开了很久（中国货 30 天、本地货 7 天）还没有 ETA、也还没有厂家到货
+    [!!h.po_no_eta, `${h.po_no_eta} 张 PO 还没 ETA，要问厂家`, "#/purchasing/noeta", false],
+    // 采购 / 管理层：还没决定的少发 / 缺零件 + 7 天内新记的厂家问题（仓库点货记的会出现在这里）
     [!!h.po_issues_todo, `${h.po_issues_todo} 笔厂家问题等处理`, "#/purchasing/issues", false],
     [!!h.po_overdue, `${h.po_overdue} 张 PO 已过预计到货日，要跟进`, "#/purchasing", true],
     [!!h.hr_gaps, `${h.hr_gaps} 位员工资料没填齐`, "#/hr/gaps", false],

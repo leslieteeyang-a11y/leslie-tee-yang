@@ -129,3 +129,107 @@ label.recv-note { display: flex; flex-direction: column; gap: 4px; margin-top: 1
   .recv-table input.podo-num { width: 58px; padding: 6px; }
   .recv-auto { max-width: none; }
 }
+
+/* SOP：第几步、等哪个部门（2026-10-15） */
+.sop { padding: 10px 12px; }
+.sop.overdue { border: 1px solid var(--red); }
+.sop-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.sop-steps li { display: flex; align-items: center; gap: 5px; padding: 4px 9px 4px 4px; border-radius: 99px; background: #eef1f5; color: var(--muted);
+  font-size: .82rem; }
+.sop-steps li .n { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: inline-flex; align-items: center;
+  justify-content: center; font-weight: 700; font-size: .75rem; flex: 0 0 auto; }
+.sop-steps li small { font-size: .7rem; }
+.sop-steps li.done { background: var(--green-soft); color: var(--green); }
+.sop-steps li.done .n { background: var(--green); color: #fff; }
+.sop-steps li.skip { background: var(--amber-soft); color: var(--amber); }
+.sop-steps li.cur { background: var(--blue); color: #fff; }
+.sop-steps li.cur .n { color: var(--blue); }
+.sop-steps li.cur small { color: #fff; }
+.sop-now { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 8px 0 0; }
+.sop-now .tag { margin-left: 0; }
+tr.podo-overdue td { background: #fff5f5; }
+
+/* 要厂家怎么处理、缺零件 */
+.isr { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; display: inline-block; margin: 1px 4px 1px 0;
+  background: #f1e8fd; color: #7b3fc4; }
+.isk.part { background: var(--blue-soft); color: var(--blue); }
+.podo-kinds { flex-wrap: wrap; gap: 4px 14px; }
+
+/* 收到的型号：搜我们的商品 / 不是我们的产品 */
+.our-pick { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.our-pick.chosen { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px;
+  border: 1px solid var(--green); border-radius: 8px; background: var(--green-soft); }
+.our-pick-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.our-pick-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow-y: auto; background: #fff; }
+.our-pick-list li + li { border-top: 1px solid var(--line); }
+.our-pick-list button { width: 100%; text-align: left; background: none; color: var(--text); padding: 7px 10px; border-radius: 0;
+  font-weight: 400; white-space: normal; }
+.our-pick-list button:hover { background: var(--blue-soft); }
+.our-pick-not { align-self: flex-start; }
+
+/* 开单画面：这批的问题 */
+.podo-problems { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
+.podo-problems h4 { margin: 14px 0 6px; }
+.podo-prob-list li { align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.podo-prob-what { flex: 1 1 220px; min-width: 0; }
+.podo-prob-do { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.podo-prob-do select { width: auto; max-width: 100%; }
+.podo-prob-do input.podo-note { margin-top: 0; }
+.podo-prob-sum { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 4px 0; }
+.recv-wrong-card .wide { grid-column: 1 / -1; }
+.recv-wrong-card p.wide { margin: 0; }
+.recv-wrong-card button.wide-btn { justify-self: start; }
+.podo-same { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.podo-same select { width: auto; max-width: 100%; }
+.podo-xsrc { overflow-wrap: anywhere; }
+.podo-note-btn { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.podo-note-hint { display: block; margin-top: 2px; white-space: normal; }
+.recv-do-note { display: block; margin-top: 2px; color: var(--amber); }
+
+/* 这家还欠 / 厂家还欠 / WhatsApp */
+.podo-owed-hint ul { margin: 6px 0; padding-left: 18px; }
+.podo-owed-hint li { margin: 2px 0; }
+.podo-owed-hint .tag { margin: 0 6px 0 0; }
+.podo-wa-ask { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.podo-owed { border: 1px solid var(--amber); background: #fffaf2; border-radius: 8px; padding: 8px 12px; margin: 6px 0 8px; }
+.podo-owed-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
+.podo-owed-head > span { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.podo-factory { margin: 6px 0 12px 10px; padding-left: 10px; border-left: 3px solid var(--line); }
+.podo-factory h4 { margin: 8px 0 4px; display: flex; gap: 8px; align-items: center; }
+.tag.cs { background: #eef1f5; color: var(--text); }
+.wa-lang { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+textarea.wa-text { width: 100%; font-family: inherit; font-size: .9rem; line-height: 1.45; }
+.wa-toggle { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+
+@media (max-width: 640px) {
+  .podo-factory { margin-left: 0; padding-left: 8px; }
+  .sop-steps li { font-size: .78rem; padding-right: 7px; }
+  .sop-steps li small { display: none; }
+}
+.podo-items .show-sm { display: none; }
+@media (max-width: 640px) { .podo-items .show-sm { display: inline; } }
+.podo-owed-list { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; }
+.pick-field { display: flex; flex-direction: column; gap: 3px; font-size: .85rem; min-width: 0; }
+.form .pick-field { font-size: .9rem; }
+.pick-label { color: var(--muted); }
+/* 厂家问题表格：手机变成卡片（徽章 + 数量一行、型号、DO / PO、按钮排在下面） */
+@media (max-width: 640px) {
+  .podo-issues-wrap { overflow-x: visible; }
+  table.podo-issues, table.podo-issues tbody { display: block; width: 100%; }
+  table.podo-issues thead { display: none; }
+  table.podo-issues tr {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; row-gap: 2px;
+    grid-template-areas: "pick kind qty" "pick model model" "pick do do" "pick act act";
+    padding: 10px 4px; border-bottom: 1px solid var(--line);
+  }
+  table.podo-issues td { display: block; padding: 0; border: 0; min-width: 0; text-align: left; }
+  table.podo-issues td.pi-pick { grid-area: pick; padding-top: 2px; }
+  table.podo-issues td.pi-kind { grid-area: kind; }
+  table.podo-issues td.pi-model { grid-area: model; }
+  table.podo-issues td.pi-do { grid-area: do; }
+  table.podo-issues td.pi-qty { grid-area: qty; text-align: right; }
+  table.podo-issues td.pi-ord { display: none; }
+  table.podo-issues td.pi-act { grid-area: act; }
+  table.podo-issues td.pi-kind br { display: none; }
+  table.podo-issues td.pi-kind small { margin-left: 6px; }
+}

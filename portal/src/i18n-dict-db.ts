@@ -168,7 +168,26 @@ export const DICT_DB: Record<string, string> = {
   "要先点货：请在「点货」填每个型号实际收到几件，再按「点完，货到了」。":
     "Count the goods first: under \"Receive\", enter how many of each model actually arrived, then press \"Done — goods arrived\".",
   "要「订货与 ETA」或「仓库」可编辑才能记厂家问题。": "You need Edit access to Purchasing & ETA or Warehouse to log supplier issues.",
-  "这张厂家 DO 是你确认的：请另一位同事（仓库部）点货，少了、坏了才有人核对。":
-    "You confirmed this supplier DO, so another colleague (warehouse) has to count it — that way short or damaged goods get a second check.",
   "点过货的厂家 DO，厂家问题只有采购或管理层可以作废。": "Once a supplier DO has been counted, only purchasing or management can void its supplier issues.",
+  // 资料库错误讯息（20261015_ops_po_sop）
+  "来错的型号「不是我们的产品」请填品名。": "Wrong model marked \"Not our product\": enter the item name.",
+  "缺零件请填零件 / 东西名称。": "Missing parts: enter the part / item name.",
+  "缺零件最多 100 行。": "At most 100 missing-part rows.",
+  "缺零件的数量不是数字。": "The missing part qty isn't a number.",
+  "缺零件的数量不能是负数。": "The missing part qty can't be negative.",
+  "只能手动记坏货、到货少、发错型号或缺零件（少发、多发确认时自动算）。":
+    "You can only log damaged, short on arrival, wrong model or missing parts by hand (short- and over-shipped are worked out on confirm).",
+  "请填缺的零件 / 东西名称。": "Enter the missing part / item name.",
+  "「不是我们的产品」请填品名。": "\"Not our product\": enter the item name.",
+  "只有「少发」和「缺零件」要选「厂家会补」或「取消（下次再订）」。":
+    "Only short-shipped and missing parts take \"Supplier will send\" or \"Cancel (reorder later)\".",
+  "少发请选「厂家会补」或「取消（下次再订）」；作废的问题不能改。":
+    "For short-shipped choose \"Supplier will send\" or \"Cancel (reorder later)\"; voided issues can't be changed.",
+  "进货待入 AutoCount 只有开单部或仓库「可审批」的人可以标已输入。":
+    "Only Billing or people with Warehouse \"approve\" can mark goods-in as keyed into AutoCount.",
+  "进货待入 AutoCount 只有仓库「可审批」的人（仓库主管、管理层）可以取消。":
+    "Only people with Warehouse \"approve\" (warehouse manager, management) can cancel goods-in lines.",
+  "取消进货要写原因。": "Please give a reason for cancelling the goods in.",
+  "请填 AutoCount 进货单（GRN）号码。": "Enter the AutoCount GRN number.",
+  "只有开单部或仓库「可审批」的人看得到待开进货单。": "Only Billing or people with Warehouse \"approve\" can see GRNs to enter.",
 };

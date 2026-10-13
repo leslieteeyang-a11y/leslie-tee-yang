@@ -30,14 +30,16 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
   if (canReceive(me)) tabs.push(["receive", "点货"]);
   if (sup) tabs.push(["shipments", "货柜"]);
   tabs.push(["item", "查 SKU 到货"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : tabs[0][0];
+  // #/purchasing/noeta：首页「N 张 PO 还没 ETA，要问厂家」点进来 = 未到货 PO 只列这些
+  const noEta = sub === "noeta" && sup;
+  const tab: Tab = noEta ? "po" : tabs.some(([k]) => k === sub) ? (sub as Tab) : tabs[0][0];
   return (
     <>
       <h1>订货与 ETA</h1>
       <div className="filters">
         <Tabs value={tab} onChange={(t) => go(t === tabs[0][0] ? "/purchasing" : `/purchasing/${t}`)} options={tabs} />
       </div>
-      {tab === "po" && <PoTab me={me} canEdit={canEdit} prices={seesPrices(me)} />}
+      {tab === "po" && <PoTab me={me} canEdit={canEdit} prices={seesPrices(me)} noEtaInit={noEta} />}
       <Suspense fallback={<p className="muted">载入中…</p>}>
         {tab === "do" && (arg1 ? <DoEditor key={arg1} me={me} idParam={arg1} /> : <DoList me={me} />)}
         {tab === "issues" && <IssuesTab me={me} />}
@@ -72,7 +74,7 @@ function EtaCell({ r }: { r: Pick<PoRow, "eta" | "eta_source" | "overdue" | "day
 }
 
 // ------------------------------------------------------------------ 未到货 PO
-function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: boolean }) {
+function PoTab({ me, canEdit, prices, noEtaInit }: { me: Me; canEdit: boolean; prices: boolean; noEtaInit?: boolean }) {
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState("");
@@ -80,6 +82,9 @@ function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: bool
   const [overdue, setOverdue] = useState(false);
   const [stale, setStale] = useState(false);
   const [china, setChina] = useState("");
+  const [noEta, setNoEta] = useState(!!noEtaInit);
+  // 已经在未到货 PO、又从首页点「还没 ETA」进来：打开筛选（点 PO 明细再关掉不会取消筛选）
+  useEffect(() => { if (noEtaInit) setNoEta(true); }, [noEtaInit]);
   const [rows, setRows] = useState<PoRow[] | null>(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -88,10 +93,10 @@ function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: bool
   const load = useCallback(() => {
     setError("");
     setRows(null);
-    api.poList({ q: query, company, status, overdue, stale, china })
+    api.poList({ q: query, company, status, overdue, stale, china, no_eta: noEta })
       .then((r) => { setRows(r); setPicked(new Set()); })
       .catch((e: Error) => setError(e.message));
-  }, [query, company, status, overdue, stale, china]);
+  }, [query, company, status, overdue, stale, china, noEta]);
   useEffect(load, [load]);
   // 从明细弹窗改完回来时重新载入
   useEffect(() => {
@@ -103,7 +108,7 @@ function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: bool
   const key = (r: PoRow) => `${r.company}|${r.po_no}`;
   const pickedRows = (rows ?? []).filter((r) => picked.has(key(r)));
   const pickedCompanies = new Set(pickedRows.map((r) => r.company));
-  // 金额只给采购 / 管理层（物流部是订货可编辑，但资料库不回金额：seesPrices 同规则）
+  // 金额只给订货「可编辑」（采购 / 管理层；资料库也只回给他们：seesPrices 同规则）
   const showAmt = prices && rows?.some((r) => r.open_amt != null);
 
   function toggle(r: PoRow) {
@@ -136,7 +141,9 @@ function PoTab({ me, canEdit, prices }: { me: Me; canEdit: boolean; prices: bool
         </select>
         <label className="check"><input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> 只看逾期</label>
         <label className="check"><input type="checkbox" checked={stale} onChange={(e) => setStale(e.target.checked)} /> 含 120 天以上旧单</label>
+        <label className="check"><input type="checkbox" checked={noEta} onChange={(e) => setNoEta(e.target.checked)} /> 只看还没 ETA（要问厂家）</label>
       </form>
+      {noEta && <p className="muted small">中国货开单 30 天以上、本地货 7 天以上（120 天内），没填 ETA、没挂货柜，也还没有厂家到货：请问厂家什么时候出货，填进 PO 的 ETA。</p>}
       <ErrorBox error={error} />
       {rows && (
         <p className="muted small">

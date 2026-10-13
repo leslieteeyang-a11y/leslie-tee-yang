@@ -611,7 +611,7 @@ $$;
 create or replace function pg_temp.grn(p_key bigint, p_tr numeric) returns void language sql security definer as $$
   update bi.fact_po_line set transferred_qty = p_tr where company = 'HOMEWORKSSB' and dtl_key = p_key
 $$;
--- 点货：每个型号照出货全到、照原分配（20261014 起不能直接标记到货；确认的人不能自己点 → 换仓库阿强点，点完换回来）
+-- 点货：每个型号照出货全到、照原分配（20261014 起不能直接标记到货；换仓库阿强点（仓库部的人点货），点完换回来）
 create or replace function pg_temp.recv_all(p_id bigint) returns jsonb language plpgsql as $$
 declare
   claims text := current_setting('request.jwt.claims', true);

@@ -1,19 +1,25 @@
 // 厂家到货（一张厂家 DO / 装箱单）：#/purchasing/do/new 新开（选厂家 → 选 PO → 编辑），#/purchasing/do/<id> 打开。
 // 草稿：每个型号填这批出货、分给各分店（同型号可拆），存草稿 / 确认。确认后只能改表头（DO 号、日期、ETA、货柜、备注、附件），
-// 要改货品先「退回草稿」（订货可审批）。数量都不含单价。
+// 要改货品先「退回草稿」（订货可审批）。数量都不含单价。只有订货部（订货「可编辑」）开。
+// SOP（使用者 2026-10-13）：上方显示第几步、等哪个部门（① 选 PO ② 出货数量 ③ 分配分店 ④ ETA ⑤ 确认 → ⑥ 点货（仓库部）→ ⑦ 厂家问题（采购））。
+// 「这批的问题」：少发自动列出、先选厂家会补 / 取消 / 未决定（确认时套到自动产生的少发）；多发自动列出；来错的型号（搜我们的商品或
+// 「不是我们的产品」、要厂家怎么处理）；缺零件 / 其他要补的。确认后可「📱 WhatsApp 发给厂家」。
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { BRANCH_LABEL, fmtDate, fmtQty, Me, Shipment, SHIPMENT_STATUS_LABEL, api, todayKL } from "../api";
 import { go, replaceRoute, setLeaveGuard } from "../router";
 import { ErrorBox, Modal } from "../ui";
 import {
-  Candidate, DO_ACTION_LABEL, DoFile, DoFull, DoSupplier, downloadDoFile, FILE_ACCEPT, isSheet, joinList, newClientKey, num,
-  Outlet, podo, ui, uploadDoFile,
+  Candidate, DECISION_LABEL, DO_ACTION_LABEL, DoFile, DoFull, DoPart, DoSop, DoSupplier, downloadDoFile, FILE_ACCEPT, Issue,
+  IssueRequest, isSheet, joinList, newClientKey, num, Outlet, podo, requestLabel, ui, uploadDoFile,
 } from "../podo-api";
-import { AskModal, DoStatusBadge, ErrorLines, EtaText, FileList, outletName } from "./common";
+import {
+  AskModal, DoStatusBadge, ErrorLines, EtaText, FileList, OurItemPicker, outletName, Picked, RequestSelect, SopSteps,
+} from "./common";
 import { ImportPanel, ImportResult, OtherHit } from "./Import";
-import { AddIssueModal, IssueTable } from "./Issues";
+import { AddIssueModal, IssueTable, issueModel } from "./Issues";
 import { PoPicker, SupplierPicker } from "./Pickers";
 import { readWorkbook, Sheet } from "./parse";
+import { WaModal, waIssuesText } from "./whatsapp";
 
 interface Start { company: string; creditor_code: string; supplier_name: string; po_nos: string[] }
 /** 对得上 PO 的型号（一个型号一行） */
@@ -26,12 +32,18 @@ interface Row {
   note: string;
   excel?: "hit" | "missing";
   showNote?: boolean;
+  /** 少发先决定：空 = 未决定（确认时套到自动产生的少发） */
+  short_decision: "" | "await" | "cancelled";
 }
-/** 对不上 PO 的行（确认时记成发错型号） */
+/** 对不上 PO 的行 = 来错的型号（确认时记成发错型号）。手动加的：own = true 我们的商品 / false 不是我们的产品 / null 还没选；
+ *  Excel 读进来的：own = undefined（照 Excel 的写法） */
 interface XRow {
   key: string; manual: boolean; shipped: string; src_code: string; src_desc: string; src_row: number | null; sheet?: string;
   expected_code: string; note: string; suggest: string[]; other?: OtherHit;
+  own?: boolean | null; request: IssueRequest | "";
 }
+/** 缺零件 / 其他要补的（确认时记成厂家问题 kind = part） */
+interface PRow { key: string; item_code: string; part_name: string; qty: string; request: IssueRequest | ""; note: string }
 
 let xseq = 0;
 const xkey = () => `x${++xseq}`;
@@ -81,14 +93,16 @@ function DoLoad({ me, id }: { me: Me; id: number }) {
 function DoPage({ me, initial, start }: { me: Me; initial: DoFull | null; start?: Start }) {
   const [full, setFull] = useState<DoFull | null>(initial);
   const [flash, setFlash] = useState("");
-  const onFull = (f: DoFull, msg = "") => {
+  const [waAsk, setWaAsk] = useState(false);       // 刚确认：上方问要不要 WhatsApp 发给厂家
+  const onFull = (f: DoFull, msg = "", wa = false) => {
     // 新开的第一次存：网址换成这张的号码（不触发重新载入）
     if (!full) replaceRoute(`/purchasing/do/${f.id}`);
     setFlash(msg);
+    setWaAsk(wa);
     setFull(f);
   };
   return <DoForm key={full ? `${full.id}:${full.status}:${full.updated_at}` : "new"} me={me} full={full} start={start}
-                 onFull={onFull} flash={flash} />;
+                 onFull={onFull} flash={flash} waAsk={waAsk} />;
 }
 
 function rowsFromFull(full: DoFull): Record<string, Row> {
@@ -104,22 +118,51 @@ function rowsFromFull(full: DoFull): Record<string, Row> {
       item_code: it.item_code, shipped: String(it.shipped ?? 0), alloc,
       auto: !!s && (keys.length === 0 || (keys.length === 1 && keys[0] === s && Number(alloc[s]) === Number(it.shipped))),
       src_code: it.src_code ?? "", src_desc: it.src_desc ?? "", src_row: it.src_row ?? null, note: it.note ?? "",
-      showNote: !!it.note,
+      showNote: !!it.note, short_decision: it.short_decision ?? "",
     };
   }
   return out;
 }
 
 function xrowsFromFull(full: DoFull): XRow[] {
-  return full.items.filter((it) => !it.item_code).map((it) => ({
-    key: xkey(), manual: it.src_row == null, shipped: String(it.shipped ?? 0), src_code: it.src_code ?? "", src_desc: it.src_desc ?? "",
-    src_row: it.src_row ?? null, expected_code: it.expected_code ?? "", note: it.note ?? "", suggest: [],
+  return full.items.filter((it) => !it.item_code).map((it) => {
+    const manual = it.src_row == null;
+    // 手动加的：照存的 own；以前存的（没有 own）当「不是我们的产品」，照原本打的型号 / 品名
+    const own = manual ? (typeof it.own === "boolean" ? it.own : (it.src_code || it.src_desc ? false : null)) : it.own;
+    return {
+      key: xkey(), manual, shipped: String(it.shipped ?? 0), src_code: it.src_code ?? "", src_desc: it.src_desc ?? "",
+      src_row: it.src_row ?? null, expected_code: it.expected_code ?? "", note: it.note ?? "", suggest: [], own,
+      request: it.request ?? "",
+    };
+  });
+}
+
+function prowsFromFull(full: DoFull): PRow[] {
+  return (full.parts ?? []).map((x: DoPart) => ({
+    key: xkey(), item_code: x.item_code ?? "", part_name: x.part_name ?? "", qty: String(x.qty ?? ""), request: x.request ?? "next",
+    note: x.note ?? "",
   }));
 }
 
 function blankRow(code: string): Row {
-  return { item_code: code, shipped: "0", alloc: {}, auto: false, src_code: "", src_desc: "", src_row: null, note: "" };
+  return { item_code: code, shipped: "0", alloc: {}, auto: false, src_code: "", src_desc: "", src_row: null, note: "", short_decision: "" };
 }
+
+/** 预估会记的少发 / 多发（与伺服器 ops_po_do_confirm 同规则）：这张在那几张 PO 出的先补别张 DO 的少发，还欠的跟已记过的比、只记差额；
+ *  超出所选 PO 的先补别张 PO「厂家会补」的少发 */
+function estimate(order: string[], rows: Record<string, Row>, candMap: Map<string, Candidate>) {
+  return order.map((code) => {
+    const c = candMap.get(code);
+    const s = num(rows[code].shipped) || 0;
+    const rem = c?.remaining ?? 0;
+    const fill = Math.min(c?.fillable ?? 0, s, rem);
+    const short = r3(Math.max(0, rem - s));
+    const over = r3(Math.max(0, s - rem));
+    return { c: code, rem, s, short, over, newShort: r3(Math.max(0, short - Math.max(0, (c?.flagged ?? 0) - fill))),
+             newOver: r3(Math.max(0, over - (c?.await_elsewhere ?? 0))) };
+  });
+}
+type Est = ReturnType<typeof estimate>[number];
 
 /** 新的型号：出货预设 = 还可以出；只有一间分店订就先分给那间 */
 function defaultRow(c: Candidate): Row {
@@ -150,8 +193,8 @@ function fullRow(r: Row, c?: Candidate): Row {
   return c && !c.single_outlet && rem > 0 ? allocByRemaining(x, c) : x;
 }
 
-function DoForm({ me, full, start, onFull, flash }: {
-  me: Me; full: DoFull | null; start?: Start; onFull: (f: DoFull, msg?: string) => void; flash: string;
+function DoForm({ me, full, start, onFull, flash, waAsk }: {
+  me: Me; full: DoFull | null; start?: Start; onFull: (f: DoFull, msg?: string, wa?: boolean) => void; flash: string; waAsk: boolean;
 }) {
   const draft = !full || full.status === "draft";
   const editable = !full || full.can_edit;                       // 草稿 + 有权限
@@ -171,6 +214,7 @@ function DoForm({ me, full, start, onFull, flash }: {
   const [outlets, setOutlets] = useState<Outlet[]>(full?.outlets ?? []);
   const [rows, setRows] = useState<Record<string, Row>>(() => (full ? rowsFromFull(full) : {}));
   const [xrows, setXrows] = useState<XRow[]>(() => (full ? xrowsFromFull(full) : []));
+  const [prows, setProws] = useState<PRow[]>(() => (full ? prowsFromFull(full) : []));
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState(flash.startsWith("!") ? flash.slice(1) : "");
   const [msg, setMsg] = useState(flash.startsWith("!") ? "" : flash);
@@ -185,6 +229,7 @@ function DoForm({ me, full, start, onFull, flash }: {
   const [confirming, setConfirming] = useState(false);
   const [ask, setAsk] = useState<"cancel" | "reopen" | null>(null);
   const [addIssue, setAddIssue] = useState(false);
+  const [wa, setWa] = useState(false);
 
   // 新开：读所选 PO 的型号
   useEffect(() => {
@@ -228,6 +273,7 @@ function DoForm({ me, full, start, onFull, flash }: {
   const touch = () => { setDirty(true); setMsg(""); };
   const setRow = (code: string, f: (r: Row) => Row) => { setRows((prev) => ({ ...prev, [code]: f(prev[code]) })); touch(); };
   const setX = (key: string, patch: Partial<XRow>) => { setXrows((prev) => prev.map((x) => (x.key === key ? { ...x, ...patch } : x))); touch(); };
+  const setP = (key: string, patch: Partial<PRow>) => { setProws((prev) => prev.map((x) => (x.key === key ? { ...x, ...patch } : x))); touch(); };
 
   // ------------------------------------------------ 检查与储存
   function problems(strict: boolean): string[] {
@@ -240,7 +286,21 @@ function DoForm({ me, full, start, onFull, flash }: {
       const a = allocSum(r);
       if (strict && (s > 0 || a > 0) && a !== r3(s)) out.push(`型号 ${code} 出货 ${fmtQty(s)}，分到各分店的合计是 ${fmtQty(a)}：要相等才能确认。`);
     }
-    for (const x of xrows) if (Number.isNaN(num(x.shipped))) out.push(`「${x.src_code || x.src_desc}」的数量不是数字。`);
+    xrows.forEach((x, i) => {
+      if (Number.isNaN(num(x.shipped))) { out.push(`「${x.src_code || x.src_desc}」的数量不是数字。`); return; }
+      if (!x.manual) return;
+      const blank = x.own == null && !x.src_code.trim() && !x.src_desc.trim() && !x.shipped.trim() && !x.note.trim();
+      if (blank) return;
+      if (x.own == null) out.push(`来错的型号第 ${i + 1} 行：请从清单选我们的型号，或按「不是我们的产品」。`);
+      else if (x.own === false && !x.src_desc.trim()) out.push("来错的型号「不是我们的产品」请填品名。");
+      else if (strict && !(num(x.shipped) > 0)) out.push(`来错的型号第 ${i + 1} 行请填数量。`);
+    });
+    for (const x of prows) {
+      if (!x.part_name.trim() && !x.item_code && !x.qty.trim() && !x.note.trim()) continue;
+      if (!x.part_name.trim()) out.push("缺零件请填零件 / 东西名称。");
+      else if (Number.isNaN(num(x.qty))) out.push(`缺零件「${x.part_name.trim()}」的数量不是数字。`);
+      else if (!(num(x.qty) > 0)) out.push(`缺零件「${x.part_name.trim()}」请填数量。`);
+    }
     if (strict && !poNos.length) out.push("请先选这张 DO 对应的 PO。");
     if (strict && !order.some((c) => num(rows[c].shipped) > 0) && !xrows.some((x) => num(x.shipped) > 0)) out.push("这张 DO 没有任何出货数量。");
     return out;
@@ -251,17 +311,26 @@ function DoForm({ me, full, start, onFull, flash }: {
     for (const code of order) {
       const r = rows[code];
       const s = num(r.shipped) || 0;
-      if (!(s > 0) && !r.note.trim()) continue;
+      // 出货 0 但选了「厂家会补 / 取消」也要送（整个型号都没出 = 全部少发）
+      if (!(s > 0) && !r.note.trim() && !r.short_decision) continue;
       const alloc: Record<string, number> = {};
       for (const [o, v] of Object.entries(r.alloc)) if (num(v) > 0) alloc[o] = num(v);
-      items.push({ item_code: code, shipped: s, alloc, src_code: r.src_code, src_desc: r.src_desc, src_row: r.src_row, note: r.note });
+      items.push({ item_code: code, shipped: s, alloc, src_code: r.src_code, src_desc: r.src_desc, src_row: r.src_row, note: r.note,
+                   short_decision: r.short_decision || null });
     }
     for (const x of xrows) {
       if (!x.src_code.trim() && !x.src_desc.trim()) continue;
       items.push({ item_code: null, shipped: num(x.shipped) || 0, src_code: x.src_code, src_desc: x.src_desc, src_row: x.src_row,
-                   expected_code: x.expected_code || null, note: x.note });
+                   expected_code: x.expected_code || null, note: x.note, request: x.request || null,
+                   ...(typeof x.own === "boolean" ? { own: x.own } : {}) });
     }
     return items;
+  }
+
+  function partsPayload() {
+    return prows.filter((x) => x.part_name.trim() || x.item_code || x.qty.trim() || x.note.trim()).map((x) => ({
+      item_code: x.item_code || null, part_name: x.part_name.trim(), qty: num(x.qty) || 0, request: x.request || "next", note: x.note.trim(),
+    }));
   }
 
   async function save(): Promise<DoFull> {
@@ -270,7 +339,7 @@ function DoForm({ me, full, start, onFull, flash }: {
     const p: Record<string, unknown> = { ...head, files };
     if (full) p.id = full.id;
     else { p.client_key = clientKey.current; p.company = company; }
-    if (draft) Object.assign(p, { creditor_code: creditor, po_nos: poNos, items: itemsPayload() });
+    if (draft) Object.assign(p, { creditor_code: creditor, po_nos: poNos, items: itemsPayload(), parts: partsPayload() });
     return podo.save(p);
   }
 
@@ -294,7 +363,7 @@ function DoForm({ me, full, start, onFull, flash }: {
       if (nr[code]) continue;
       if (r.src_row != null) {
         moved.push({ key: xkey(), manual: false, shipped: r.shipped, src_code: r.src_code || code, src_desc: r.src_desc, src_row: r.src_row,
-                     expected_code: "", note: r.note, suggest: [] });
+                     expected_code: "", note: r.note, suggest: [], request: "" });
       } else if (num(r.shipped) > 0) dropped.push(code);
     }
     setPoNos(next);
@@ -368,7 +437,7 @@ function DoForm({ me, full, start, onFull, flash }: {
       ...r.res.unmatched.map((u) => ({
         key: xkey(), manual: false, shipped: String(u.qty), src_code: u.code || u.model,
         src_desc: (u.desc || u.texts.filter((t) => t !== u.code && t !== u.model).join(" ")).slice(0, 300),
-        src_row: u.row, sheet: u.sheet, expected_code: "", note: "", suggest: u.suggest, other: r.other.get(u),
+        src_row: u.row, sheet: u.sheet, expected_code: "", note: "", suggest: u.suggest, other: r.other.get(u), request: "" as const,
       })),
     ]);
     setImp(null);
@@ -376,15 +445,19 @@ function DoForm({ me, full, start, onFull, flash }: {
     setMsg(`已套用 Excel：对上 ${r.res.matched.length} 个型号${r.res.unmatched.length ? `，对不上 ${r.res.unmatched.length} 行（在下面处理）` : ""}。记得按「存草稿」。`);
   }
 
-  /** 对不上的 Excel 行 → 就是某个型号（厂家写法不同）：数量并进那个型号 */
+  /** 对不上的行 → 就是某个型号（厂家写法不同）：数量并进那个型号。一定先问（使用者：一选整行就被并掉＝「一选就跳走」） */
   function mapX(x: XRow, code: string) {
     const cur = rows[code];
     if (!cur) return;
-    const base = cur.src_row != null ? num(cur.shipped) || 0 : 0;
+    // Excel 的行并进还没对上 Excel 的型号：出货 = Excel 的数量（原本的是预设）；其他（已对上 Excel、手动加的）：加上去
+    const base = cur.src_row != null || x.manual ? num(cur.shipped) || 0 : 0;
+    const total = r3(base + (num(x.shipped) || 0));
+    const label = x.src_code || x.src_desc || "—";
+    if (!window.confirm(ui(`把「${label}」并进 ${code}？${code} 的出货会变成 ${fmtQty(total)}，这一行拿掉。`))) return;
     const nr = withShipped({
       ...cur, src_code: cur.src_row != null ? cur.src_code : x.src_code, src_desc: cur.src_row != null ? cur.src_desc : x.src_desc,
-      src_row: cur.src_row ?? x.src_row, excel: "hit",
-    }, String(r3(base + (num(x.shipped) || 0))), candMap.get(code));
+      src_row: cur.src_row ?? x.src_row, excel: x.src_row != null ? "hit" : cur.excel,
+    }, String(total), candMap.get(code));
     setRows({ ...rows, [code]: nr });
     setXrows(xrows.filter((y) => y.key !== x.key));
     touch();
@@ -413,6 +486,26 @@ function DoForm({ me, full, start, onFull, flash }: {
   const totAlloc = (o: string) => r3(order.reduce((s, c) => s + (num(rows[c].alloc[o]) || 0), 0));
   const status = full?.status ?? "draft";
   const ship = ships.find((s) => String(s.id) === head.shipment_id);
+  const est = estimate(order, rows, candMap);
+  // SOP：草稿照画面上现在的内容算（还没存的也算）；确认后照资料库
+  const sop: DoSop | null = draft && editable ? liveSop() : full?.sop ?? null;
+  function liveSop(): DoSop {
+    const shippedRows = order.filter((c) => num(rows[c].shipped) > 0);
+    const done = {
+      po: poNos.length > 0,
+      shipped: shippedRows.length > 0 || xrows.some((x) => num(x.shipped) > 0),
+      alloc: shippedRows.length > 0 && shippedRows.every((c) => allocSum(rows[c]) === r3(num(rows[c].shipped))),
+      eta: !!(head.eta || ship?.eta),
+      confirmed: false, received: false, decided: true,
+    };
+    const step = !done.po ? 1 : !done.shipped ? 2 : !done.alloc ? 3 : !done.eta ? 4 : 5;
+    return { step, owner: "purchasing", done, decide_n: 0, draft_overdue: !!full?.sop?.draft_overdue };
+  }
+  const liveIssues = (full?.issues ?? []).filter((i) => i.status !== "void");
+  // 点完货的 DO：WhatsApp 预设只发点货时 / 点货后记的（确认时的多半已经发过），勾了才连同确认时的
+  const recvIds = new Set(full?.receipt?.issue_ids ?? []);
+  const recvIssues = liveIssues.filter((i) => recvIds.has(i.id) || (!i.auto && !!full?.arrived_at && i.created_at > full.arrived_at));
+  const splitWa = full?.status === "arrived" && recvIssues.length > 0 && recvIssues.length < liveIssues.length;
 
   return (
     <>
@@ -431,7 +524,14 @@ function DoForm({ me, full, start, onFull, flash }: {
       {full?.status === "arrived" && <div className="ok">{`已到货 · ${full.arrived_by_name ?? ""} · ${fmtDate(full.arrived_at)}${full.arrive_note ? " · " + full.arrive_note : ""}`}</div>}
       {full?.status === "arrived" && full.receipt && <ReceiptSummary full={full} />}
       {full?.status === "confirmed" && <div className="ok">{`在路上（${full.confirmed_by_name ?? ""} · ${fmtDate(full.confirmed_at)} 确认）：分店在「在路上」看得到这张与 ETA。`}</div>}
-      {full?.status === "confirmed" && full.confirmed_by_me && <p className="small muted">货到了由仓库的同事在「点货」点数量（确认这张的人不能自己点）。</p>}
+      {sop && <SopSteps sop={sop} />}
+      {waAsk && full && liveIssues.length > 0 && (
+        <div className="podo-sum podo-wa-ask">
+          <span>{`这批有 ${liveIssues.length} 笔厂家问题：要告诉厂家吗？`}</span>
+          <button type="button" className="small" onClick={() => setWa(true)}>📱 WhatsApp 发给厂家</button>
+        </div>
+      )}
+      {draft && editable && cands !== null && <OwedHint company={company} creditor={creditor} poNos={poNos} doId={full?.id ?? null} />}
 
       {full && (full.status === "confirmed" || full.status === "arrived") && (
         <p className="small">分店看到的 ETA：<EtaText eta={full.eta_effective} source={full.eta_source} arrived={full.status !== "confirmed"} /></p>
@@ -518,9 +618,20 @@ function DoForm({ me, full, start, onFull, flash }: {
                             {c && c.owed > 0 && <span className="tag warn">{`厂家欠 ${fmtQty(c.owed)}`}</span>}
                             {!c && <span className="tag warn">不在所选 PO</span>}
                           </div>
-                          {editable && !r.showNote && <button type="button" className="text-btn small" onClick={() => setRow(code, (x) => ({ ...x, showNote: true }))}>＋ 备注</button>}
+                          {editable && !r.showNote && (
+                            <span className="podo-note-btn">
+                              <button type="button" className="text-btn small" onClick={() => setRow(code, (x) => ({ ...x, showNote: true }))}>＋ 备注</button>
+                              {!Number.isNaN(s) && r3(s) !== r3(rem) && <small className="muted">会带进厂家问题、印在给厂家的清单 / 讯息上</small>}
+                            </span>
+                          )}
                           {r.showNote && (editable
-                            ? <input className="podo-note" value={r.note} placeholder="备注（例：颜色不对）" onChange={(e) => setRow(code, (x) => ({ ...x, note: e.target.value }))} />
+                            ? <>
+                                <input className="podo-note" value={r.note} placeholder="备注（例：颜色不对）" aria-label={`${code} 备注`}
+                                       onChange={(e) => setRow(code, (x) => ({ ...x, note: e.target.value }))} />
+                                <small className="muted podo-note-hint">
+                                  {!Number.isNaN(s) && r3(s) !== r3(rem) ? "会带进厂家问题、印在给厂家的清单 / 讯息上；仓库点货时也看得到。" : "仓库点货时看得到。"}
+                                </small>
+                              </>
                             : <small className="pre">{r.note}</small>)}
                         </td>
                         <td className="num">
@@ -574,75 +685,25 @@ function DoForm({ me, full, start, onFull, flash }: {
               </table>
             </div>
 
-            {/* 对不上 PO 的行 */}
-            {(xrows.length > 0 || editable) && (
-              <>
-                <h3>{`对不上 PO 的行（${xrows.length}）`}</h3>
-                <p className="muted small">Excel 里对不到所选 PO 的型号。是同一个型号只是厂家写法不同 → 选「就是…」；真的发错 → 留著，确认时记成「发错型号」；不是货品（备注、空行）→ 拿掉。</p>
-                {xrows.length > 0 && (
-                  <div className="table-wrap flat">
-                    <table>
-                      <thead><tr><th>Excel 型号 / 品名</th><th className="num">数量</th><th>这一行是…</th><th className="hide-sm">备注</th><th></th></tr></thead>
-                      <tbody>
-                        {xrows.map((x) => (
-                          <tr key={x.key}>
-                            <td>
-                              {x.manual && editable ? (
-                                <>
-                                  <input value={x.src_code} placeholder="收到的型号" onChange={(e) => setX(x.key, { src_code: e.target.value })} />
-                                  <input value={x.src_desc} placeholder="品名" onChange={(e) => setX(x.key, { src_desc: e.target.value })} />
-                                </>
-                              ) : (
-                                <>
-                                  <b>{x.src_code || "—"}</b><br /><small>{x.src_desc}</small>
-                                  {x.src_row != null && <><br /><small className="muted">{x.sheet ? `${x.sheet} 第 ${x.src_row} 行` : `Excel 第 ${x.src_row} 行`}</small></>}
-                                </>
-                              )}
-                              {x.other && <><br /><small className="late">{`这个型号（${x.other.item_code}）在 ${joinList(x.other.po_nos)}，没有选进这张 DO`}</small></>}
-                            </td>
-                            <td className="num">
-                              <input className="podo-num" inputMode="decimal" value={x.shipped} disabled={!editable}
-                                     onChange={(e) => setX(x.key, { shipped: e.target.value })} aria-label="数量" />
-                            </td>
-                            <td>
-                              <select value="" disabled={!editable} onChange={(e) => e.target.value && mapX(x, e.target.value)}>
-                                <option value="">发错型号（不是我们订的）</option>
-                                {order.map((code) => <option key={code} value={code}>{`就是 ${code}（厂家写法不同）`}</option>)}
-                              </select>
-                              {x.other && !rows[x.other.item_code] && (
-                                <button type="button" className="small ghost" disabled={!editable || !!busy}
-                                        onClick={() => run("读取中…", () => changePos([...new Set([...poNos, ...x.other!.po_nos])].sort()))}>
-                                  {`加选 ${joinList(x.other.po_nos)}`}
-                                </button>
-                              )}
-                              {[...new Set([...(x.other ? [x.other.item_code] : []), ...x.suggest])].filter((s) => rows[s]).map((s) => (
-                                <button key={s} type="button" className="small ghost" disabled={!editable} onClick={() => mapX(x, s)}>{`就是 ${s}？`}</button>
-                              ))}
-                              <label className="small">本来应该是（可不填）
-                                <select value={x.expected_code} disabled={!editable} onChange={(e) => setX(x.key, { expected_code: e.target.value })}>
-                                  <option value="">—</option>
-                                  {order.map((code) => <option key={code} value={code}>{code}</option>)}
-                                </select>
-                              </label>
-                            </td>
-                            <td className="hide-sm">
-                              <input value={x.note} disabled={!editable} placeholder="例：订白色收到黑色" onChange={(e) => setX(x.key, { note: e.target.value })} />
-                            </td>
-                            <td>{editable && <button type="button" className="small ghost danger" onClick={() => { setXrows(xrows.filter((y) => y.key !== x.key)); touch(); }}>拿掉</button>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {editable && (
-                  <button type="button" className="small ghost" onClick={() => {
-                    setXrows([...xrows, { key: xkey(), manual: true, shipped: "", src_code: "", src_desc: "", src_row: null, expected_code: "", note: "", suggest: [] }]);
-                    touch();
-                  }}>＋ 加一行发错型号</button>
-                )}
-              </>
-            )}
+            {/* 这批的问题：少发 / 多发自动列出，来错的型号、缺零件自己加 */}
+            <ProblemsPanel
+              editable={editable} company={company} order={order} rows={rows} candMap={candMap} est={est} xrows={xrows} prows={prows}
+              poNos={poNos} others={others} busy={!!busy}
+              setRow={setRow} setX={setX} setP={setP}
+              setDecisionAll={(d) => {
+                const next = { ...rows };
+                for (const x of est) if (x.newShort > 0) next[x.c] = { ...next[x.c], short_decision: d };
+                setRows(next);
+                touch();
+              }}
+              addX={() => { setXrows([...xrows, { key: xkey(), manual: true, shipped: "", src_code: "", src_desc: "", src_row: null, expected_code: "", note: "", suggest: [], own: null, request: "" }]); touch(); }}
+              dropX={(key) => { setXrows(xrows.filter((y) => y.key !== key)); touch(); }}
+              addP={() => { setProws([...prows, { key: xkey(), item_code: "", part_name: "", qty: "", request: "next", note: "" }]); touch(); }}
+              dropP={(key) => { setProws(prows.filter((y) => y.key !== key)); touch(); }}
+              mapX={mapX}
+              loadOthers={() => { loadOthers().catch(() => setOthers([])); }}
+              addPos={(add) => run("读取中…", () => changePos([...new Set([...poNos, ...add])].sort()))}
+            />
           </div>
         )
       ) : full && <ItemsView full={full} />}
@@ -654,6 +715,7 @@ function DoForm({ me, full, start, onFull, flash }: {
           {msg && <div className="ok">{msg}</div>}
           {dirty && !error && !msg && <p className="muted small">有修改还没储存。</p>}
         </div>
+        {draft && editable && cands !== null && <ProblemSummary est={est} rows={rows} xrows={xrows} prows={prows} />}
         <div className="actions left">
           {draft && editable && (
             <>
@@ -685,9 +747,12 @@ function DoForm({ me, full, start, onFull, flash }: {
         <>
           <div className="podo-group-head">
             <h3>{`厂家问题（${full.issues.length}）`}</h3>
-            {full.can_add_issue && <button className="small" onClick={() => setAddIssue(true)}>＋ 记坏货 / 到货少 / 发错型号</button>}
+            <span className="nowrap">
+              {liveIssues.length > 0 && <button className="small ghost" onClick={() => setWa(true)}>📱 WhatsApp 发给厂家</button>}{" "}
+              {full.can_add_issue && <button className="small" onClick={() => setAddIssue(true)}>＋ 记坏货 / 到货少 / 发错型号 / 缺零件</button>}
+            </span>
           </div>
-          {full.issues.length === 0 ? <p className="muted small">这张没有少发、多发或发错型号。</p>
+          {full.issues.length === 0 ? <p className="muted small">这张没有少发、多发、发错型号或缺零件。</p>
             : <IssueTable rows={full.issues} onChanged={() => { reload(full.id).catch((e: Error) => setError(e.message)); }} />}
         </>
       )}
@@ -720,7 +785,7 @@ function DoForm({ me, full, start, onFull, flash }: {
         </Modal>
       )}
       {confirming && cands && (
-        <ConfirmModal order={order} rows={rows} xrows={xrows} candMap={candMap} outlets={active} hasEta={!!(head.eta || ship?.eta)}
+        <ConfirmModal order={order} rows={rows} xrows={xrows} prows={prows} est={est} outlets={active} hasEta={!!(head.eta || ship?.eta)}
                       hasNo={!!head.do_no.trim()} onClose={() => setConfirming(false)}
                       onOk={async (damaged) => {
                         const saved = await save();
@@ -737,7 +802,7 @@ function DoForm({ me, full, start, onFull, flash }: {
                           catch (e) { fails.push(`坏货没记到：${d.item_code}`, (e as Error).message); }
                         }
                         if (damaged.length) after = await podo.get(after.id);
-                        onFull(after, fails.length ? "!" + fails.join("\n") : "已确认：分店在「在路上」看得到了。");
+                        onFull(after, fails.length ? "!" + fails.join("\n") : "已确认：分店在「在路上」看得到了。", true);
                       }} />
       )}
       {ask === "cancel" && full && (
@@ -753,7 +818,269 @@ function DoForm({ me, full, start, onFull, flash }: {
         <AddIssueModal doFull={full} onClose={() => setAddIssue(false)}
                        onSaved={() => { setAddIssue(false); reload(full.id).catch((e: Error) => setError(e.message)); }} />
       )}
+      {wa && full && (
+        <WaModal title={`WhatsApp 发给厂家 · ${supplierName}`} onClose={() => setWa(false)}
+                 toggle={splitWa ? { label: `连同确认时的问题（${liveIssues.length - recvIssues.length} 笔）`, hint: "确认时多半已经发过" } : undefined}
+                 build={(l, all) => waIssuesText(l, (splitWa && !all ? recvIssues : liveIssues)
+                   .map((i) => ({ ...i, do_no: full.do_no, do_date: full.do_date })))} />
+      )}
     </>
+  );
+}
+
+// ------------------------------------------------------------------ 草稿：这批的问题
+// 少发 / 多发照表格自动列出（备注 = 那一行的备注，会带进厂家问题）；少发先选厂家会补 / 取消 / 未决定。
+// 来错的型号：手动加的搜我们的商品或「不是我们的产品」（没有「就是 X」下拉：使用者一选整行被并掉）；Excel 对不上的行保留「就是 X？」，
+// 但要再确认一次才并。缺零件 / 其他要补的：确认时变成厂家问题（不影响在路上与少发）。
+function ProblemsPanel({ editable, company, order, rows, candMap, est, xrows, prows, poNos, others, busy, setRow, setX, setP,
+  setDecisionAll, addX, dropX, addP, dropP, mapX, loadOthers, addPos }: {
+  editable: boolean; company: string; order: string[]; rows: Record<string, Row>; candMap: Map<string, Candidate>; est: Est[];
+  xrows: XRow[]; prows: PRow[]; poNos: string[]; others: Candidate[] | null; busy: boolean;
+  setRow: (code: string, f: (r: Row) => Row) => void; setX: (key: string, patch: Partial<XRow>) => void;
+  setP: (key: string, patch: Partial<PRow>) => void; setDecisionAll: (d: Row["short_decision"]) => void;
+  addX: () => void; dropX: (key: string) => void; addP: () => void; dropP: (key: string) => void;
+  mapX: (x: XRow, code: string) => void; loadOthers: () => void; addPos: (pos: string[]) => void;
+}) {
+  const shorts = est.filter((x) => x.short > 0);
+  const overs = est.filter((x) => x.over > 0);
+  const shipped = order.filter((c) => num(rows[c].shipped) > 0);
+  const desc = (code: string) => candMap.get(code)?.description ?? "";
+  const noteInput = (code: string) => (
+    <input className="podo-note" value={rows[code].note} disabled={!editable} placeholder="备注（会带进厂家问题、给厂家的讯息）"
+           aria-label={`问题备注 ${code}`} onChange={(e) => setRow(code, (x) => ({ ...x, note: e.target.value, showNote: true }))} />
+  );
+  // 手动加的行选了我们的型号：在别张还没到齐的 PO 上 → 提示加选那张 PO；就在所选的 PO → 提示直接填上面的表格
+  const otherFor = (code: string) => {
+    if (!code || rows[code] || !others) return null;
+    const c = others.find((o) => o.item_code === code);
+    const pos = (c?.po_nos ?? []).filter((p) => !poNos.includes(p));
+    return pos.length ? pos : null;
+  };
+
+  return (
+    <div className="podo-problems">
+      <h3>这批的问题</h3>
+      <p className="muted small">少发、多发照上面的出货数量自动列出；来错的型号、缺零件自己加。确认后都记进「厂家问题」，可以 WhatsApp 发给厂家。</p>
+
+      <h4>{`少发（${shorts.length}）`}</h4>
+      {shorts.length === 0 ? <p className="muted small">没有少发。</p> : (
+        <>
+          {editable && shorts.some((x) => x.newShort > 0) && (
+            <div className="toolbar">
+              <span className="small muted">全部：</span>
+              <button type="button" className="small ghost" onClick={() => setDecisionAll("await")}>厂家会补</button>
+              <button type="button" className="small ghost" onClick={() => setDecisionAll("cancelled")}>取消（下次再订）</button>
+              <button type="button" className="small ghost" onClick={() => setDecisionAll("")}>未决定</button>
+            </div>
+          )}
+          <ul className="list podo-prob-list">
+            {shorts.map((x) => (
+              <li key={x.c}>
+                <span className="podo-prob-what">
+                  <b>{x.c}</b> <small>{desc(x.c)}</small><br />
+                  <small className="muted">{`还可以出 ${fmtQty(x.rem)} · 出 ${fmtQty(x.s)} · 少 ${fmtQty(x.short)}`}</small>
+                  {x.newShort === 0 && <><br /><small className="muted">已记过（之前的少发还没补齐），不重复记</small></>}
+                  {x.newShort > 0 && x.newShort < x.short && <><br /><small className="muted">{`新记 ${fmtQty(x.newShort)}（其余之前已记过）`}</small></>}
+                </span>
+                <span className="podo-prob-do">
+                  {x.newShort > 0 && (
+                    <select value={rows[x.c].short_decision} disabled={!editable} aria-label={`${x.c} 少发怎么处理`}
+                            onChange={(e) => setRow(x.c, (r) => ({ ...r, short_decision: e.target.value as Row["short_decision"] }))}>
+                      <option value="">未决定</option>
+                      <option value="await">厂家会补</option>
+                      <option value="cancelled">取消（下次再订）</option>
+                    </select>
+                  )}
+                  {noteInput(x.c)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <h4>{`多发（${overs.length}）`}</h4>
+      {overs.length === 0 ? <p className="muted small">没有多发。</p> : (
+        <ul className="list podo-prob-list">
+          {overs.map((x) => (
+            <li key={x.c}>
+              <span className="podo-prob-what">
+                <b>{x.c}</b> <small>{desc(x.c)}</small><br />
+                <small className="muted">{`还可以出 ${fmtQty(x.rem)} · 出 ${fmtQty(x.s)} · 多 ${fmtQty(x.over)}`}</small>
+                {x.newOver < x.over && <><br /><small className="muted">{`先补厂家欠的 ${fmtQty(r3(x.over - x.newOver))}`}</small></>}
+              </span>
+              <span className="podo-prob-do">{noteInput(x.c)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h4>{`来错的型号（${xrows.length}）`}</h4>
+      {xrows.length === 0 && <p className="muted small">收到不是这些 PO 的型号（例：订白色收到黑色）才加。Excel 里对不到 PO 的行也会列在这里。</p>}
+      {xrows.map((x, i) => {
+        const otherPos = x.manual && x.own ? otherFor(x.src_code) : null;
+        const inTable = x.manual && x.own && !!rows[x.src_code];
+        const excelPos = !x.manual && x.other && !rows[x.other.item_code] ? x.other.po_nos : null;
+        const sugg = !x.manual ? [...new Set([...(x.other ? [x.other.item_code] : []), ...x.suggest])].filter((c) => rows[c]) : [];
+        return (
+          <div key={x.key} className="recv-wrong-card podo-wrong-card">
+            <div className="recv-wrong-head">
+              <b className="small">{x.manual ? `第 ${i + 1} 行` : x.sheet ? `${x.sheet} 第 ${x.src_row} 行` : `Excel 第 ${x.src_row} 行`}</b>
+              {editable && <button type="button" className="small ghost danger" onClick={() => dropX(x.key)}>拿掉</button>}
+            </div>
+            <div className="wide pick-field">
+              <span className="pick-label">收到的型号</span>
+              {x.manual ? (
+                <OurItemPicker company={company} disabled={!editable}
+                               value={{ own: x.own ?? null, code: x.src_code, desc: x.src_desc }}
+                               onChange={(v: Picked) => {
+                                 setX(x.key, { own: v.own, src_code: v.code, src_desc: v.desc });
+                                 if (v.own) loadOthers();
+                               }} />
+              ) : (
+                <span className="podo-xsrc"><b>{x.src_code || "—"}</b> <small>{x.src_desc}</small></span>
+              )}
+            </div>
+            {inTable && <p className="small amber wide">{`${x.src_code} 就在所选的 PO 里：直接在上面的表格填出货数量就好，不用记成来错。`}</p>}
+            {inTable && editable && (
+              <button type="button" className="small ghost wide-btn" onClick={() => mapX(x, x.src_code)}>{`并进上面的 ${x.src_code}`}</button>
+            )}
+            {(otherPos || excelPos) && (
+              <p className="small late wide">
+                {`这个型号在 ${joinList((otherPos ?? excelPos)!)} 有订，要加选那张 PO 吗？`}{" "}
+                <button type="button" className="small ghost" disabled={!editable || busy} onClick={() => addPos((otherPos ?? excelPos)!)}>
+                  {`加选 ${joinList((otherPos ?? excelPos)!)}`}
+                </button>
+              </p>
+            )}
+            <label>数量
+              <input className="podo-num" inputMode="decimal" value={x.shipped} disabled={!editable} aria-label="来错数量"
+                     onChange={(e) => setX(x.key, { shipped: e.target.value })} />
+            </label>
+            <label>本来应该是（可不填）
+              <select value={x.expected_code} disabled={!editable} aria-label="本来应该是" onChange={(e) => setX(x.key, { expected_code: e.target.value })}>
+                <option value="">—</option>
+                {order.map((code) => <option key={code} value={code}>{code}</option>)}
+              </select>
+            </label>
+            <label>要厂家怎么处理
+              <RequestSelect kind="wrong" value={x.request} disabled={!editable} onChange={(v) => setX(x.key, { request: v })} />
+            </label>
+            <label className="wide">备注
+              <input value={x.note} disabled={!editable} placeholder="例：订白色收到黑色，请换货" aria-label="来错备注"
+                     onChange={(e) => setX(x.key, { note: e.target.value })} />
+            </label>
+            {!x.manual && editable && (sugg.length > 0 || order.length > 0) && (
+              <div className="wide podo-same">
+                <small className="muted">厂家写法不同、其实是同一个型号？</small>
+                {sugg.map((c) => (
+                  <button key={c} type="button" className="small ghost" onClick={() => mapX(x, c)}>{`就是 ${c}？`}</button>
+                ))}
+                <select value="" aria-label="就是哪个型号" onChange={(e) => e.target.value && mapX(x, e.target.value)}>
+                  <option value="">就是…（选了会再问一次）</option>
+                  {order.map((code) => <option key={code} value={code}>{`就是 ${code}（厂家写法不同）`}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {editable && <button type="button" className="small ghost" onClick={addX}>＋ 加一行来错的型号</button>}
+
+      <h4>{`缺零件 / 其他要补的（${prows.length}）`}</h4>
+      {prows.length === 0 && <p className="muted small">例：少了螺丝包、少一片玻璃。不影响在路上与少发的数量；确认后在「厂家问题」决定厂家会补或取消。</p>}
+      {prows.map((x, i) => (
+        <div key={x.key} className="recv-wrong-card podo-part-card">
+          <div className="recv-wrong-head">
+            <b className="small">{`第 ${i + 1} 行`}</b>
+            {editable && <button type="button" className="small ghost danger" onClick={() => dropP(x.key)}>拿掉</button>}
+          </div>
+          <label>型号（可不选）
+            <select value={x.item_code} disabled={!editable} aria-label="缺零件的型号" onChange={(e) => setP(x.key, { item_code: e.target.value })}>
+              <option value="">—</option>
+              {(shipped.length ? shipped : order).map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+          </label>
+          <label>缺的零件 / 东西
+            <input value={x.part_name} disabled={!editable} placeholder="例：螺丝包" aria-label="缺的零件"
+                   onChange={(e) => setP(x.key, { part_name: e.target.value })} />
+          </label>
+          <label>数量
+            <input className="podo-num" inputMode="decimal" value={x.qty} disabled={!editable} aria-label="缺零件数量"
+                   onChange={(e) => setP(x.key, { qty: e.target.value })} />
+          </label>
+          <label>要厂家怎么处理
+            <RequestSelect kind="part" value={x.request} disabled={!editable} onChange={(v) => setP(x.key, { request: v })} />
+          </label>
+          <label className="wide">备注
+            <input value={x.note} disabled={!editable} placeholder="例：每箱少 1 包" aria-label="缺零件备注"
+                   onChange={(e) => setP(x.key, { note: e.target.value })} />
+          </label>
+        </div>
+      ))}
+      {editable && <button type="button" className="small ghost" onClick={addP}>＋ 加一行缺零件 / 其他要补的</button>}
+    </div>
+  );
+}
+
+/** 确认按钮上方的摘要：少发几个型号共几件（厂家会补 / 取消 / 未决定）、多发、来错、缺零件 */
+function ProblemSummary({ est, rows, xrows, prows }: { est: Est[]; rows: Record<string, Row>; xrows: XRow[]; prows: PRow[] }) {
+  const shorts = est.filter((x) => x.short > 0);
+  const overs = est.filter((x) => x.over > 0);
+  const fresh = shorts.filter((x) => x.newShort > 0);
+  const dec = (d: Row["short_decision"]) => fresh.filter((x) => rows[x.c].short_decision === d).length;
+  const wrongs = xrows.filter((x) => num(x.shipped) > 0);
+  const parts = prows.filter((x) => x.part_name.trim());
+  if (!shorts.length && !overs.length && !wrongs.length && !parts.length) return null;
+  const sum = (xs: number[]) => fmtQty(r3(xs.reduce((s, x) => s + x, 0)));
+  const known = shorts.length - fresh.length;
+  return (
+    <p className="small podo-prob-sum">
+      {shorts.length > 0 && (
+        <span className={dec("") ? "amber" : ""}>
+          {`少发 ${shorts.length} 个型号共 ${sum(shorts.map((x) => x.short))} 件（厂家会补 ${dec("await")} / 取消 ${dec("cancelled")} / 未决定 ${dec("")}${known ? ` / 已记过 ${known}` : ""}）`}
+        </span>
+      )}
+      {overs.length > 0 && <span>{`多发 ${overs.length} 个型号共 ${sum(overs.map((x) => x.over))} 件`}</span>}
+      {wrongs.length > 0 && <span>{`来错的型号 ${wrongs.length} 行`}</span>}
+      {parts.length > 0 && <span>{`缺零件 ${parts.length} 项`}</span>}
+    </p>
+  );
+}
+
+/** 开同一家厂的新厂家到货（选完 PO）：这家还欠的（少发未决定 / 厂家会补还没补齐、缺零件还没处理），同 CS 工厂的排前面 */
+function OwedHint({ company, creditor, poNos, doId }: { company: string; creditor: string; poNos: string[]; doId: number | null }) {
+  const [owed, setOwed] = useState<Issue[] | null>(null);
+  const [facs, setFacs] = useState<string[]>([]);
+  useEffect(() => {
+    podo.issues({ status: "open", owed: true, company, creditor_code: creditor }).then(setOwed).catch(() => setOwed([]));
+  }, [company, creditor]);
+  const key = poNos.join(",");
+  useEffect(() => {
+    podo.pos(company, creditor)
+      .then((ps) => setFacs([...new Set(ps.filter((p) => poNos.includes(p.po_no) && p.factory).map((p) => p.factory!))]))
+      .catch(() => setFacs([]));
+  }, [company, creditor, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = (owed ?? []).filter((i) => i.do_id !== doId && Number(i.owed_qty) > 0)
+    .sort((a, b) => Number(!facs.includes(a.factory ?? "")) - Number(!facs.includes(b.factory ?? "")));
+  if (!list.length) return null;
+  const same = list.filter((i) => i.factory && facs.includes(i.factory)).length;
+  return (
+    <div className="podo-sum warn podo-owed-hint">
+      <b>{`这家还欠 ${list.length} 项`}</b>
+      {facs.length > 0 && same > 0 && <>{" · "}<small>{`同一个工厂（${joinList(facs)}）的 ${same} 项排前面`}</small></>}
+      <ul>
+        {list.slice(0, 8).map((i) => (
+          <li key={i.id}>
+            {i.factory && <span className={"tag cs" + (facs.includes(i.factory) ? " hit" : "")}>{i.factory}</span>}
+            <b>{issueModel(i)}</b>{` × ${fmtQty(i.owed_qty)}`}
+            {" · "}<small className="muted">{`${i.kind === "part" ? "缺零件" : "少发"}${i.decision ? " · " + DECISION_LABEL[i.decision] : ""} · DO ${i.do_no || "#" + i.do_id}`}</small>
+          </li>
+        ))}
+        {list.length > 8 && <li className="muted">{`还有 ${list.length - 8} 项`}</li>}
+      </ul>
+      <small>这批出了这些型号（同一张 PO）的话，确认时会自动补掉少发。 <a href="#/purchasing/issues">到厂家问题看 →</a></small>
+    </div>
   );
 }
 
@@ -839,12 +1166,30 @@ function ItemsView({ full }: { full: DoFull }) {
       </div>
       {wrong.length > 0 && (
         <>
-          <h3>{`对不上 PO 的行（${wrong.length}）`}</h3>
+          <h3>{`来错的型号（${wrong.length}）`}</h3>
           <ul className="list">
             {wrong.map((x, n) => (
               <li key={n}>
-                <span><b>{x.src_code || "—"}</b> <small>{x.src_desc}</small>{x.expected_code && <small className="muted">{` · 本来应该是 ${x.expected_code}`}</small>}{x.note && <small className="muted">{` · ${x.note}`}</small>}</span>
+                <span><b>{x.src_code || "—"}</b> <small>{x.src_desc}</small>{x.own === false && <small className="muted">{" · 不是我们的产品"}</small>}
+                  {x.expected_code && <small className="muted">{` · 本来应该是 ${x.expected_code}`}</small>}
+                  {x.request && <small className="muted">{` · 要厂家：${requestLabel("wrong", x.request)}`}</small>}
+                  {x.note && <small className="muted">{` · ${x.note}`}</small>}</span>
                 <span>{fmtQty(x.shipped)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {(full.parts ?? []).length > 0 && (
+        <>
+          <h3>{`缺零件 / 其他要补的（${full.parts!.length}）`}</h3>
+          <ul className="list">
+            {full.parts!.map((x, n) => (
+              <li key={n}>
+                <span><b>{`${x.item_code ? x.item_code + " " : ""}缺「${x.part_name}」`}</b>
+                  {x.request && <small className="muted">{` · 要厂家：${requestLabel("part", x.request)}`}</small>}
+                  {x.note && <small className="muted">{` · ${x.note}`}</small>}</span>
+                <span>{fmtQty(x.qty)}</span>
               </li>
             ))}
           </ul>
@@ -883,29 +1228,19 @@ function AppliedView({ full }: { full: DoFull }) {
 
 // ------------------------------------------------------------------ 确认前：总览、预计的厂家问题、顺便记坏货
 interface Damaged { item_code: string; qty: string; note: string }
-function ConfirmModal({ order, rows, xrows, candMap, outlets, hasEta, hasNo, onClose, onOk }: {
-  order: string[]; rows: Record<string, Row>; xrows: XRow[]; candMap: Map<string, Candidate>; outlets: Outlet[];
+function ConfirmModal({ order, rows, xrows, prows, est, outlets, hasEta, hasNo, onClose, onOk }: {
+  order: string[]; rows: Record<string, Row>; xrows: XRow[]; prows: PRow[]; est: Est[]; outlets: Outlet[];
   hasEta: boolean; hasNo: boolean; onClose: () => void; onOk: (damaged: Damaged[]) => Promise<void>;
 }) {
   const [damaged, setDamaged] = useState<Damaged[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const shipped = order.filter((c) => num(rows[c].shipped) > 0);
-  // 预估会记的少发 / 多发（与伺服器同规则）：这张在那几张 PO 出的先补别张 DO 的少发，还欠的跟已记过的比、只记差额；
-  // 超出所选 PO 的先补别张 PO「厂家会补」的少发
-  const est = order.map((code) => {
-    const c = candMap.get(code);
-    const s = num(rows[code].shipped) || 0;
-    const rem = c?.remaining ?? 0;
-    const fill = Math.min(c?.fillable ?? 0, s, rem);
-    const short = r3(Math.max(0, rem - s));
-    const over = r3(Math.max(0, s - rem));
-    return { c: code, rem, s, short, over, newShort: r3(Math.max(0, short - Math.max(0, (c?.flagged ?? 0) - fill))),
-             newOver: r3(Math.max(0, over - (c?.await_elsewhere ?? 0))) };
-  });
   const shorts = est.filter((x) => x.short > 0);
   const overs = est.filter((x) => x.over > 0);
   const wrongs = xrows.filter((x) => num(x.shipped) > 0);
+  const parts = prows.filter((x) => x.part_name.trim());
+  const decText = (code: string) => DECISION_LABEL[rows[code].short_decision || "pending"];
   const byOutlet = outlets.map((o) => ({ o, n: r3(order.reduce((s, c) => s + (num(rows[c].alloc[o.code]) || 0), 0)) })).filter((x) => x.n > 0);
 
   async function ok() {
@@ -923,7 +1258,6 @@ function ConfirmModal({ order, rows, xrows, candMap, outlets, hasEta, hasNo, onC
     }
   }
 
-  type Est = (typeof est)[number];
   const list = (xs: Est[], f: (x: Est) => string) => (
     <ul className="list small">
       {xs.slice(0, 15).map((x) => <li key={x.c}><span>{x.c}</span><span>{f(x)}</span></li>)}
@@ -936,17 +1270,39 @@ function ConfirmModal({ order, rows, xrows, candMap, outlets, hasEta, hasNo, onC
       <p>{`${shipped.length} 个型号，共 ${fmtQty(r3(shipped.reduce((s, c) => s + num(rows[c].shipped), 0)))} 件。`}
         {byOutlet.map((x) => <span key={x.o.code} className="tag outlet">{`${x.o.short_name || x.o.name} ${fmtQty(x.n)}`}</span>)}
       </p>
-      <p className="muted small">确认后：各分店在「在路上」看得到这批货与 ETA；下面的少发 / 多发 / 发错型号会记到「厂家问题」（已记过的不会重复记）。</p>
+      <p className="muted small">确认后：各分店在「在路上」看得到这批货与 ETA；下面的少发 / 多发 / 发错型号 / 缺零件会记到「厂家问题」（已记过的不会重复记），可以 WhatsApp 发给厂家。</p>
       {!hasEta && <div className="podo-sum warn">还没填 ETA：分店会看到「未填」。可以确认后再补。</div>}
       {!hasNo && <div className="podo-sum warn">还没填厂家 DO 号。</div>}
       {shorts.length > 0 && <><h3>{`少发（${shorts.length}）`}</h3>{list(shorts, (x) => `还可以出 ${fmtQty(x.rem)} · 出 ${fmtQty(x.s)} · 少 ${fmtQty(x.short)}`
-        + (x.newShort === 0 ? " · 已记过" : x.newShort < x.short ? ` · 新记 ${fmtQty(x.newShort)}` : ""))}</>}
+        + (x.newShort === 0 ? " · 已记过" : (x.newShort < x.short ? ` · 新记 ${fmtQty(x.newShort)}` : "") + ` · ${decText(x.c)}`))}</>}
       {overs.length > 0 && <><h3>{`多发（${overs.length}）`}</h3>{list(overs, (x) => `还可以出 ${fmtQty(x.rem)} · 出 ${fmtQty(x.s)} · 多 ${fmtQty(x.over)}`
         + (x.newOver < x.over ? ` · 先补厂家欠的 ${fmtQty(r3(x.over - x.newOver))}` : ""))}</>}
       {wrongs.length > 0 && (
         <>
           <h3>{`发错型号（${wrongs.length}）`}</h3>
-          <ul className="list small">{wrongs.map((x) => <li key={x.key}><span>{x.src_code || x.src_desc}</span><span>{fmtQty(num(x.shipped))}</span></li>)}</ul>
+          <ul className="list small">
+            {wrongs.map((x) => (
+              <li key={x.key}>
+                <span>{x.src_code || x.src_desc}{x.own === false && <small className="muted">{" · 不是我们的产品"}</small>}
+                  {x.request && <small className="muted">{` · 要厂家：${requestLabel("wrong", x.request)}`}</small>}</span>
+                <span>{fmtQty(num(x.shipped))}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {parts.length > 0 && (
+        <>
+          <h3>{`缺零件（${parts.length}）`}</h3>
+          <ul className="list small">
+            {parts.map((x) => (
+              <li key={x.key}>
+                <span>{`${x.item_code ? x.item_code + " " : ""}缺「${x.part_name.trim()}」`}
+                  {x.request && <small className="muted">{` · 要厂家：${requestLabel("part", x.request)}`}</small>}</span>
+                <span>{fmtQty(num(x.qty))}</span>
+              </li>
+            ))}
+          </ul>
         </>
       )}
       <h3>坏货 / 破损（可不填，货到了再记也可以）</h3>

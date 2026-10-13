@@ -322,15 +322,26 @@ export function can(me: Me, module: string, need: Level): boolean {
   return !!m && LEVEL_RANK[m.level] >= LEVEL_RANK[need];
 }
 
-/** 看得到厂家（含 CS 编号）：订货「可编辑」（采购、管理层、物流部）或仓库部；同资料库 ops.sees_supplier。
- *  其他人（分行、门市、电商）只看产品、数量、ETA：未到货 PO、货柜不能开，查 SKU 到货不显示 PO 号 / 厂家。 */
+/** 看得到厂家（含 CS 编号）：订货「可编辑」（采购、管理层）、仓库部、开单部（开 GRN 要知道厂家与 PO）；同资料库 ops.sees_supplier。
+ *  其他人（分行、门市、电商、物流部）只看产品、数量、ETA：未到货 PO、货柜不能开，查 SKU 到货不显示 PO 号 / 厂家。 */
 export function seesSupplier(me: Me): boolean {
-  return can(me, "purchasing", "edit") || me.staff.department === "warehouse";
+  return can(me, "purchasing", "edit") || me.staff.department === "warehouse" || me.staff.department === "billing";
 }
 
-/** 看得到进货单价 / 金额：订货「可编辑」，但物流部不算（物流部开厂家到货、不看价格）；同资料库 ops.sees_prices */
+/** 看得到进货单价 / 金额：订货「可编辑」（采购、管理层）；同资料库 ops.sees_prices */
 export function seesPrices(me: Me): boolean {
-  return can(me, "purchasing", "edit") && me.staff.department !== "logistics";
+  return can(me, "purchasing", "edit");
+}
+
+/** 看得到「待开进货单」、能标进货已输入 AutoCount（填 GRN 号）：开单部或仓库「可审批」，而且仓库至少「只看」
+ *  （个人例外把仓库设成「无」就收回）；同资料库 ops.grn_can_mark */
+export function canGrn(me: Me): boolean {
+  return can(me, "warehouse", "view") && (me.staff.department === "billing" || can(me, "warehouse", "approve"));
+}
+
+/** 能取消「进货待入 AutoCount」（一定要写原因）：只有仓库「可审批」（仓库主管、管理层）；点货的人、开单部都不能。同资料库 ops_wh_move_mark */
+export function canCancelReceive(me: Me): boolean {
+  return can(me, "warehouse", "approve");
 }
 
 /** 能点货（货到了填实际收到几件）：订货或仓库「可编辑」；同资料库 ops.podo_can_receive（分店另外在资料库检查） */
