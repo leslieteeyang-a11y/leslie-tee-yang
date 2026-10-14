@@ -275,7 +275,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `style.css` 档尾 `@media print` 把变数换回白底黑字；工资单（`.ps`）、条码标签（`.label`）在画面上是白纸、刻意不变。
   logo `public/icon.svg` = 浅蓝 #dbe8fa 方块 + 深蓝 #283060 房子（BI 的 theme-color 与图示线条色），`icon-192.png` 由 SVG 转出；BI 自己的图示是白底深蓝线条
   「斜屋顶 + 铁锤」（`favicon-48.png`，大图抓不全），使用者若要两边用同一个 logo，请他给原图档。theme-color / manifest #111721。
-  前端部署 `THEME_BI_DEPLOY_PENDING`。
+  前端部署 `dpl_9d5s3NpHtrzJtYoogFMtLWafrGtz`（112 个档 uid 与本机 SHA1 一致；`icon-192.png` 用 upng-js 压成 16 色、1 KB，原本 3 KB 的版本两次上传都失败、自己内嵌又少了 28 个字）。审查：截图 95 张 × 3 轮 + 实际印 PDF，多人审查逐条复核后修了 18 项（打印白纸、分页外框、内文连结底线、淡底灰字对比、红字 #fa7f7f 等），第三轮只剩 1 项已修。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，
