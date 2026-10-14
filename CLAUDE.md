@@ -174,8 +174,10 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 固定名单里的读取函数；模块 `ready = false` 时营运系统员工一律没有），`public.bi_company()` 换成 `bi.crm_company()`。**以后在这边改任何顾客资料
 函数，开头要写 `bi.crm_require(…)`、分店用 `bi.crm_company()`**，不要再用 `bi.customer_require` / `bi_company()`（不然营运系统员工被挡、或 JB
 员工看到全部分店）；新的读取函数要给只看的人用，第二个参数 `true` 并加进那个 migration 的 `v_read` 名单。`bi_delivery_*` 与 BI 送货页的
-`bi_customer_set_address` / `_set_geo` 维持只认 BI 名单。交接包 `docs/ops_customers/`（HANDOFF.md + patch，以营运系统 `dbe274c` 为底）。
-BI 的 `/loyalty.html` 先留着，两边资料相通。
+`bi_customer_set_address` / `_set_geo` 维持只认 BI 名单。交接包 `docs/ops_customers/`（HANDOFF.md + patch，以营运系统 `dbe274c` 为底，
+`git am` 实测无冲突、测试与 build 通过），ZIP `HomeWorks-顾客资料-给营运系统-2026-10-14.zip` 交给使用者上传到那边。**正式环境 2026-10-14 已套
+`ops_customers`**（23 个函数改写，模块 `ready = false` → 营运系统员工还进不来，BI 不受影响）；那边部署前端后再套 `ops_customers_ready`。
+经两轮多人审查（资料库第二轮零问题；前端修了表单被盖掉、筛选消失、设定用预设值存回去、横向卷动等）。BI 的 `/loyalty.html` 先留着，两边资料相通。
 
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`

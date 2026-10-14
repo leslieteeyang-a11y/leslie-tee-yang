@@ -49,12 +49,15 @@ BI 网站的顾客资料页（`homeworks-bi` 的 `/loyalty.html`）整页搬进�
   不然营运系统的员工会被挡。重套一次 `20261016_ops_customers.sql` 也会把漏掉的改过来（可以重复套用）。
 - 对 AutoCount 仍然只读。
 
-## 3. 资料库：正式环境（见第 6 节）
+## 3. 资料库：正式环境已套（2026-10-14）
 
-- `portal/supabase/migrations/20261016_ops_customers.sql` —— 模块 `customers`（「顾客资料」，`ready = false`）、部门预设（销售 = 可编辑、
-  管理层 = 可审批，`on conflict do nothing` 不盖掉之后改过的）、`bi.crm_ops_role` / `bi.crm_require` / `bi.crm_company`、
-  `public.ops_cust_role()`（前端用来决定显示哪些按钮）、改写 25 个顾客资料函数。可重复套用，不含 DROP / DELETE。
-- `portal/supabase/migrations/20261016b_ops_customers_ready.sql` —— `ready = true`。**等前端部署好再套**（先套的话，旧前端点侧栏会进「没有权限」页）。
+- `portal/supabase/migrations/20261016_ops_customers.sql` —— **已用 Supabase MCP 套用**（migration 名称 `ops_customers`）：模块 `customers`
+  （「顾客资料」，`ready = false`）、部门预设（销售 = 可编辑、管理层 = 可审批，`on conflict do nothing` 不盖掉之后改过的）、`bi.crm_ops_role` /
+  `bi.crm_require` / `bi.crm_company`、`public.ops_cust_role()`（前端用来决定显示哪些按钮）、改写 **23** 个顾客资料函数（其中 11 个读取函数给
+  「只看」）。可重复套用（重套 = 改写 0 个），不含 DROP / DELETE。
+  **模块 `ready = false` 的期间营运系统的员工一律没有权限**（`bi.crm_ops_role` 回 null），BI 名单的人照旧——所以现在 BI 网页完全不受影响。
+- `portal/supabase/migrations/20261016b_ops_customers_ready.sql` —— `ready = true`。**还没套，等前端部署 READY 再套**（先套的话，旧前端点侧栏会进
+  「没有权限」页；而且这时营运系统的员工就拿得到资料）。
 
 ## 4. 合并步骤（给营运系统那边的 Claude）
 
@@ -65,9 +68,10 @@ ZIP 里有：`customers-module.patch`（`git am` 用，以 `dbe274c 图示 PNG �
 2. 资料库测试：`PGHOST=… PGPORT=… PGUSER=postgres sh portal/supabase/tests/run.sh`（最后印 `cust_test ok`）。
 3. 前端：`cd portal && npm run build`。
 4. 部署到 `homeworks-ops`（照 `portal/README.md` 的「部署」）。新档：`src/pages/Customers.tsx`、`src/cust/*.tsx`（6 个）、`src/cust/dict.ts`、
-   `src/cust-api.ts`、`src/cust.css`；改到的档：`src/App.tsx`、`src/i18n-dict-db.ts`。每个档都 ≤ 19 KB。
+   `src/cust-api.ts`、`src/cust.css`；改到的档：`src/App.tsx`、`src/i18n-dict-db.ts`。每个档都 ≤ 20 KB（最大 `cust/Panel.tsx` 19 KB）。
 5. 部署 READY 之后，用 Supabase MCP `apply_migration` 套 `20261016b_ops_customers_ready.sql`（名称 `ops_customers_ready`）。
-6. 把 CLAUDE.md 加一段「顾客资料」（第 2 节的重点，特别是「BI 改顾客资料函数要用 `bi.crm_require`」）。
+6. CLAUDE.md 的「顾客资料」那段在 patch 里（放在「物流部」前面），留着，之后的人才知道资料在 BI 表、权限怎么接。
+7. 套完 `ops_customers_ready` 后验证：admin 帐号开「顾客资料」看得到 5 个分页；门市员工看得到跟进 / 顾客 / 报告、可以储存；送货部看不到这个模块。
 
 ### 改到的旧档（patch 冲突时手动补）
 
@@ -77,9 +81,26 @@ ZIP 里有：`customers-module.patch`（`git am` 用，以 `dbe274c 图示 PNG �
   错误讯息「这个动作只有管理员可以做。」。
 - `portal/supabase/tests/run.sh`：最后加一行跑 `cust_test.sql`。
 - `portal/supabase/tests/stub_supabase.sql`：最后加「顾客资料」那一段（BI 的权限函数与几个有代表性的顾客资料函数）。
+- `CLAUDE.md`：「物流部」那段前面加「顾客资料」一段。
 
 ## 5. 上线后请使用者做的事
 
 1. 门市同事（销售 / 门市部门）登入营运系统 → 侧栏「顾客资料」，就是 BI 那一页的内容。
 2. 要让别的部门的人也能看：「员工与权限」→ 那位员工的个人例外「顾客资料」设成「只看」或「可编辑」。
 3. BI 的 `/loyalty.html` 先留着（资料相通）；大家都改用营运系统后，要不要关掉由使用者决定。
+
+## 6. 验证纪录（交出前做过的）
+
+- **两轮多人审查**：第一轮 2 位（资料库安全、前端）；第二轮 3 个角度（资料库安全、前端逻辑、手机 / 英文版面），每个问题再由另一位试着推翻。
+  资料库第二轮没有找到问题；第一轮的建议都已采用（送货页的两个函数不改写、分店一律换 `bi.crm_company`、「只看」改成固定名单、模块开关挡营运系统员工、
+  错误讯息照营运系统说法）。前端确认的问题全部修好，最重要的：表单改到一半按 WhatsApp 会被盖掉、储存会把资料库刚清掉的「下次联络日」写回去
+  （改成逐栏位记下员工改过的）、从顾客回名单筛选与卷动位置消失（名单改成一直挂着）、设定拿不到时用预设值存回去、平板 / 手机横向卷动、
+  Ctrl 点电话不能开新分页、月报失败显示成「没有单」。
+- 本机 PostgreSQL：`run.sh` 全部通过（含新的 `cust_test.sql`：各角色、只看、模块开关、分店、送货函数不动、BI 名单照旧、离职、管理员不在 BI 名单）；
+  在 `claude/gifted-faraday-b16op8` 最新版（`dbe274c`）上 `git am` 无冲突、`run.sh` 通过、`npm run build` 通过。
+- Playwright（模拟资料，390 / 820 / 1280px，中文与 EN）：管理员 / 可审批 / 可编辑 / 只看 各跑一遍——跟进、快速登记、扫码登记、顾客名单筛选、
+  打开顾客改资料储存、WhatsApp 记联络、合并错误讯息、促销活动、月报、设定；只看的人表单停用、没有登记 / 联络按键；EN 模式剩下的中文都是资料。
+- 正式资料库（交易最后回滚）：BI 老板 8,056 位顾客照旧、JB 门市「没抓到电话的单据」只看到 JB、门市员工（只在营运系统）模块关着时被挡、
+  打开后 = sales（看得到、不能建活动）、送货 / 物流 / 仓库 / 采购部门看不到、送货页的 `bi_customer_set_geo` 仍只认 BI 名单。
+  套用后核对：23 个函数改写、11 个只看函数、`bi_delivery_*` 12 个与 `bi_customer_set_address` / `_set_geo` 维持只认 BI 名单、security definer 与授权都保留、
+  `bi.crm_require` 一般帐号叫不到、`ops_cust_role` 没开给 anon。

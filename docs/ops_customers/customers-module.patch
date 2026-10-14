@@ -1,0 +1,2797 @@
+From 149a1a1afd86c8daf7a542d2d341edae1b571c0f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 09:45:17 +0000
+Subject: [PATCH] =?UTF-8?q?=E9=A1=BE=E5=AE=A2=E8=B5=84=E6=96=99=E6=A8=A1?=
+ =?UTF-8?q?=E5=9D=97=EF=BC=9ABI=20=E7=9A=84=E9=A1=BE=E5=AE=A2=E8=B5=84?=
+ =?UTF-8?q?=E6=96=99=E9=A1=B5=E6=90=AC=E8=BF=9B=E8=90=A5=E8=BF=90=E7=B3=BB?=
+ =?UTF-8?q?=E7=BB=9F=EF=BC=8C=E6=9D=83=E9=99=90=E7=85=A7=E9=83=A8=E9=97=A8?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+使用者：「我要把这个系统连接在员工多部门里面」，要接的是顾客资料、权限照部门。门市同事本来要另外登入
+BI 网站才看得到顾客名单与跟进提醒，现在在营运系统侧栏就有「顾客资料」（#/customers）。
+
+资料不搬家：前端直接叫 BI 原本的 bi_customer* / bi_campaign* / bi_wa_template*，两边看到同一份。
+migration 20261016_ops_customers.sql 把这些函数开头的 bi.customer_require 换成 bi.crm_require：
+BI 名单照旧，另外认营运系统「顾客资料」模块权限（管理员 = owner、可审批 = manager、可编辑 = sales、
+只看 = 只能叫固定名单里的读取函数）；模块 ready = false 期间营运系统员工一律没有，20261016b 打开。
+送货的 bi_delivery_* 与 BI 送货页的 bi_customer_set_address / _set_geo 维持只认 BI 名单。
+「没抓到电话的单据」改用 bi.crm_company()，营运系统员工照自己的分店。
+
+前端：pages/Customers.tsx + cust/*（每个档 ≤ 20 KB），分页 跟进 / 顾客 / 促销活动 / 报告 / 设定，
+一位顾客在 #/customers/c/<编号>（名单挂着不卸下，回来时筛选与卷动位置都在）。这页自己带中英文
+（translate="no"，字典 cust/dict.ts 大多照抄 BI，用语一致）。颜色只用 style.css 的变数。
+
+经两轮多人审查：资料库没有找到问题；前端修了 13 + 13 项（表单改到一半按 WhatsApp 被盖掉 / 储存把资料库
+刚清掉的下次联络日写回去、回到名单筛选消失、设定拿不到时用预设值存回去、手机与平板横向卷动等）。
+测试：tests/cust_test.sql（各角色、只看、模块开关、分店、送货函数不动、BI 名单照旧），run.sh 全部通过。
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FukrbyV1LJiGqNzUs29hwZ
+---
+ CLAUDE.md                                     |  15 +
+ portal/src/App.tsx                            |   6 +-
+ portal/src/cust-api.ts                        | 312 ++++++++++++++
+ portal/src/cust.css                           |  81 ++++
+ portal/src/cust/Common.tsx                    |  50 +++
+ portal/src/cust/Follow.tsx                    | 220 ++++++++++
+ portal/src/cust/List.tsx                      | 233 ++++++++++
+ portal/src/cust/Panel.tsx                     | 398 ++++++++++++++++++
+ portal/src/cust/Reports.tsx                   | 246 +++++++++++
+ portal/src/cust/SettingsTab.tsx               | 144 +++++++
+ portal/src/cust/dict.ts                       | 272 ++++++++++++
+ portal/src/i18n-dict-db.ts                    |   4 +
+ portal/src/pages/Customers.tsx                | 187 ++++++++
+ .../migrations/20261016_ops_customers.sql     | 151 +++++++
+ .../20261016b_ops_customers_ready.sql         |   3 +
+ portal/supabase/tests/cust_test.sql           | 172 ++++++++
+ portal/supabase/tests/run.sh                  |   1 +
+ portal/supabase/tests/stub_supabase.sql       |  88 ++++
+ 18 files changed, 2582 insertions(+), 1 deletion(-)
+ create mode 100644 portal/src/cust-api.ts
+ create mode 100644 portal/src/cust.css
+ create mode 100644 portal/src/cust/Common.tsx
+ create mode 100644 portal/src/cust/Follow.tsx
+ create mode 100644 portal/src/cust/List.tsx
+ create mode 100644 portal/src/cust/Panel.tsx
+ create mode 100644 portal/src/cust/Reports.tsx
+ create mode 100644 portal/src/cust/SettingsTab.tsx
+ create mode 100644 portal/src/cust/dict.ts
+ create mode 100644 portal/src/pages/Customers.tsx
+ create mode 100644 portal/supabase/migrations/20261016_ops_customers.sql
+ create mode 100644 portal/supabase/migrations/20261016b_ops_customers_ready.sql
+ create mode 100644 portal/supabase/tests/cust_test.sql
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 793f812..01eeaae 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -185,6 +185,21 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   `bi.delivery_*` / BI 同步时间照常更新、首页与打卡能用。没提供升级或版本仍 < 14.18 → 开 Supabase 支援单引用 PostgREST #5196。
+   2026-10-09 使用者截图确认：Infrastructure 页**没有** Service Versions / Upgrade project（= 目前没有可升级版本）→ 已给使用者英文支援单范本，等 Supabase 回覆。
+   BI 网页没有这个重送，遇到时重新整理即可。
++- 顾客资料（模块 key `customers`，2026-10-14，使用者：「我要把这个系统连接在员工多部门里面」→ 选「顾客资料」+「照部门权限」；另一个 Claude 对话在 BI 分支
++  `claude/pensive-fermi-gtqw9c` 做的，以 ZIP 交过来，交接说明在那边 `docs/ops_customers/HANDOFF.md`）：把 BI 的顾客资料页（`/loyalty.html`）整页搬进来，
++  `#/customers/<分页>`（跟进 / 顾客 / 促销活动 / 报告 / 设定），一位顾客 `#/customers/c/<顾客编号>`。**资料不搬家**：前端直接叫 BI 原本的
++  `bi_customer*` / `bi_campaign*` / `bi_wa_template*`（`bi.customer_*` 表，两边同一份）。migration `20261016_ops_customers.sql`（= `ops_customers`，
++  **正式环境 2026-10-14 已套**，23 个函数改写、只看名单 11 个）把这些函数开头的 `bi.customer_require` 换成 `bi.crm_require`：BI 名单照旧；营运系统员工看
++  「顾客资料」模块权限（admin = owner：分级门槛、删活动；可审批 = manager：汇出同意名单 CSV、合并顾客、促销活动、WhatsApp 范本；可编辑 = sales：改资料、
++  快速登记、联络、装修进度；只看 = 只能叫 migration 里 `v_read` 名单的读取函数）；**模块 `ready = false` 时营运系统员工一律没有**（`bi.crm_ops_role`），
++  前端部署 READY 后才套 `20261016b_ops_customers_ready.sql`（= `ops_customers_ready`）。部门预设：销售 / 门市 = 可编辑、管理层 = 可审批，其他部门没有
++  （送货部在「送货」看得到 DO 的顾客名字 / 电话 / 地址）；只看要用个人例外开。`public.bi_company()` 换成 `bi.crm_company()`（营运系统员工照自己的分店，
++  只有「没抓到电话的单据」用到；顾客名单本来就是总部 + JB 合并）。送货的 `bi_delivery_*` 与 BI 送货页的 `bi_customer_set_address` / `_set_geo` 不动。
++  前端 `src/pages/Customers.tsx`、`src/cust/*`、`src/cust-api.ts`、`src/cust.css`；**这页自己带中英文**（整页 `translate="no"`，`t()` 查 `src/cust/dict.ts`，
++  大多照抄 BI 的英文字典；字典没有的退回营运系统字典 = 资料库错误讯息），新增这页的文字加进 `cust/dict.ts`。角色从 `ops_cust_role()` 拿（只决定按键，
++  真正的检查在每个函数）。测试 `tests/cust_test.sql`（BI 权限函数与几个代表性顾客资料函数的 stub 在 `stub_supabase.sql` 最后）。BI 的 `/loyalty.html`
++  先留着，两边相通。BI 那边以后改顾客资料函数要写 `bi.crm_require` / `bi.crm_company`（已写进 BI 分支的 CLAUDE.md）；重套 `20261016_ops_customers.sql`
++  会把漏掉的改过来。
+ - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
+   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
+   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
+diff --git a/portal/src/App.tsx b/portal/src/App.tsx
+index 647223b..30cb661 100644
+--- a/portal/src/App.tsx
++++ b/portal/src/App.tsx
+@@ -21,12 +21,13 @@ import MyProfile from "./pages/MyProfile";
+ import Join from "./pages/Join";
+ import JoinStatus from "./pages/JoinStatus";
+ import Delivery from "./pages/Delivery";
++import Customers from "./pages/Customers";
+ import { DriverPage } from "./dlv/DriverSign";
+ import { SyncNote } from "./sync";
+ import LangSwitch from "./LangSwitch";
+ 
+ const ICON: Record<string, string> = {
+-  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", leave: "✈", warehouse: "▦", delivery: "⛟", sales: "¤",
++  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", leave: "✈", warehouse: "▦", delivery: "⛟", customers: "☏", sales: "¤",
+   collection: "₪", commission: "%", hr: "☺", payroll: "▤", reports: "▥", admin: "⚙",
+ };
+ 
+@@ -105,6 +106,9 @@ export default function App() {
+     case "delivery":
+       page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
+       break;
++    case "customers":
++      page = can(me, "customers", "view") ? <Customers sub={arg} arg={arg2} /> : <NoAccess />;
++      break;
+     case "payroll":
+       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
+       break;
+diff --git a/portal/src/cust-api.ts b/portal/src/cust-api.ts
+new file mode 100644
+index 0000000..798dbd0
+--- /dev/null
++++ b/portal/src/cust-api.ts
+@@ -0,0 +1,312 @@
++// 顾客资料模块的资料层：型别、纯函数（分级、跟进提醒、筛选、电话格式）与翻译。
++// 资料在 BI 的 bi.customer_*（与 BI 的顾客资料页 loyalty.html 共用同一份）；前端直接呼叫 BI 原本的 public.bi_customer* /
++// bi_campaign* / bi_wa_template* 函数，权限在函数开头的 bi.crm_require 检查（BI 名单 + 营运系统「顾客资料」模块权限，
++// migration 20261016_ops_customers.sql）。这一页自己带中英文（translate="no"，字典在 cust/dict.ts），不走 i18n.ts 的 DOM 翻译。
++import { supabase } from "./supabase";
++import { getLang, tr as portalTr } from "./i18n";
++import { CUST_EN, CUST_PATTERNS } from "./cust/dict";
++
++export type Consent = "yes" | "no" | null;
++export interface Customer {
++  member_id: string; name: string | null; stores: string | null; first_date: string | null; last_date: string | null;
++  doc_count: number; doc_count_12m: number; spent: number; spent_12m: number; categories: string[];
++  birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
++  customer_type: string | null; note: string | null; consent: Consent; next_contact: string | null;
++  last_contact_at: string | null; profile_created_at: string | null; profile_updated_at: string | null;
++  reno_stage?: string | null; reno_stage_at?: string | null; quote_open?: number; quote_amount?: number; quote_due?: string | null;
++}
++export interface Item { item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number }
++export interface Doc {
++  company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string; debtor_name: string | null;
++  sales_agent: string | null; amount: number; items: Item[];
++}
++export interface Profile {
++  name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; address: string | null;
++  customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
++  next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
++  reno_stage?: string | null; reno_stage_at?: string | null; email?: string | null;
++}
++export interface Quote {
++  company: string; doc_no: string; doc_date: string; sales_agent: string | null; amount: number; transferred: boolean;
++  items: string | null; bought_after: boolean;
++}
++export interface Detail { member_id: string; profile: Profile | null; docs: Doc[]; aliases?: string[]; quotes?: Quote[] }
++export interface Signup {
++  id: number; member_id: string; main_id: string; name: string | null; birth_month: number | null; birth_day: number | null;
++  area: string | null; address?: string | null; email?: string | null; consent: boolean; store: string | null; created_at: string;
++  status: "pending" | "confirmed" | "rejected";
++  current: {
++    name: string | null; birth_month: number | null; birth_day: number | null; area: string | null; consent: Consent;
++    last_contact_at?: string | null;
++  } | null;
++}
++export interface LogRow { at: string; by: string | null; action: string; changes: Record<string, unknown>; member_id: string }
++export interface Missing {
++  company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string;
++  debtor_name: string | null; sales_agent: string | null; amount: number;
++}
++export interface Settings {
++  vip_min_12m: number; regular_min_docs: number; lapsed_days: number; lead_follow_days: number; birthday_days: number;
++  quote_follow_days: number; quote_max_days: number; stage_follow_days: number; stage_reco: Record<string, string[]>;
++  updated_at?: string | null; updated_by?: string | null;
++}
++export interface Template { id: number; title: string; body: string; sort: number }
++export interface Campaign {
++  id: number; name: string; message: string | null; sent_on: string; created_by: string | null; members: number;
++  buyers_30: number; revenue_30: number; buyers_60: number; revenue_60: number;
++}
++export interface Monthly {
++  month: string; active: number; new_customers: number; returning_customers: number;
++  new_revenue: number; returning_revenue: number; lapsed: number;
++}
++export interface Agent { agent: string; customers: number; returning_customers: number; new_customers: number; revenue: number }
++
++/** 顾客资料的角色（public.ops_cust_role）：owner = 管理员 / BI 老板、manager = 可审批、sales = 可编辑、viewer = 只看 */
++export type CustRole = "owner" | "manager" | "sales" | "viewer";
++
++// ------------------------------------------------------------ 翻译：这一页 translate="no"，自己翻
++const EN = getLang() === "en";
++/** 中文原句 → 目前语言；{a} 换成 vars.a。字典没有的退回营运系统的字典（资料库错误讯息在那边） */
++export function t(zh: string, vars?: Record<string, string | number>): string {
++  let s = EN ? CUST_EN[zh] ?? portalTr(zh) : zh;
++  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
++  return s;
++}
++/** 资料库来的错误讯息（中文）→ 目前语言 */
++export function errText(e: unknown): string {
++  const m = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
++  if (EN) {
++    for (const [re, fn] of CUST_PATTERNS) {
++      const hit = m.match(re);
++      if (hit) return fn(hit);
++    }
++  }
++  return t(m);
++}
++
++/** 资料库存的系统文字（例：「顾客自己扫码登记（HQ）」）→ 目前语言；员工 email 照原样 */
++export function dbText(s: string | null | undefined): string {
++  if (!s || !EN) return s ?? "";
++  for (const [re, fn] of CUST_PATTERNS) {
++    const hit = s.match(re);
++    if (hit) return fn(hit);
++  }
++  return s;
++}
++
++// ------------------------------------------------------------ 呼叫
++export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
++  const { data, error } = await supabase.rpc(fn, args);
++  if (error) throw new Error(error.message);
++  return data as T;
++}
++export const custRole = () => rpc<CustRole | null>("ops_cust_role");
++/** 「已联络」：记下联络时间（跟进提醒就消失）；回传错误讯息（空字串 = 成功） */
++export async function touch(id: string): Promise<string> {
++  const { error } = await supabase.rpc("bi_customer_touch", { p_member: id });
++  return error ? errText(error) : "";
++}
++
++// ------------------------------------------------------------ 纯函数（与 BI 的 Loyalty.tsx 相同）
++export const num = (v: unknown) => Number(v ?? 0);
++export const STORE: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB" };
++export const TYPES = ["屋主", "设计师", "承包商", "水工", "公司", "其他"];
++export const DEFAULT_SETTINGS: Settings = {
++  vip_min_12m: 10000, regular_min_docs: 2, lapsed_days: 365, lead_follow_days: 7, birthday_days: 7,
++  quote_follow_days: 7, quote_max_days: 60, stage_follow_days: 30,
++  stage_reco: { plan: ["SANITARY", "KITCHEN"], rough: ["VALVE", "FITTING"], tile: ["SANITARY", "BUILDING"],
++    install: ["LOCK", "KITCHEN", "ELECTRIC", "GARDEN"], done: ["LOCK", "GARDEN"] },
++};
++/** 装修进度 5 段（使用者 2026-10-05 选的），键存资料库、名称显示用 */
++export const STAGES: [string, string][] = [
++  ["plan", "规划中"], ["rough", "动工 / 水电"], ["tile", "泥水 / 贴砖"], ["install", "安装"], ["done", "完工"],
++];
++export const STAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES);
++
++/** 这个装修阶段推荐的类别里，顾客还没买过的（给店员开口推荐） */
++export function stageNext(stage: string | null | undefined, bought: string[], s: Settings): string[] {
++  if (!stage) return [];
++  return (s.stage_reco?.[stage] ?? []).filter((c) => !bought.includes(c));
++}
++
++/** 60123456789 → 012-345 6789；6591234567 → +65 9123 4567；A:公司:代号 → 代号 (HQ) */
++export function fmtMember(id: string): string {
++  if (id.startsWith("A:")) {
++    const [, co, code] = id.split(":");
++    return `${code} (${STORE[co] ?? co})`;
++  }
++  if (id.startsWith("65") && id.length === 10) return `+65 ${id.slice(2, 6)} ${id.slice(6)}`;
++  if (id.startsWith("60")) {
++    const d = "0" + id.slice(2);
++    if (d.startsWith("01")) return `${d.slice(0, 3)}-${d.slice(3, d.length - 4)} ${d.slice(-4)}`;
++    return `${d.slice(0, 2)}-${d.slice(2)}`;
++  }
++  return id;
++}
++
++/** 给 WhatsApp 用的国际格式：60123456789 → +60123456789；账号型顾客没有电话 → 空 */
++export function waNumber(id: string): string {
++  return /^[0-9]+$/.test(id) ? `+${id}` : "";
++}
++
++/** 单据上的客户名称常夹着电话：「ZILONG (017-7000190)」→「ZILONG」 */
++export function cleanName(raw: string | null | undefined): string {
++  return (raw ?? "").replace(/[(（]?\s*\+?\d[\d\s-]{6,}\d\s*[)）]?/g, " ").replace(/[()（）]\s*[)）]?/g, " ")
++    .replace(/\s+/g, " ").trim();
++}
++
++/** 范本的 {name} 换成顾客名字；没有名字时把「Hi {name}，」收成「Hi，」 */
++export function fillTemplate(body: string, name: string): string {
++  return body.replace(/\{name\}/g, name.trim()).replace(/[ \t]+([，,！!])/g, "$1");
++}
++
++/** wa.me 连结；账号型顾客（没有电话）回空字串 */
++export function waLink(id: string, text?: string): string {
++  if (!/^[0-9]+$/.test(id)) return "";
++  return `https://wa.me/${id}` + (text ? `?text=${encodeURIComponent(text)}` : "");
++}
++
++/** 本地日期 yyyy-mm-dd（不用 toISOString，避免马来西亚早上 8 点前算成前一天） */
++export function localISO(d: Date = new Date()): string {
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
++}
++
++function midnight(d: Date): Date {
++  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
++}
++
++export function daysSince(d: string | null, today: Date = new Date()): number {
++  if (!d) return Infinity;
++  const at = d.length <= 10 ? new Date(d + "T00:00:00") : new Date(d);
++  return (midnight(today).getTime() - midnight(at).getTime()) / 86400000;
++}
++
++/** 离下一次生日还有几天（今天生日 = 0）；2/29 在平年算 3/1 */
++export function daysUntilBirthday(month: number, day: number, today: Date = new Date()): number {
++  const t0 = midnight(today);
++  let b = new Date(t0.getFullYear(), month - 1, day);
++  if (b < t0) b = new Date(t0.getFullYear() + 1, month - 1, day);
++  return Math.round((b.getTime() - t0.getTime()) / 86400000);
++}
++
++export type Tier = "vip" | "regular" | "normal" | "lapsed" | "lead";
++export const TIERS: Tier[] = ["vip", "regular", "normal", "lapsed", "lead"];
++export const TIER_LABEL: Record<Tier, string> = { vip: "VIP", regular: "常客", normal: "一般", lapsed: "流失", lead: "潜在客" };
++
++/** 分级：没买过 = 潜在客；最后消费超过流失天数 = 流失；近 12 个月消费 ≥ 门槛 = VIP；近 12 个月单数 ≥ 门槛 = 常客；其余一般 */
++export function tierOf(c: Pick<Customer, "last_date" | "spent_12m" | "doc_count_12m">, s: Settings, today: Date = new Date()): Tier {
++  if (!c.last_date) return "lead";
++  if (daysSince(c.last_date, today) > s.lapsed_days) return "lapsed";
++  if (num(c.spent_12m) >= num(s.vip_min_12m)) return "vip";
++  if (num(c.doc_count_12m) >= num(s.regular_min_docs)) return "regular";
++  return "normal";
++}
++
++export interface Reason { kind: "due" | "birthday" | "lead" | "quote" | "stage"; days: number }
++export interface FollowUp { c: Customer; reasons: Reason[] }
++
++/** 跟进提醒：约好的联络日到了、生日快到（这段期间还没联络过）、潜在客建档后 N 天都没联络、报价没成交、装修进度太久没更新 */
++export function followUps(list: Customer[], s: Settings, today: Date = new Date()): FollowUp[] {
++  const iso = localISO(today);
++  const out: FollowUp[] = [];
++  for (const c of list) {
++    const reasons: Reason[] = [];
++    const contacted = daysSince(c.last_contact_at, today);
++    if (c.next_contact && c.next_contact <= iso) reasons.push({ kind: "due", days: daysSince(c.next_contact, today) });
++    if (c.birth_month && c.birth_day) {
++      const d = daysUntilBirthday(c.birth_month, c.birth_day, today);
++      if (d <= s.birthday_days && !(contacted <= s.birthday_days - d)) reasons.push({ kind: "birthday", days: d });
++    }
++    if (!c.last_date && c.profile_created_at && !c.last_contact_at && !(c.next_contact && c.next_contact > iso)
++        && daysSince(c.profile_created_at, today) >= s.lead_follow_days) {
++      reasons.push({ kind: "lead", days: daysSince(c.profile_created_at, today) });
++    }
++    // 报价单开出 N 天还没成交（没转单、之后也没买），从该跟进的那天起还没联络过
++    if (c.quote_due && (!c.last_contact_at || localISO(new Date(c.last_contact_at)) < c.quote_due)) {
++      reasons.push({ kind: "quote", days: daysSince(c.quote_due, today) + s.quote_follow_days });
++    }
++    // 装修进度太久没更新（完工的不追）
++    if (c.reno_stage && c.reno_stage !== "done" && c.reno_stage_at && daysSince(c.reno_stage_at, today) >= s.stage_follow_days
++        && !(contacted < s.stage_follow_days)) {
++      reasons.push({ kind: "stage", days: daysSince(c.reno_stage_at, today) });
++    }
++    if (reasons.length) out.push({ c, reasons });
++  }
++  const order = { due: 0, quote: 50, birthday: 100, stage: 500, lead: 1000 };
++  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => order[r.kind] + (r.kind === "birthday" ? r.days : 0)));
++  return out.sort((a, b) => rank(a) - rank(b));
++}
++
++export interface Filters {
++  q: string; store: string; recency: string; minSpent: string; category: string; notCategory: string; ctype: string;
++  area: string; bmonth: string; tier: string; consent: string; stage: string;
++}
++export const EMPTY_FILTERS: Filters = {
++  q: "", store: "", recency: "", minSpent: "", category: "", notCategory: "", ctype: "", area: "", bmonth: "", tier: "", consent: "",
++  stage: "",
++};
++
++export function applyFilters(list: Customer[], f: Filters, s: Settings = DEFAULT_SETTINGS): Customer[] {
++  const text = f.q.trim().toLowerCase();
++  const digits = f.q.replace(/\D/g, "").replace(/^0/, "");
++  const min = num(f.minSpent);
++  return list.filter((c) => {
++    if (text && !((digits.length >= 4 && c.member_id.includes(digits)) || (c.name ?? "").toLowerCase().includes(text)
++      || (c.note ?? "").toLowerCase().includes(text))) return false;
++    if (f.store === "HQ" && !(c.stores ?? "").includes("HQ")) return false;
++    if (f.store === "JB" && !(c.stores ?? "").includes("JB")) return false;
++    if (f.store === "both" && c.stores !== "HQ + JB") return false;
++    const age = daysSince(c.last_date);
++    if (f.recency === "90" && age > 90) return false;
++    if (f.recency === "180" && age > 180) return false;
++    if (f.recency === "365" && age > 365) return false;
++    if (f.recency === "lapsed" && !(age > 365 && isFinite(age))) return false;
++    if (f.recency === "none" && isFinite(age)) return false;
++    if (min && num(c.spent) < min) return false;
++    if (f.category && !c.categories.includes(f.category)) return false;
++    if (f.notCategory && c.categories.includes(f.notCategory)) return false;
++    if (f.ctype === "-" ? c.customer_type : f.ctype && c.customer_type !== f.ctype) return false;
++    if (f.area && !`${c.area ?? ""} ${c.address ?? ""}`.toLowerCase().includes(f.area.trim().toLowerCase())) return false;
++    if (f.bmonth && c.birth_month !== num(f.bmonth)) return false;
++    if (f.tier && tierOf(c, s) !== f.tier) return false;
++    if (f.consent === "yes" && c.consent !== "yes") return false;
++    if (f.consent === "no" && c.consent !== "no") return false;
++    if (f.consent === "unknown" && c.consent) return false;
++    if (f.stage === "quote" ? !num(c.quote_open) : f.stage === "any" ? !c.reno_stage : f.stage && c.reno_stage !== f.stage) return false;
++    return true;
++  });
++}
++
++// ------------------------------------------------------------ 格式与汇出
++export function fmtNum(v: unknown, digits = 0): string {
++  return num(v).toLocaleString("en-MY", { minimumFractionDigits: digits, maximumFractionDigits: digits });
++}
++export function fmtMoney(v: unknown): string {
++  return "RM " + fmtNum(v, 2);
++}
++export function fmtDay(s: string | null | undefined): string {
++  return s ? s.slice(0, 10) : "";
++}
++export function fmtTime(s: string | null | undefined): string {
++  return s ? new Date(s).toLocaleString("en-MY", { dateStyle: "short", timeStyle: "short" }) : "";
++}
++export function pct(a: number, b: number): string {
++  return b ? `${((a / b) * 100).toFixed(0)}%` : "–";
++}
++
++function csvCell(v: unknown): string {
++  const s = v == null ? "" : String(v);
++  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
++}
++export function downloadCsv(filename: string, header: string[], rows: unknown[][]): void {
++  const text = "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
++  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
++  const a = document.createElement("a");
++  a.href = url;
++  a.download = filename;
++  a.click();
++  setTimeout(() => URL.revokeObjectURL(url), 1000);
++}
++
++/** BI 网站（顾客扫码登记页 join.html 在那边，不用登入） */
++export const BI_SITE = "https://homeworks-bi.vercel.app";
+diff --git a/portal/src/cust.css b/portal/src/cust.css
+new file mode 100644
+index 0000000..24f4644
+--- /dev/null
++++ b/portal/src/cust.css
+@@ -0,0 +1,81 @@
++/* 顾客资料（#/customers）专用。颜色一律用 style.css 的变数（配色与 BI 同一套），不要写死 */
++.cu-tag { display: inline-block; padding: 0 7px; margin-left: 4px; border-radius: 99px; font-size: .75rem; line-height: 18px;
++  white-space: nowrap; border: 1px solid currentColor; }
++.cu-tag:first-child { margin-left: 0; }
++.cu-tier-vip { color: var(--amber); }
++.cu-tier-regular { color: var(--green); }
++.cu-tier-normal { color: var(--muted); }
++.cu-tier-lapsed { color: var(--red); }
++.cu-tier-lead { color: var(--primary); }
++.cu-yes { color: var(--green); padding: 0 5px; }
++.cu-no { color: var(--red); padding: 0 5px; }
++.cu-quote { color: var(--amber); }
++.cu-neg { color: var(--red); }
++.cu-wa { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-right: 6px; vertical-align: middle; }
++.cu-wa-row { margin: 12px 0; }
++a.cu-btn { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line);
++  color: var(--primary); font-size: .85rem; font-weight: 600; white-space: nowrap; }
++a.cu-btn:hover { background: var(--hover); }
++.cu-link { cursor: pointer; }
++td.click { cursor: pointer; }
++td.click:hover { background: var(--hover); }
++.cu-title { margin-bottom: 4px; }
++.cu-h3 { margin-top: 0; }
++.cu-kpis { margin: 12px 0; }
++.cu-kpis .kpi b { font-size: 1.4rem; }
++.cu-forms { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; align-items: flex-start; }
++fieldset.plain.cu-forms { flex-direction: row; flex-wrap: wrap; gap: 16px; }
++.cu-form { flex: 1 1 280px; max-width: 460px; }
++.cu-narrow { max-width: 520px; }
++.cu-row { display: flex; gap: 8px; }
++.cu-row select { flex: 1; }
++.cu-box { border: 1px dashed var(--line-strong); border-radius: 10px; padding: 10px 12px; margin: 12px 0; display: flex;
++  flex-direction: column; gap: 8px; }
++.cu-box .toolbar { margin-bottom: 0; }
++/* 装修进度的 5 个按键：手机上换行，不要横向卷（选中的那段会卷出画面） */
++.cu-box .tabs { flex-wrap: wrap; overflow: visible; }
++td.cu-wide { min-width: 160px; }
++.cu-alias { margin-right: 10px; white-space: nowrap; }
++.cu-alias button { margin-left: 4px; }
++.cu-tpl { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
++.cu-sel td { background: var(--primary-soft); }
++.cu-scroll { overflow-x: auto; margin: 8px 0; }
++.cu-items { background: var(--tint); padding: 6px 10px 10px; }
++.cu-items table td { border-bottom-color: var(--line); padding: 4px 8px; }
++.cu-note { max-width: 260px; }
++.cu-log { margin-top: 12px; }
++.cu-filters select { flex: 1 1 150px; width: auto; min-width: 0; }
++.cu-short { max-width: 200px; }
++.cu-new { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
++.cu-new input { width: 170px; min-width: 0; }
++.cu-quick summary { margin-bottom: 4px; }
++.cu-quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; margin-top: 12px; }
++@media (max-width: 800px) {
++  .cu-filters input, .cu-filters select { flex: 1 1 140px; font-size: 16px; }
++  .cu-short { max-width: none; flex: 1 1 140px; }
++  .cu-new { margin-left: 0; width: 100%; }
++  .cu-new input { flex: 1; width: auto; font-size: 16px; }
++  .cu-quick-grid { grid-template-columns: 1fr; }
++  .cu-quick-grid input, .cu-quick-grid select, .cu-form input, .cu-form select, .cu-form textarea { font-size: 16px; }
++  .cu-form { max-width: none; }
++}
++/* 跟进提醒：一位一块（手机上表格太挤） */
++.cu-fu { list-style: none; padding: 0; margin: 0; }
++.cu-fu li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.6fr); gap: 6px 16px;
++  padding: 10px 0; border-bottom: 1px solid var(--line); align-items: start; }
++.cu-fu li:last-child { border-bottom: 0; }
++.cu-fu-who b { display: block; margin-top: 2px; }
++.cu-fu-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
++@media (max-width: 800px) {
++  .cu-fu li { grid-template-columns: 1fr; }
++}
++/* 第二轮审查：按键列在手机上换行；输入框宽度压过 style.css 的 .toolbar input */
++.tabs.cu-wrap { flex-wrap: wrap; overflow: visible; }
++.cu-filters select.cu-cat { flex: 1 1 190px; }
++a.cu-link { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: .2em; }
++.toolbar input.cu-short:not([type]) { flex: 0 1 220px; width: auto; max-width: 260px; }
++.toolbar .cu-new input:not([type]) { flex: 0 1 170px; width: 170px; min-width: 0; }
++@media (max-width: 800px) {
++  .toolbar input.cu-short:not([type]) { flex: 1 1 140px; max-width: none; }
++  .toolbar .cu-new input:not([type]) { flex: 1 1 auto; width: auto; }
++}
+diff --git a/portal/src/cust/Common.tsx b/portal/src/cust/Common.tsx
+new file mode 100644
+index 0000000..dac6d6c
+--- /dev/null
++++ b/portal/src/cust/Common.tsx
+@@ -0,0 +1,50 @@
++// 顾客资料：几个页面共用的小元件（分级标签、同意标记、一键 WhatsApp）
++import type { ReactNode } from "react";
++import { Consent, fillTemplate, fmtMember, t, Template, Tier, TIER_LABEL, touch, waLink } from "../cust-api";
++
++/** 顾客电话 / 账号：真的连结（键盘可以按、可以开新分页），点了走 onOpen（记下名单卷到哪里） */
++export function MemberLink({ id, onOpen, children }: { id: string; onOpen: (id: string) => void; children?: ReactNode }) {
++  return (
++    <a href={`#/customers/c/${encodeURIComponent(id)}`} className="cu-link"
++       onClick={(e) => {
++         e.stopPropagation();   // 表格那一列自己也会打开
++         if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;   // 开新分页 / 新视窗：交给浏览器
++         e.preventDefault();
++         onOpen(id);
++       }}>
++      {children ?? fmtMember(id)}
++    </a>
++  );
++}
++
++export function TierTag({ tier }: { tier: Tier }) {
++  return <span className={`cu-tag cu-tier-${tier}`}>{t(TIER_LABEL[tier])}</span>;
++}
++
++export function ConsentTag({ consent }: { consent: Consent }) {
++  if (consent === "yes") return <span className="cu-tag cu-yes" title={t("同意收促销")}>✓</span>;
++  if (consent === "no") return <span className="cu-tag cu-no" title={t("不收促销")}>✕</span>;
++  return null;
++}
++
++/** 一键 WhatsApp：每个范本一颗按钮，开 wa.me 并记下联络时间（只看的人只开 WhatsApp、不记）；
++ *  onTouched(错误讯息)：空字串 = 已记下联络时间 */
++export function WaButtons({ id, name, templates, canEdit, onTouched }: {
++  id: string; name: string; templates: Template[]; canEdit: boolean; onTouched: (err: string) => void;
++}) {
++  if (!waLink(id)) return <span className="muted small">{t("账号型顾客没有电话,不能 WhatsApp")}</span>;
++  const mark = () => { if (canEdit) touch(id).then(onTouched); };
++  return (
++    <span className="cu-wa">
++      {templates.map((x) => (
++        <a key={x.id} className="cu-btn" href={waLink(id, fillTemplate(x.body, name))} target="_blank" rel="noreferrer"
++           onClick={(e) => { e.stopPropagation(); mark(); }} title={fillTemplate(x.body, name)}>
++          WhatsApp · {x.title}
++        </a>
++      ))}
++      <a className="cu-btn" href={waLink(id)} target="_blank" rel="noreferrer" onClick={(e) => { e.stopPropagation(); mark(); }}>
++        {t("WhatsApp(空白)")}
++      </a>
++    </span>
++  );
++}
+diff --git a/portal/src/cust/Follow.tsx b/portal/src/cust/Follow.tsx
+new file mode 100644
+index 0000000..5c5709b
+--- /dev/null
++++ b/portal/src/cust/Follow.tsx
+@@ -0,0 +1,220 @@
++// 顾客资料 · 跟进：跟进提醒（生日、约好的联络日、潜在客、报价没成交、装修进度）、柜台快速登记、最近扫码登记的顾客
++import { useEffect, useState } from "react";
++import {
++  cleanName, errText, fmtMember, fmtNum, fmtTime, FollowUp, num, Reason, rpc, Settings, Signup, STAGE_LABEL, STAGES, stageNext,
++  t, Template, touch,
++} from "../cust-api";
++import { ConsentTag, MemberLink, WaButtons } from "./Common";
++
++export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTouched }: {
++  items: FollowUp[]; settings: Settings; templates: Template[]; canEdit: boolean; onOpen: (id: string) => void; onTouched: () => void;
++}) {
++  const [shown, setShown] = useState(20);
++  const [busy, setBusy] = useState<string | null>(null);
++  const [err, setErr] = useState("");
++  const done = (e: string) => { setErr(e); if (!e) onTouched(); };
++  async function mark(id: string) {
++    setBusy(id);
++    const e = await touch(id);
++    setBusy(null);
++    done(e);
++  }
++  const label = (r: Reason) => {
++    if (r.kind === "due") return r.days > 0 ? t("约好联络日已过 {d} 天", { d: r.days }) : t("今天约好联络");
++    if (r.kind === "birthday") return r.days === 0 ? t("今天生日 🎂") : t("{d} 天后生日 🎂", { d: r.days });
++    if (r.kind === "quote") return t("报价 {d} 天还没成交", { d: r.days });
++    if (r.kind === "stage") return t("装修进度 {d} 天没更新", { d: r.days });
++    return t("潜在客,建档 {d} 天还没联络", { d: r.days });
++  };
++  return (
++    <section className="card">
++      <h2>{t("跟进提醒({n} 位)", { n: fmtNum(items.length) })}</h2>
++      <p className="muted small">
++        {t("{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了、报价开出 {q} 天还没成交、装修进度 {s} 天没更新。按 WhatsApp 或「已联络」后就会从这里消失。", {
++          b: settings.birthday_days, l: settings.lead_follow_days, q: settings.quote_follow_days, s: settings.stage_follow_days })}
++      </p>
++      {err && <div className="error">{err}</div>}
++      {items.length === 0 && <p className="muted">{t("目前没有要跟进的顾客 👍")}</p>}
++      {items.length > 0 && (
++        <ul className="cu-fu">
++          {items.slice(0, shown).map(({ c, reasons }) => (
++            <li key={c.member_id}>
++              <div className="cu-fu-who">
++                <MemberLink id={c.member_id} onOpen={onOpen} /> <ConsentTag consent={c.consent} />
++                {cleanName(c.name) && <MemberLink id={c.member_id} onOpen={onOpen}><b>{cleanName(c.name)}</b></MemberLink>}
++              </div>
++              <div className="cu-fu-why">
++                {reasons.map((r) => <div key={r.kind}>{label(r)}</div>)}
++                {reasons.some((r) => r.kind === "quote") && (
++                  <div className="muted small">{t("未成交报价 RM {a}", { a: fmtNum(c.quote_amount, 2) })}</div>
++                )}
++                {c.reno_stage && (
++                  <div className="muted small">
++                    {t("装修:{s}", { s: t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage) })}
++                    {stageNext(c.reno_stage, c.categories, settings).length > 0
++                      && ` · ${t("可推荐 {c}", { c: stageNext(c.reno_stage, c.categories, settings).join(" / ") })}`}
++                  </div>
++                )}
++                {c.note && <div className="muted small">{t("备注")}: {c.note}</div>}
++              </div>
++              <div className="cu-fu-act">
++                <WaButtons id={c.member_id} name={cleanName(c.name)} templates={templates} canEdit={canEdit} onTouched={done} />
++                {canEdit && (
++                  <button className="ghost small" disabled={busy === c.member_id} onClick={() => mark(c.member_id)}>{t("已联络")}</button>
++                )}
++              </div>
++            </li>
++          ))}
++        </ul>
++      )}
++      {items.length > shown && (
++        <div className="actions left"><button className="ghost" onClick={() => setShown(shown + 50)}>{t("显示更多")}</button></div>
++      )}
++    </section>
++  );
++}
++
++/** 手机版快速登记：电话 + 名字 + 生日 + 同意 + 装修阶段，只写有填的栏位（bi_customer_quick） */
++export function QuickRegister({ onSaved, onOpen }: { onSaved: () => void; onOpen: (id: string) => void }) {
++  const blank = { phone: "", name: "", bm: "", bd: "", consent: "", stage: "", area: "" };
++  const [f, setF] = useState(blank);
++  const [busy, setBusy] = useState(false);
++  const [msg, setMsg] = useState<{ ok: boolean; text: string; id?: string } | null>(null);
++  const upd = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
++
++  async function save() {
++    if (f.phone.replace(/\D/g, "").length < 8) { setMsg({ ok: false, text: t("请输入完整手机号") }); return; }
++    if (!!f.bm !== !!f.bd) { setMsg({ ok: false, text: t("生日要月、日都填,或都不填") }); return; }
++    setBusy(true);
++    try {
++      const r = await rpc<{ member_id: string }>("bi_customer_quick", {
++        p_member: f.phone, p_name: f.name, p_birth_month: f.bm ? num(f.bm) : null, p_birth_day: f.bd ? num(f.bd) : null,
++        p_consent: f.consent || null, p_reno_stage: f.stage || null, p_area: f.area,
++      });
++      setMsg({ ok: true, text: t("已登记 {p}。", { p: fmtMember(r.member_id) }), id: r.member_id });
++      setF(blank);
++      onSaved();
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  return (
++    <details className="card cu-quick">
++      <summary><b>{t("快速登记")}</b> <span className="muted small">{t("柜台 / 手机用,30 秒填完;只会补上有填的栏位")}</span></summary>
++      <div className="cu-quick-grid">
++        <label>{t("手机号码")}<input type="tel" inputMode="tel" value={f.phone} onChange={upd("phone")} placeholder="012-345 6789" /></label>
++        <label>{t("名字")}<input value={f.name} onChange={upd("name")} /></label>
++        <label>{t("生日(月 / 日)")}
++          <span className="cu-row">
++            <select value={f.bm} onChange={upd("bm")}>
++              <option value="">{t("月")}</option>
++              {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
++            </select>
++            <select value={f.bd} onChange={upd("bd")}>
++              <option value="">{t("日")}</option>
++              {Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
++            </select>
++          </span>
++        </label>
++        <label>{t("同意收促销讯息")}
++          <select value={f.consent} onChange={upd("consent")}>
++            <option value="">{t("未确认")}</option>
++            <option value="yes">{t("同意")}</option>
++            <option value="no">{t("不同意")}</option>
++          </select>
++        </label>
++        <label>{t("装修进度")}
++          <select value={f.stage} onChange={upd("stage")}>
++            <option value="">{t("不知道 / 不填")}</option>
++            {STAGES.map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
++          </select>
++        </label>
++        <label>{t("地区")}<input value={f.area} onChange={upd("area")} /></label>
++      </div>
++      <div className="actions left">
++        <button disabled={busy} onClick={save}>{t("储存")}</button>
++        {msg?.id && <button className="ghost" onClick={() => onOpen(msg.id!)}>{t("打开这位顾客")}</button>}
++      </div>
++      {msg && <div className={msg.ok ? "ok" : "error"}>{msg.text}</div>}
++    </details>
++  );
++}
++
++/** 顾客扫 QR 登记（2026-10-06 起送出即生效）：列近 14 天扫码登记的顾客给店员跟进；改版前留下的待确认登记仍可确认 / 删掉 */
++export function Signups({ canEdit, onDone, onOpen }: { canEdit: boolean; onDone: () => void; onOpen: (id: string) => void }) {
++  const [rows, setRows] = useState<Signup[] | null>(null);
++  const [err, setErr] = useState("");
++  async function load() {
++    try {
++      setRows(await rpc<Signup[]>("bi_customer_signups") ?? []);
++      setErr("");
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++  useEffect(() => { load(); }, []);
++
++  async function handle(x: Signup, accept: boolean) {
++    try {
++      await rpc("bi_customer_signup_handle", { p_id: x.id, p_accept: accept });
++      await load();
++      if (accept) onDone();
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++
++  if (err) return <div className="error">{t("查询失败:")}{err}</div>;
++  if (!rows || rows.length === 0) return null;
++  return (
++    <details className="card" open={rows.some((x) => x.status === "pending")}>
++      <summary><b>{t("最近扫码登记的顾客({n} 位,近 14 天)", { n: rows.length })}</b></summary>
++      <p className="muted small">
++        {t("顾客扫 QR 送出就直接存进顾客资料:已有的名字 / 生日不会被盖掉,地址、电邮与同意收促销以顾客填的为准;每笔改动都在顾客的「修改纪录」。可以在这里打 WhatsApp 欢迎新顾客。")}
++      </p>
++      <div className="cu-scroll">
++        <table>
++          <thead>
++            <tr><th>{t("时间")}</th><th>{t("电话 / 账号")}</th><th>{t("名字")}</th><th>{t("生日")}</th><th>{t("地址")}</th>
++              <th>{t("同意收促销")}</th><th>{t("门市")}</th><th>{t("状态")}</th></tr>
++          </thead>
++          <tbody>
++            {rows.map((x) => (
++              <tr key={x.id}>
++                <td className="nowrap">{fmtTime(x.created_at)}</td>
++                <td className="nowrap"><MemberLink id={x.main_id} onOpen={onOpen} /></td>
++                <td>{x.name}{x.current?.name && x.current.name !== x.name
++                  ? <div className="muted small">{t("现有:{n}", { n: x.current.name })}</div> : null}</td>
++                <td>{x.birth_month ? `${x.birth_month}/${x.birth_day}` : ""}</td>
++                <td className="small cu-note">
++                  {x.address ?? x.area}
++                  {x.email && <div className="muted">{x.email}</div>}
++                </td>
++                <td>{x.consent ? t("同意") : t("不同意")}</td>
++                <td>{x.store}</td>
++                <td className="nowrap">
++                  {x.status === "pending" && canEdit ? (
++                    <>
++                      <button className="small" onClick={() => handle(x, true)}>{t("确认")}</button>{" "}
++                      <button className="ghost small" onClick={() => handle(x, false)}>{t("不是本人 / 删掉")}</button>
++                    </>
++                  ) : (
++                    <>
++                      <span className="muted small">
++                        {x.status === "pending" ? t("待确认") : x.current?.last_contact_at ? t("已联络") : t("已登记")}{" "}
++                      </span>
++                      <button className="ghost small" onClick={() => onOpen(x.main_id)}>{t("打开这位顾客")}</button>
++                    </>
++                  )}
++                </td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      </div>
++    </details>
++  );
++}
+diff --git a/portal/src/cust/List.tsx b/portal/src/cust/List.tsx
+new file mode 100644
+index 0000000..939a195
+--- /dev/null
++++ b/portal/src/cust/List.tsx
+@@ -0,0 +1,233 @@
++// 顾客资料 · 顾客名单：分级、筛选（买过 / 没买过某类别、生日月、同意收促销…）、汇出同意名单、用名单建促销活动
++import { useMemo, useState } from "react";
++import {
++  applyFilters, cleanName, CustRole, Customer, downloadCsv, EMPTY_FILTERS, Filters, fmtDay, fmtMember, fmtNum, localISO, num,
++  rpc, Settings, STAGE_LABEL, STAGES, t, Tier, TIER_LABEL, tierOf, TIERS, TYPES, waNumber, errText,
++} from "../cust-api";
++import { ConsentTag, MemberLink, TierTag } from "./Common";
++
++export function CustomerList({ list, settings, role, onOpen }: {
++  list: Customer[]; settings: Settings; role: CustRole; onOpen: (id: string) => void;
++}) {
++  const canManage = role === "owner" || role === "manager";
++  const canEdit = role !== "viewer";
++  const [f, setF] = useState<Filters>(EMPTY_FILTERS);
++  const [sort, setSort] = useState<"recent" | "spent" | "name">("recent");
++  const [shown, setShown] = useState(100);
++  const [newPhone, setNewPhone] = useState("");
++
++  const set = (k: keyof Filters) => (e: { target: { value: string } }) => { setF({ ...f, [k]: e.target.value }); setShown(100); };
++  const categories = useMemo(() => Array.from(new Set(list.flatMap((c) => c.categories))).sort(), [list]);
++  const filtered = useMemo(() => {
++    const out = applyFilters(list, f, settings);
++    if (sort === "spent") out.sort((a, b) => num(b.spent) - num(a.spent));
++    else if (sort === "name") out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
++    else out.sort((a, b) => ((a.last_date ?? "") < (b.last_date ?? "") ? 1 : (a.last_date ?? "") > (b.last_date ?? "") ? -1 : 0));
++    return out;
++  }, [list, f, sort, settings]);
++  const agreed = useMemo(() => filtered.filter((c) => c.consent === "yes"), [filtered]);
++  const tiers = useMemo(() => {
++    const out: Record<Tier, number> = { vip: 0, regular: 0, normal: 0, lapsed: 0, lead: 0 };
++    for (const c of list) out[tierOf(c, settings)] += 1;
++    return out;
++  }, [list, settings]);
++
++  function exportCsv() {
++    downloadCsv(`customers_${localISO()}.csv`,
++      [t("电话(WhatsApp)"), t("电话"), t("名字"), t("分级"), t("类型"), t("地区"), t("地址"), t("生日"), t("门市"), t("首次消费"),
++        t("最后消费"), t("单数"), t("累计消费"), t("近 12 个月"), t("买过类别"), t("备注")],
++      agreed.map((c) => [waNumber(c.member_id), fmtMember(c.member_id), cleanName(c.name), t(TIER_LABEL[tierOf(c, settings)]),
++        c.customer_type, c.area, c.address, c.birth_month ? `${c.birth_month}/${c.birth_day}` : "", c.stores, c.first_date,
++        c.last_date, c.doc_count, num(c.spent).toFixed(2), num(c.spent_12m).toFixed(2), c.categories.join(" "), c.note]));
++  }
++
++  function openNew() {
++    const digits = newPhone.replace(/\D/g, "");
++    if (digits.length < 8) return;
++    onOpen(newPhone.trim().startsWith("+") ? "+" + digits : digits);
++    setNewPhone("");
++  }
++
++  return (
++    <>
++      <div className="toolbar">
++        <div className="tabs cu-wrap">
++          <button className={f.tier === "" ? "on" : ""} onClick={() => setF({ ...f, tier: "" })}>{t("全部")}</button>
++          {TIERS.map((x) => (
++            <button key={x} className={f.tier === x ? "on" : ""} onClick={() => { setF({ ...f, tier: x }); setShown(100); }}>
++              {t(TIER_LABEL[x])} {fmtNum(tiers[x])}
++            </button>
++          ))}
++        </div>
++      </div>
++      <p className="muted small">
++        {t("VIP = 近 12 个月消费 ≥ RM{v};常客 = 近 12 个月 ≥ {d} 张单;流失 = 超过 {l} 天没来", {
++          v: fmtNum(settings.vip_min_12m), d: settings.regular_min_docs, l: settings.lapsed_days })}
++      </p>
++      <div className="toolbar cu-filters">
++        <input placeholder={t("电话、名字或备注")} value={f.q} onChange={set("q")} />
++        <select value={f.store} onChange={set("store")}>
++          <option value="">{t("全部门市")}</option>
++          <option value="HQ">HQ</option>
++          <option value="JB">JB</option>
++          <option value="both">{t("两边都买过")}</option>
++        </select>
++        <select value={f.recency} onChange={set("recency")}>
++          <option value="">{t("不限最后消费")}</option>
++          <option value="90">{t("3 个月内来过")}</option>
++          <option value="180">{t("6 个月内来过")}</option>
++          <option value="365">{t("12 个月内来过")}</option>
++          <option value="lapsed">{t("超过 12 个月没来")}</option>
++          <option value="none">{t("还没买过")}</option>
++        </select>
++        <select className="cu-cat" value={f.category} onChange={set("category")}>
++          <option value="">{t("买过:全部类别")}</option>
++          {categories.map((c) => <option key={c} value={c}>{t("买过 {c}", { c })}</option>)}
++        </select>
++        <select className="cu-cat" value={f.notCategory} onChange={set("notCategory")}>
++          <option value="">{t("没买过:不限")}</option>
++          {categories.map((c) => <option key={c} value={c}>{t("没买过 {c}", { c })}</option>)}
++        </select>
++        <select value={f.ctype} onChange={set("ctype")}>
++          <option value="">{t("全部类型")}</option>
++          {TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
++          <option value="-">{t("未分类")}</option>
++        </select>
++        <select value={f.consent} onChange={set("consent")}>
++          <option value="">{t("同意收促销:不限")}</option>
++          <option value="yes">{t("同意")}</option>
++          <option value="no">{t("不同意")}</option>
++          <option value="unknown">{t("未确认")}</option>
++        </select>
++        <select value={f.stage} onChange={set("stage")}>
++          <option value="">{t("装修阶段:不限")}</option>
++          {STAGES.map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
++          <option value="any">{t("有填装修阶段")}</option>
++          <option value="quote">{t("有报价没成交")}</option>
++        </select>
++        <select value={f.bmonth} onChange={set("bmonth")}>
++          <option value="">{t("生日月份")}</option>
++          {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{t("{m} 月", { m: i + 1 })}</option>)}
++        </select>
++        <input className="cu-short" placeholder={t("地区")} value={f.area} onChange={set("area")} />
++        <input className="cu-short" placeholder={t("累计消费至少 RM")} value={f.minSpent} onChange={set("minSpent")} inputMode="numeric" />
++        <button className="ghost" onClick={() => setF(EMPTY_FILTERS)}>{t("清除筛选")}</button>
++      </div>
++      <div className="toolbar">
++        <div className="tabs cu-wrap">
++          <button className={sort === "recent" ? "on" : ""} onClick={() => setSort("recent")}>{t("最近消费")}</button>
++          <button className={sort === "spent" ? "on" : ""} onClick={() => setSort("spent")}>{t("消费最多")}</button>
++          <button className={sort === "name" ? "on" : ""} onClick={() => setSort("name")}>{t("名字")}</button>
++        </div>
++        <span className="muted small">
++          {t("符合 {n} 位,其中同意收促销 {y} 位", { n: fmtNum(filtered.length), y: fmtNum(agreed.length) })}
++        </span>
++        {canManage && (
++          <button onClick={exportCsv} disabled={!agreed.length}>
++            {t("汇出同意名单 {n} 位 (Excel)", { n: fmtNum(agreed.length) })}
++          </button>
++        )}
++        {canEdit && (
++          <span className="cu-new">
++            <input placeholder={t("新顾客电话")} value={newPhone} onChange={(e) => setNewPhone(e.target.value)} inputMode="tel"
++                   onKeyDown={(e) => { if (e.key === "Enter") openNew(); }} />
++            <button className="ghost" onClick={openNew}>{t("新增顾客")}</button>
++          </span>
++        )}
++      </div>
++      {canManage && <NewCampaign members={agreed.map((c) => c.member_id)} total={filtered.length} />}
++      <div className="table-wrap">
++        <table>
++          <thead>
++            <tr>
++              <th>{t("电话 / 账号")}</th><th>{t("名字")}</th><th>{t("分级")}</th><th>{t("类型")}</th><th>{t("地区")}</th>
++              <th>{t("门市")}</th><th>{t("最后消费")}</th><th className="num">{t("累计消费")}</th>
++              <th className="num">{t("近 12 个月")}</th><th>{t("买过类别")}</th>
++            </tr>
++          </thead>
++          <tbody>
++            {filtered.length === 0 && <tr><td colSpan={10} className="muted">{t("没有符合的顾客")}</td></tr>}
++            {filtered.slice(0, shown).map((c) => (
++              <tr key={c.member_id} className="click" onClick={() => onOpen(c.member_id)}>
++                <td className="nowrap"><MemberLink id={c.member_id} onOpen={onOpen} /> <ConsentTag consent={c.consent} /></td>
++                <td>{cleanName(c.name)}</td>
++                <td className="nowrap">
++                  <TierTag tier={tierOf(c, settings)} />
++                  {num(c.quote_open) > 0 && <span className="cu-tag cu-quote">{t("报价 {n}", { n: num(c.quote_open) })}</span>}
++                </td>
++                <td>{c.customer_type ? t(c.customer_type) : ""}{c.reno_stage ? ` · ${t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage)}` : ""}</td>
++                <td>{c.area}</td>
++                <td>{c.stores}</td>
++                <td className="nowrap">{fmtDay(c.last_date)}</td>
++                <td className="num">{fmtNum(c.spent, 2)}</td>
++                <td className={"num" + (num(c.spent_12m) ? "" : " muted")}>{num(c.spent_12m) ? fmtNum(c.spent_12m, 2) : "–"}</td>
++                <td className="muted small">{c.categories.join(" · ")}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      </div>
++      {filtered.length > shown && (
++        <div className="actions left"><button className="ghost" onClick={() => setShown(shown + 200)}>{t("显示更多")}</button></div>
++      )}
++    </>
++  );
++}
++
++function NewCampaign({ members, total }: { members: string[]; total: number }) {
++  const [show, setShow] = useState(false);
++  const [name, setName] = useState("");
++  const [message, setMessage] = useState("");
++  const [sentOn, setSentOn] = useState(localISO());
++  const [busy, setBusy] = useState(false);
++  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
++
++  async function create() {
++    if (!name.trim()) { setMsg({ ok: false, text: t("活动要有名称") }); return; }
++    setBusy(true);
++    try {
++      const r = await rpc<{ members: number }>("bi_campaign_create",
++        { p_name: name, p_message: message, p_sent_on: sentOn || null, p_members: members });
++      setMsg({ ok: true, text: t("已建立活动,名单 {n} 位。", { n: fmtNum(num(r.members)) }) });
++      setName(""); setMessage("");
++      setShow(false);
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  const note = msg && <div className={msg.ok ? "ok" : "error"}>{msg.text}</div>;
++  if (!show) {
++    return (
++      <>
++        <div className="toolbar">
++          <button className="ghost" disabled={!members.length} onClick={() => { setShow(true); setMsg(null); }}>
++            {t("用这份名单建立促销活动")}
++          </button>
++        </div>
++        {note}
++      </>
++    );
++  }
++  return (
++    <div className="card">
++      <h3 className="cu-h3">{t("建立促销活动")}</h3>
++      <p className="muted small">
++        {t("会放进目前筛选结果里「同意收促销」的 {y} 位(另外 {x} 位未同意或未确认,不会放进去)。之后在「促销活动」看这批人发送后 30 / 60 天的消费。", {
++          y: fmtNum(members.length), x: fmtNum(total - members.length) })}
++      </p>
++      <div className="form cu-narrow">
++        <label>{t("活动名称(例:10 月水龙头 8 折)")}<input value={name} onChange={(e) => setName(e.target.value)} /></label>
++        <label>{t("发送日期")}<input type="date" value={sentOn} onChange={(e) => setSentOn(e.target.value)} /></label>
++        <label>{t("讯息内容(选填,留底用)")}<textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} /></label>
++        <div className="actions left">
++          <button disabled={busy || !members.length} onClick={create}>{t("建立")}</button>
++          <button className="ghost" onClick={() => setShow(false)}>{t("取消")}</button>
++        </div>
++      </div>
++      {note}
++    </div>
++  );
++}
+diff --git a/portal/src/cust/Panel.tsx b/portal/src/cust/Panel.tsx
+new file mode 100644
+index 0000000..01fa9b4
+--- /dev/null
++++ b/portal/src/cust/Panel.tsx
+@@ -0,0 +1,398 @@
++// 顾客资料 · 一位顾客：基本资料（可编辑以上能改）、装修进度、报价单、购买历史、合并重复号码（可审批）、修改纪录
++import { Fragment, useEffect, useRef, useState } from "react";
++import {
++  cleanName, CustRole, dbText, Detail, errText, fmtDay, fmtMember, fmtMoney, fmtNum, fmtTime, localISO, LogRow, num, rpc, Settings,
++  STAGE_LABEL, STAGES, STORE, t, Template, tierOf, TYPES,
++} from "../cust-api";
++import { TierTag, WaButtons } from "./Common";
++
++type Msg = { ok: boolean; text: string } | null;
++const Note = ({ msg }: { msg: Msg }) => (msg ? <div className={msg.ok ? "ok" : "error"}>{msg.text}</div> : null);
++
++export function CustomerPanel({ id, role, settings, templates, categoriesOf, onBack, onSaved, onOpen }: {
++  id: string; role: CustRole; settings: Settings; templates: Template[]; categoriesOf: (id: string) => string[];
++  onBack: () => void; onSaved: () => void; onOpen: (id: string) => void;
++}) {
++  const canEdit = role !== "viewer";
++  const canManage = role === "owner" || role === "manager";
++  const [d, setD] = useState<Detail | null>(null);
++  const [err, setErr] = useState("");
++  const [open, setOpen] = useState<string | null>(null);
++  const [msg, setMsg] = useState<Msg>(null);
++  const [busy, setBusy] = useState(false);
++  const [form, setForm] = useState({ name: "", bm: "", bd: "", area: "", address: "", ctype: "", note: "", consent: "", next: "" });
++  // 员工改过、还没储存的栏位：重新载入（按 WhatsApp、改装修进度、合并之后）只保留这些，其他栏位照资料库
++  // （不然储存会把资料库刚改的值盖回去，例：WhatsApp 后资料库清掉的「下次联络日」）
++  const edited = useRef(new Set<keyof typeof form>());
++
++  async function load() {
++    try {
++      const det = await rpc<Detail>("bi_customer", { p_member: id });
++      setErr("");
++      setD(det);
++      const p = det.profile;
++      const server = {
++        name: p?.name ?? cleanName(det.docs[0]?.debtor_name), bm: p?.birth_month ? String(p.birth_month) : "",
++        bd: p?.birth_day ? String(p.birth_day) : "", area: p?.area ?? "", address: p?.address ?? "",
++        ctype: p?.customer_type ?? "", note: p?.note ?? "", consent: p?.consent ?? "", next: p?.next_contact ?? "",
++      };
++      setForm((cur) => {
++        const out = { ...server };
++        for (const k of edited.current) out[k] = cur[k];
++        return out;
++      });
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++  useEffect(() => { setD(null); load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const upd = (k: keyof typeof form) => (e: { target: { value: string } }) => {
++    edited.current.add(k);
++    setForm({ ...form, [k]: e.target.value });
++  };
++
++  async function save() {
++    if (!!form.bm !== !!form.bd) { setMsg({ ok: false, text: t("生日要月、日都填,或都不填") }); return; }
++    setBusy(true);
++    try {
++      await rpc("bi_customer_save", {
++        p_member: d?.member_id ?? id, p_name: form.name, p_birth_month: form.bm ? num(form.bm) : null,
++        p_birth_day: form.bd ? num(form.bd) : null, p_area: form.area, p_address: form.address,
++        p_customer_type: form.ctype || null, p_note: form.note, p_consent: form.consent || null, p_next_contact: form.next || null,
++      });
++      setMsg({ ok: true, text: t("已储存。") });
++      edited.current.clear();
++      await load();
++      onSaved();
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  async function setStage(stage: string) {
++    try {
++      await rpc("bi_customer_set_stage", { p_member: d?.member_id ?? id, p_stage: stage || null });
++      setMsg({ ok: true, text: t("装修阶段已更新。") });
++      await load();
++      onSaved();
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    }
++  }
++
++  const key = d?.member_id ?? id;
++  const categories = categoriesOf(key);
++  const docs = d?.docs ?? [];
++  const stores = Array.from(new Set(docs.map((x) => STORE[x.company] ?? x.company))).sort().join(" + ");
++  const spent = docs.reduce((s, x) => s + num(x.amount), 0);
++  const cutoff = localISO(new Date(Date.now() - 365 * 86400000));
++  const recent = docs.filter((x) => x.doc_date > cutoff);
++  const tier = tierOf({
++    last_date: docs[0]?.doc_date ?? null, spent_12m: recent.reduce((s, x) => s + num(x.amount), 0),
++    doc_count_12m: recent.filter((x) => num(x.amount) > 0).length,
++  }, settings);
++  const p = d?.profile;
++
++  return (
++    <>
++      <div className="toolbar"><button className="ghost" onClick={onBack}>{t("← 返回")}</button></div>
++      <div className="card">
++        <h2 className="cu-title">{form.name || fmtMember(key)} {d && <TierTag tier={tier} />}</h2>
++        <div className="muted small">
++          {fmtMember(key)}{stores ? ` · ${stores}` : ""}
++          {docs.length ? ` · ${t("首次消费")} ${fmtDay(docs[docs.length - 1].doc_date)}` : ""}
++          {d && !docs.length ? ` · ${t("还没有购买纪录")}` : ""}
++          {p?.last_contact_at ? ` · ${t("上次联络")} ${fmtDay(localISO(new Date(p.last_contact_at)))}` : ""}
++          {p?.email ? ` · ${p.email}` : ""}
++        </div>
++        {err && <div className="error">{t("查询失败:")}{err}</div>}
++        {!d && !err && <p className="muted">{t("载入中…")}</p>}
++        {d && (
++          <>
++            <div className="cu-wa-row">
++              <WaButtons id={key} name={form.name} templates={templates} canEdit={canEdit}
++                         onTouched={(e) => { if (e) setMsg({ ok: false, text: e }); else { load(); onSaved(); } }} />
++            </div>
++            <div className="kpis cu-kpis">
++              <div className="kpi"><b>{fmtMoney(spent)}</b>
++                <span>{t("累计消费")} · {t("{n} 张单", { n: fmtNum(docs.filter((x) => num(x.amount) > 0).length) })}</span></div>
++              <div className="kpi"><b>{docs.length ? fmtDay(docs[0].doc_date) : "–"}</b>
++                <span>{t("最后消费")}{docs[0]?.sales_agent ? ` · ${t("业务员 {a}", { a: docs[0].sales_agent })}` : ""}</span></div>
++            </div>
++            {!canEdit && <p className="muted small">{t("你的权限是「只看」:可以看,不能改。")}</p>}
++            <fieldset className="plain cu-forms" disabled={!canEdit || busy}>
++              <div className="form cu-form">
++                <h3>{t("基本资料")}</h3>
++                <label>{t("名字")}<input value={form.name} onChange={upd("name")} /></label>
++                <label>{t("生日(月 / 日)")}
++                  <span className="cu-row">
++                    <select value={form.bm} onChange={upd("bm")}>
++                      <option value="">{t("月")}</option>
++                      {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
++                    </select>
++                    <select value={form.bd} onChange={upd("bd")}>
++                      <option value="">{t("日")}</option>
++                      {Array.from({ length: 31 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
++                    </select>
++                  </span>
++                </label>
++                <label>{t("类型")}
++                  <select value={form.ctype} onChange={upd("ctype")}>
++                    <option value="">{t("请选择")}</option>
++                    {TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
++                  </select>
++                </label>
++                <label>{t("同意收促销讯息")}
++                  <select value={form.consent} onChange={upd("consent")}>
++                    <option value="">{t("未确认")}</option>
++                    <option value="yes">{t("同意")}</option>
++                    <option value="no">{t("不同意")}</option>
++                  </select>
++                </label>
++                {p?.consent_at && (
++                  <div className="muted small">{t("{w} 于 {d} 登记", { w: dbText(p.consent_by), d: fmtDay(localISO(new Date(p.consent_at))) })}</div>
++                )}
++              </div>
++              <div className="form cu-form">
++                <label>{t("地区(例:Skudai、Mount Austin、新加坡)")}<input value={form.area} onChange={upd("area")} /></label>
++                <label>{t("地址(选填)")}<input value={form.address} onChange={upd("address")} /></label>
++                <label>{t("备注(例:装修中、喜欢黑色款)")}<textarea value={form.note} onChange={upd("note")} rows={3} /></label>
++                <label>{t("下次联络日期(到期会出现在跟进提醒)")}<input type="date" value={form.next} onChange={upd("next")} /></label>
++                {canEdit && <div className="actions left"><button disabled={busy} onClick={save}>{t("储存")}</button></div>}
++                {p?.updated_at && (
++                  <div className="muted small">{t("上次修改")}: {fmtTime(p.updated_at)} {dbText(p.updated_by)}</div>
++                )}
++              </div>
++            </fieldset>
++            <Note msg={msg} />
++
++            <StageBox stage={p?.reno_stage ?? ""} since={p?.reno_stage_at ?? null} settings={settings}
++                      categories={categories} canEdit={canEdit} onChange={setStage} />
++
++            {(d.quotes ?? []).length > 0 && (
++              <>
++                <h3>{t("报价单({n} 张)", { n: fmtNum((d.quotes ?? []).length) })}</h3>
++                <div className="cu-scroll">
++                  <table>
++                    <thead>
++                      <tr><th>{t("日期")}</th><th>{t("门市")}</th><th>{t("单号")}</th><th>{t("业务员")}</th><th>{t("货品")}</th>
++                        <th className="num">{t("金额")}</th><th>{t("状态")}</th></tr>
++                    </thead>
++                    <tbody>
++                      {(d.quotes ?? []).map((q) => (
++                        <tr key={`${q.company}|${q.doc_no}`}>
++                          <td className="nowrap">{fmtDay(q.doc_date)}</td>
++                          <td>{STORE[q.company] ?? q.company}</td>
++                          <td className="nowrap">{q.doc_no}</td>
++                          <td>{q.sales_agent}</td>
++                          <td className="muted small cu-wide">{q.items}</td>
++                          <td className="num">{fmtNum(q.amount, 2)}</td>
++                          <td className="nowrap">{q.transferred ? t("已转单") : q.bought_after ? t("之后有买") : <b>{t("未成交")}</b>}</td>
++                        </tr>
++                      ))}
++                    </tbody>
++                  </table>
++                </div>
++              </>
++            )}
++
++            <h3>{t("购买历史({n} 张单)", { n: fmtNum(docs.length) })}</h3>
++            <div className="cu-scroll">
++              <table>
++                <thead>
++                  <tr><th>{t("日期")}</th><th>{t("门市")}</th><th>{t("单号")}</th><th>{t("业务员")}</th><th className="num">{t("金额")}</th></tr>
++                </thead>
++                <tbody>
++                  {docs.length === 0 && <tr><td colSpan={5} className="muted">{t("没有消费纪录")}</td></tr>}
++                  {docs.map((x) => {
++                    const k = `${x.company}|${x.doc_type}|${x.doc_no}`;
++                    return (
++                      <Fragment key={k}>
++                        <tr className="click" onClick={() => setOpen(open === k ? null : k)}>
++                          <td className="nowrap">{fmtDay(x.doc_date)}</td>
++                          <td>{STORE[x.company] ?? x.company}</td>
++                          <td className="nowrap">{open === k ? "▾ " : "▸ "}{x.doc_no}{x.doc_type === "CN" ? ` (${t("退货")})` : ""}</td>
++                          <td>{x.sales_agent}</td>
++                          <td className={"num" + (num(x.amount) < 0 ? " cu-neg" : "")}>{fmtNum(x.amount, 2)}</td>
++                        </tr>
++                        {open === k && (
++                          <tr>
++                            <td colSpan={5} className="cu-items">
++                              <table>
++                                <tbody>
++                                  {x.items.map((it, i) => (
++                                    <tr key={i}>
++                                      <td className="nowrap">{it.item_code ?? ""}</td>
++                                      <td>{it.description}</td>
++                                      <td className="num">{fmtNum(it.qty)} {it.uom ?? ""}</td>
++                                      <td className="num">{fmtNum(it.sub_total, 2)}</td>
++                                    </tr>
++                                  ))}
++                                </tbody>
++                              </table>
++                              {x.debtor_name && <div className="muted small">{t("单上客户名称")}: {x.debtor_name} ({x.debtor_code})</div>}
++                            </td>
++                          </tr>
++                        )}
++                      </Fragment>
++                    );
++                  })}
++                </tbody>
++              </table>
++            </div>
++            <MergeBox id={key} aliases={d.aliases ?? []} canManage={canManage}
++                      onDone={(main) => { onSaved(); if (main !== key) onOpen(main); else load(); }} />
++            <ChangeLog id={key} />
++          </>
++        )}
++      </div>
++    </>
++  );
++}
++
++const FIELD_LABEL: Record<string, string> = {
++  name: "名字", birth_month: "生日月", birth_day: "生日日", area: "地区", address: "地址", customer_type: "类型",
++  note: "备注", consent: "同意收促销", next_contact: "下次联络", last_contact_at: "联络", reno_stage: "装修阶段", email: "电邮",
++};
++
++function fmtVal(k: string, v: unknown): string {
++  if (v == null || v === "") return "–";
++  if (k === "consent") return v === "yes" ? t("同意") : v === "no" ? t("不同意") : String(v);
++  if (k === "reno_stage") return t(STAGE_LABEL[String(v)] ?? String(v));
++  if (k === "last_contact_at") return fmtTime(String(v));
++  if (k === "customer_type") return t(String(v));
++  return String(v);
++}
++
++function StageBox({ stage, since, settings, categories, canEdit, onChange }: {
++  stage: string; since: string | null; settings: Settings; categories: string[]; canEdit: boolean; onChange: (s: string) => void;
++}) {
++  const reco = settings.stage_reco?.[stage] ?? [];
++  return (
++    <div className="cu-box">
++      <div className="toolbar">
++        <b>{t("装修进度")}</b>
++        <div className="tabs">
++          {STAGES.map(([k, v]) => (
++            <button key={k} className={stage === k ? "on" : ""} disabled={!canEdit}
++                    onClick={() => onChange(stage === k ? "" : k)}>{t(v)}</button>
++          ))}
++        </div>
++        {since && <span className="muted small">{t("{d} 更新", { d: fmtDay(localISO(new Date(since))) })}</span>}
++      </div>
++      {stage && reco.length > 0 && (
++        <div className="small">
++          {t("这个阶段可以推荐:")}{" "}
++          {reco.map((c) => (
++            <span key={c} className={"cu-tag " + (categories.includes(c) ? "cu-tier-normal" : "cu-tier-lead")}>
++              {c}{categories.includes(c) ? ` ✓ ${t("买过")}` : ""}
++            </span>
++          ))}
++        </div>
++      )}
++    </div>
++  );
++}
++
++function MergeBox({ id, aliases, canManage, onDone }: {
++  id: string; aliases: string[]; canManage: boolean; onDone: (main: string) => void;
++}) {
++  const [other, setOther] = useState("");
++  const [msg, setMsg] = useState<Msg>(null);
++  if (!canManage && !aliases.length) return null;
++
++  async function merge() {
++    if (other.replace(/\D/g, "").length < 8 && !other.startsWith("A:")) { setMsg({ ok: false, text: t("请输入完整手机号") }); return; }
++    if (!window.confirm(t("把 {o} 的购买纪录与资料合并到 {m}?之后两个号码都会显示成同一位顾客(可以再取消合并)。", {
++      o: other, m: fmtMember(id) }))) return;
++    try {
++      await rpc("bi_customer_merge", { p_keep: id, p_drop: other });
++      setOther("");
++      setMsg({ ok: true, text: t("已合并。") });
++      onDone(id);
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    }
++  }
++
++  async function unmerge(a: string) {
++    if (!window.confirm(t("取消合并 {a}?它的购买纪录会回到自己的号码(已合并过来的资料留在这里)。", { a: fmtMember(a) }))) return;
++    try {
++      await rpc("bi_customer_unmerge", { p_alias: a });
++      setMsg({ ok: true, text: t("已取消合并。") });
++      onDone(id);
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    }
++  }
++
++  return (
++    <div className="cu-box">
++      <b>{t("合并重复顾客")}</b>
++      {aliases.length > 0 && (
++        <div className="small">
++          {t("已合并进来的号码:")}{" "}
++          {aliases.map((a) => (
++            <span key={a} className="cu-alias">
++              {fmtMember(a)}{canManage && <button className="ghost small" onClick={() => unmerge(a)}>{t("取消合并")}</button>}
++            </span>
++          ))}
++        </div>
++      )}
++      {canManage && (
++        <div className="toolbar">
++          <input className="cu-short" placeholder={t("同一个人的另一个电话")} value={other} onChange={(e) => setOther(e.target.value)} />
++          <button className="ghost" onClick={merge}>{t("合并进来")}</button>
++        </div>
++      )}
++      <Note msg={msg} />
++    </div>
++  );
++}
++
++function ChangeLog({ id }: { id: string }) {
++  const [rows, setRows] = useState<LogRow[] | null>(null);
++  const [err, setErr] = useState("");
++  async function load() {
++    try {
++      setRows(await rpc<LogRow[]>("bi_customer_log", { p_member: id }) ?? []);
++      setErr("");
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++  const act: Record<string, string> = { insert: "建档", update: "修改", delete: "删除", merge: "合并", unmerge: "取消合并" };
++  return (
++    <details className="cu-log" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
++      <summary className="small">{t("修改纪录")}</summary>
++      {err && <div className="error">{t("查询失败:")}{err}</div>}
++      {rows && rows.length === 0 && <div className="muted small">{t("还没有纪录")}</div>}
++      {rows && rows.length > 0 && (
++        <div className="cu-scroll">
++          <table>
++            <thead><tr><th>{t("时间")}</th><th>{t("谁")}</th><th>{t("动作")}</th><th>{t("改了什么")}</th></tr></thead>
++            <tbody>
++              {rows.map((r, i) => (
++                <tr key={i}>
++                  <td className="nowrap">{fmtTime(r.at)}</td>
++                  <td>{dbText(r.by)}</td>
++                  <td className="nowrap">{t(act[r.action] ?? r.action)}{r.member_id !== id ? ` (${fmtMember(r.member_id)})` : ""}</td>
++                  <td className="small cu-wide">
++                    {Object.entries(r.changes).map(([k, v]) => {
++                      if (k === "merged" || k === "unmerged") return <div key={k}>{fmtMember(String(v))}</div>;
++                      const [o, nv] = Array.isArray(v) ? v : [null, v];
++                      return <div key={k}>{t(FIELD_LABEL[k] ?? k)}: {fmtVal(k, o)} → {fmtVal(k, nv)}</div>;
++                    })}
++                  </td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++    </details>
++  );
++}
+diff --git a/portal/src/cust/Reports.tsx b/portal/src/cust/Reports.tsx
+new file mode 100644
+index 0000000..0e19cdf
+--- /dev/null
++++ b/portal/src/cust/Reports.tsx
+@@ -0,0 +1,246 @@
++// 顾客资料 · 促销活动（可审批：成效、汇出名单；管理员可删）、每月顾客报告、没抓到电话的门市单据
++import { useEffect, useRef, useState } from "react";
++import {
++  Agent, Campaign, cleanName, Customer, downloadCsv, errText, fmtDay, fmtMember, fmtNum, localISO, Missing, Monthly, num, pct,
++  rpc, Settings, STORE, t, TIER_LABEL, tierOf, waNumber,
++} from "../cust-api";
++
++export function Campaigns({ isOwner, list, settings }: { isOwner: boolean; list: Customer[]; settings: Settings }) {
++  const [rows, setRows] = useState<Campaign[] | null>(null);
++  const [err, setErr] = useState("");
++
++  async function load() {
++    try {
++      setRows(await rpc<Campaign[]>("bi_campaigns") ?? []);
++      setErr("");
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++  useEffect(() => { load(); }, []);
++
++  async function exportMembers(c: Campaign) {
++    try {
++      const ids = await rpc<string[]>("bi_campaign_members", { p_id: c.id }) ?? [];
++      const byId = new Map(list.map((x) => [x.member_id, x]));
++      downloadCsv(`campaign_${c.id}_${c.sent_on}.csv`,
++        [t("电话(WhatsApp)"), t("电话"), t("名字"), t("分级"), t("最后消费"), t("近 12 个月")],
++        ids.map((id) => {
++          const x = byId.get(id);
++          return [waNumber(id), fmtMember(id), cleanName(x?.name), x ? t(TIER_LABEL[tierOf(x, settings)]) : "", x?.last_date ?? "",
++            num(x?.spent_12m).toFixed(2)];
++        }));
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++
++  async function remove(c: Campaign) {
++    if (!window.confirm(t("删除活动「{n}」?名单与成效纪录都会删掉。", { n: c.name }))) return;
++    try {
++      await rpc("bi_campaign_delete", { p_id: c.id });
++      load();
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++
++  const today = localISO();
++  const ended = (c: Campaign, days: number) => localISO(new Date(new Date(c.sent_on + "T00:00:00").getTime() + days * 86400000)) <= today;
++
++  return (
++    <section className="card">
++      <h2>{t("促销活动")}</h2>
++      <p className="muted small">
++        {t("成效 = 名单上的顾客在发送日之后 30 / 60 天内来买的人数与金额(含没看到讯息自己来的,当参考)。在「顾客」分页筛好名单后按「用这份名单建立促销活动」。")}
++      </p>
++      {err && <div className="error">{t("查询失败:")}{err}</div>}
++      {rows === null && !err && <p className="muted">{t("载入中…")}</p>}
++      {rows && (
++        <div className="cu-scroll">
++          <table>
++            <thead>
++              <tr>
++                <th>{t("发送日期")}</th><th>{t("活动")}</th><th className="num">{t("名单")}</th>
++                <th className="num">{t("30 天内来买")}</th><th className="num">{t("30 天营业额")}</th>
++                <th className="num">{t("60 天内来买")}</th><th className="num">{t("60 天营业额")}</th><th />
++              </tr>
++            </thead>
++            <tbody>
++              {rows.length === 0 && <tr><td colSpan={8} className="muted">{t("还没有活动")}</td></tr>}
++              {rows.map((c) => (
++                <tr key={c.id}>
++                  <td className="nowrap">{fmtDay(c.sent_on)}</td>
++                  <td>{c.name}{c.message && <div className="muted small">{c.message}</div>}</td>
++                  <td className="num">{fmtNum(c.members)}</td>
++                  <td className="num">
++                    {fmtNum(c.buyers_30)} ({pct(num(c.buyers_30), num(c.members))}){ended(c, 30) ? "" : ` · ${t("进行中")}`}
++                  </td>
++                  <td className="num">{fmtNum(c.revenue_30, 2)}</td>
++                  <td className="num">
++                    {fmtNum(c.buyers_60)} ({pct(num(c.buyers_60), num(c.members))}){ended(c, 60) ? "" : ` · ${t("进行中")}`}
++                  </td>
++                  <td className="num">{fmtNum(c.revenue_60, 2)}</td>
++                  <td className="nowrap">
++                    <button className="ghost small" onClick={() => exportMembers(c)}>{t("汇出名单")}</button>{" "}
++                    {isOwner && <button className="ghost small danger" onClick={() => remove(c)}>{t("删除")}</button>}
++                  </td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++    </section>
++  );
++}
++
++export function MonthlyReport({ settings }: { settings: Settings }) {
++  const [rows, setRows] = useState<Monthly[] | null>(null);
++  const [err, setErr] = useState("");
++  const [month, setMonth] = useState("");
++  const [agents, setAgents] = useState<Agent[] | null>(null);
++  const [agentsErr, setAgentsErr] = useState("");
++
++  const asked = useRef("");   // 最后点的月份：快速连点时，旧月份晚回来的结果丢掉
++  async function pick(m: string) {
++    asked.current = m;
++    setMonth(m);
++    setAgents(null);
++    setAgentsErr("");
++    const from = new Date(m.slice(0, 10) + "T00:00:00");
++    const to = new Date(from.getFullYear(), from.getMonth() + 1, 0);
++    try {
++      const r = await rpc<Agent[]>("bi_customer_agents", { p_from: localISO(from), p_to: localISO(to) });
++      if (asked.current === m) setAgents(r ?? []);
++    } catch (e) {
++      if (asked.current === m) setAgentsErr(errText(e));
++    }
++  }
++  useEffect(() => {
++    rpc<Monthly[]>("bi_customer_monthly", { p_months: 12 })
++      .then((r) => {
++        const data = (r ?? []).slice().reverse();
++        setRows(data);
++        if (data.length) pick(data[0].month);
++      })
++      .catch((e) => setErr(errText(e)));
++  }, []); // eslint-disable-line react-hooks/exhaustive-deps
++
++  return (
++    <section className="card">
++      <h2>{t("每月顾客报告")}</h2>
++      <p className="muted small">
++        {t("新客 = 那个月第一次买;回头客 = 以前买过、那个月又来;流失 = 最后一次消费满 {l} 天、在那个月变成流失的人数。只算门市散客,本月是到今天为止。", {
++          l: settings.lapsed_days })}
++      </p>
++      {err && <div className="error">{t("查询失败:")}{err}</div>}
++      {rows === null && !err && <p className="muted">{t("载入中…")}</p>}
++      {rows && (
++        <div className="cu-scroll">
++          <table>
++            <thead>
++              <tr>
++                <th>{t("月份")}</th><th className="num">{t("来买的顾客")}</th><th className="num">{t("新客")}</th>
++                <th className="num">{t("回头客")}</th><th className="num">{t("回头客占比")}</th>
++                <th className="num">{t("新客营业额")}</th><th className="num">{t("回头客营业额")}</th><th className="num">{t("流失")}</th>
++              </tr>
++            </thead>
++            <tbody>
++              {rows.map((r) => (
++                <tr key={r.month} className={"click" + (r.month === month ? " cu-sel" : "")} onClick={() => pick(r.month)}>
++                  <td className="nowrap">{r.month.slice(0, 7)}</td>
++                  <td className="num">{fmtNum(r.active)}</td>
++                  <td className="num">{fmtNum(r.new_customers)}</td>
++                  <td className="num">{fmtNum(r.returning_customers)}</td>
++                  <td className="num">{pct(num(r.returning_customers), num(r.active))}</td>
++                  <td className="num">{fmtNum(r.new_revenue, 2)}</td>
++                  <td className="num">{fmtNum(r.returning_revenue, 2)}</td>
++                  <td className="num">{fmtNum(r.lapsed)}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++      {month && (
++        <>
++          <h3>{t("{m} 各业务员的顾客", { m: month.slice(0, 7) })}</h3>
++          {agentsErr && <div className="error">{t("查询失败:")}{agentsErr}</div>}
++          {agents === null && !agentsErr && <p className="muted">{t("载入中…")}</p>}
++          {agents && (
++            <div className="cu-scroll">
++              <table>
++                <thead>
++                  <tr>
++                    <th>{t("业务员")}</th><th className="num">{t("顾客")}</th><th className="num">{t("回头客")}</th>
++                    <th className="num">{t("新客")}</th><th className="num">{t("营业额")}</th>
++                  </tr>
++                </thead>
++                <tbody>
++                  {agents.length === 0 && <tr><td colSpan={5} className="muted">{t("这个月没有门市散客的单")}</td></tr>}
++                  {agents.map((a) => (
++                    <tr key={a.agent}>
++                      <td>{a.agent}</td>
++                      <td className="num">{fmtNum(a.customers)}</td>
++                      <td className="num">{fmtNum(a.returning_customers)}</td>
++                      <td className="num">{fmtNum(a.new_customers)}</td>
++                      <td className="num">{fmtNum(a.revenue, 2)}</td>
++                    </tr>
++                  ))}
++                </tbody>
++              </table>
++            </div>
++          )}
++        </>
++      )}
++    </section>
++  );
++}
++
++export function MissingPhone() {
++  const [rows, setRows] = useState<Missing[] | null>(null);
++  const [err, setErr] = useState("");
++
++  async function load() {
++    try {
++      setRows(await rpc<Missing[]>("bi_customer_missing_phone", { p_days: 60 }) ?? []);
++      setErr("");
++    } catch (e) {
++      setErr(errText(e));
++    }
++  }
++
++  return (
++    <details className="card" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && rows === null) load(); }}>
++      <summary><b>{t("没抓到电话的门市单据(近 60 天)")}</b></summary>
++      <p className="muted small">
++        {t("这些单的客户名称没有手机号(或号码少一位),顾客不会出现在名单里。请在 AutoCount 把客户名称改成「名字 + 手机号」,隔天同步后就会补上。")}
++      </p>
++      {err && <div className="error">{t("查询失败:")}{err}</div>}
++      {rows === null && !err && <p className="muted">{t("载入中…")}</p>}
++      {rows && (
++        <div className="cu-scroll">
++          <table>
++            <thead>
++              <tr><th>{t("日期")}</th><th>{t("门市")}</th><th>{t("单号")}</th><th>{t("单上客户名称")}</th><th>{t("业务员")}</th><th className="num">{t("金额")}</th></tr>
++            </thead>
++            <tbody>
++              {rows.length === 0 && <tr><td colSpan={6} className="muted">{t("全部都有电话 👍")}</td></tr>}
++              {rows.map((x) => (
++                <tr key={`${x.company}|${x.doc_type}|${x.doc_no}`}>
++                  <td className="nowrap">{fmtDay(x.doc_date)}</td>
++                  <td>{STORE[x.company] ?? x.company}</td>
++                  <td className="nowrap">{x.doc_no}</td>
++                  <td>{x.debtor_name} <span className="muted">({x.debtor_code})</span></td>
++                  <td>{x.sales_agent}</td>
++                  <td className="num">{fmtNum(x.amount, 2)}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++    </details>
++  );
++}
+diff --git a/portal/src/cust/SettingsTab.tsx b/portal/src/cust/SettingsTab.tsx
+new file mode 100644
+index 0000000..7e47f4d
+--- /dev/null
++++ b/portal/src/cust/SettingsTab.tsx
+@@ -0,0 +1,144 @@
++// 顾客资料 · 设定（可审批）：分级门槛与提醒天数（只有管理员能改）、WhatsApp 范本、顾客扫码登记的 QR 网址
++import { Fragment, useEffect, useRef, useState } from "react";
++import { BI_SITE, errText, num, rpc, Settings, STAGES, t, Template } from "../cust-api";
++
++type Msg = { ok: boolean; text: string } | null;
++
++function toForm(s: Settings) {
++  return {
++    vip: String(s.vip_min_12m), docs: String(s.regular_min_docs), lapsed: String(s.lapsed_days),
++    lead: String(s.lead_follow_days), bday: String(s.birthday_days),
++    quote: String(s.quote_follow_days), qmax: String(s.quote_max_days), stage: String(s.stage_follow_days),
++    reco: Object.fromEntries(STAGES.map(([k]) => [k, (s.stage_reco?.[k] ?? []).join(", ")])) as Record<string, string>,
++  };
++}
++
++export function SettingsTab({ isOwner, loaded, settings, templates, onChanged }: {
++  isOwner: boolean; loaded: boolean; settings: Settings; templates: Template[]; onChanged: () => void;
++}) {
++  const [s, setS] = useState(() => toForm(settings));
++  const [msg, setMsg] = useState<Msg>(null);
++  const [edit, setEdit] = useState<Template | null>(null);
++  const [busy, setBusy] = useState(false);
++  const dirty = useRef(false);   // 门槛改了还没存：存范本后重新载入设定时不盖掉
++  useEffect(() => { if (!dirty.current) setS(toForm(settings)); }, [settings]);
++
++  async function run(f: () => Promise<unknown>): Promise<boolean> {
++    setBusy(true); setMsg(null);
++    try { await f(); setMsg({ ok: true, text: t("已储存。") }); onChanged(); return true; }
++    catch (e) { setMsg({ ok: false, text: errText(e) }); return false; }
++    finally { setBusy(false); }
++  }
++
++  const saveSettings = () => run(async () => {
++    await rpc("bi_customer_set_settings", {
++      p_vip_min_12m: num(s.vip), p_regular_min_docs: num(s.docs), p_lapsed_days: num(s.lapsed),
++      p_lead_follow_days: num(s.lead), p_birthday_days: num(s.bday),
++      p_quote_follow_days: num(s.quote), p_quote_max_days: num(s.qmax), p_stage_follow_days: num(s.stage),
++      p_stage_reco: Object.fromEntries(Object.entries(s.reco).map(([k, v]) => [k,
++        v.split(/[,，\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean)])),
++    });
++    dirty.current = false;
++  });
++
++  async function saveTemplate() {
++    if (!edit) return;
++    const e = edit;
++    if (await run(() => rpc("bi_wa_template_save", { p_id: e.id || null, p_title: e.title, p_body: e.body, p_sort: num(e.sort) }))) {
++      setEdit(null);
++    }
++  }
++
++  function removeTemplate(x: Template) {
++    if (!window.confirm(t("删除范本「{n}」?", { n: x.title }))) return;
++    run(() => rpc("bi_wa_template_delete", { p_id: x.id }));
++  }
++
++  const upd = (k: Exclude<keyof typeof s, "reco">) => (e: { target: { value: string } }) => {
++    dirty.current = true;
++    setS({ ...s, [k]: e.target.value });
++  };
++  const field = (label: string, k: Exclude<keyof typeof s, "reco">) => (
++    <label>{t(label)}<input value={s[k]} onChange={upd(k)} inputMode="numeric" /></label>
++  );
++
++  return (
++    <>
++      {msg && <div className={msg.ok ? "ok" : "error"}>{msg.text}</div>}
++      <div className="cu-forms">
++        <section className="card cu-form">
++          <h2>{t("分级与提醒")}</h2>
++          {!loaded && <p className="muted small">{t("载入中…")}</p>}
++          <fieldset className="plain" disabled={!isOwner || busy || !loaded}>
++            {field("VIP:近 12 个月消费至少 (RM)", "vip")}
++            {field("常客:近 12 个月至少几张单", "docs")}
++            {field("流失:超过几天没来", "lapsed")}
++            {field("潜在客:建档几天没联络就提醒", "lead")}
++            {field("生日:提前几天提醒", "bday")}
++            {field("报价:开出几天还没成交就提醒", "quote")}
++            {field("报价:超过几天就不再追", "qmax")}
++            {field("装修进度:几天没更新就提醒", "stage")}
++            <h3>{t("各装修阶段推荐的类别")}</h3>
++            <div className="muted small">{t("填 AutoCount 的 Item Group,用逗号分开,例:SANITARY, KITCHEN")}</div>
++            {STAGES.map(([k, v]) => (
++              <Fragment key={k}>
++                <label>{t(v)}
++                  <input value={s.reco[k] ?? ""} onChange={(e) => { dirty.current = true; setS({ ...s, reco: { ...s.reco, [k]: e.target.value } }); }} />
++                </label>
++              </Fragment>
++            ))}
++            {isOwner && <div className="actions left"><button onClick={saveSettings}>{t("储存")}</button></div>}
++          </fieldset>
++          {!isOwner && <p className="muted small">{t("只有管理员可以改分级门槛与提醒天数。")}</p>}
++        </section>
++
++        <section className="card cu-form">
++          <h2>{t("WhatsApp 范本")}</h2>
++          <div className="muted small">{t("内容里的 {name} 会换成顾客名字。")}</div>
++          {templates.map((x) => (
++            <div key={x.id} className="cu-tpl">
++              <b>{x.title}</b>
++              <div className="muted small pre">{x.body}</div>
++              <div className="actions left">
++                <button className="ghost small" disabled={busy} onClick={() => setEdit({ ...x })}>{t("修改")}</button>
++                <button className="ghost small danger" disabled={busy} onClick={() => removeTemplate(x)}>{t("删除")}</button>
++              </div>
++            </div>
++          ))}
++          {!edit && (
++            <div className="actions left">
++              <button className="ghost" onClick={() => setEdit({ id: 0, title: "", body: "Hi {name}，", sort: templates.length + 1 })}>
++                {t("新增范本")}
++              </button>
++            </div>
++          )}
++          {edit && (
++            <div className="form cu-box">
++              <label>{t("标题(按钮上显示)")}<input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></label>
++              <label>{t("内容")}<textarea rows={4} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} /></label>
++              <label>{t("排序")}
++                <input value={String(edit.sort)} onChange={(e) => setEdit({ ...edit, sort: num(e.target.value) })} inputMode="numeric" />
++              </label>
++              <div className="actions left">
++                <button disabled={busy} onClick={saveTemplate}>{t("储存")}</button>
++                <button className="ghost" onClick={() => setEdit(null)}>{t("取消")}</button>
++              </div>
++            </div>
++          )}
++        </section>
++
++        <section className="card cu-form">
++          <h2>{t("顾客自己登记的 QR")}</h2>
++          <div className="muted small">
++            {t("把下面网址做成 QR 贴在柜台;顾客扫码填完就直接存进顾客资料,在「跟进」分页的「最近扫码登记的顾客」看得到。")}
++          </div>
++          {["HQ", "JB"].map((st) => (
++            <div key={st} className="small">
++              <b>{st}</b>: <a href={`${BI_SITE}/join.html?s=${st}`} target="_blank" rel="noreferrer">{`${BI_SITE}/join.html?s=${st}`}</a>
++            </div>
++          ))}
++        </section>
++      </div>
++    </>
++  );
++}
+diff --git a/portal/src/cust/dict.ts b/portal/src/cust/dict.ts
+new file mode 100644
+index 0000000..d6a2f62
+--- /dev/null
++++ b/portal/src/cust/dict.ts
+@@ -0,0 +1,272 @@
++// 顾客资料页（#/customers）的英文。大部分照抄 BI 的 src/i18n/loyalty.ts（同一页搬过来，用语一致），
++// 加上营运系统才有的句子与 BI 顾客资料函数的错误讯息。新增介面文字要把中文原句加进来（这一页 translate="no"，不走 i18n.ts）。
++export const CUST_EN: Record<string, string> = {
++  "← 返回": "← Back",
++  "重试": "Retry",
++  "货品": "Items",
++  "改了什么": "Changes",
++  "12 个月内来过": "Within 12 months",
++  "3 个月内来过": "Within 3 months",
++  "30 天内来买": "Bought within 30 days",
++  "30 天营业额": "Sales in 30 days",
++  "6 个月内来过": "Within 6 months",
++  "60 天内来买": "Bought within 60 days",
++  "60 天营业额": "Sales in 60 days",
++  "VIP = 近 12 个月消费 ≥ RM{v};常客 = 近 12 个月 ≥ {d} 张单;流失 = 超过 {l} 天没来": "VIP = spent ≥ RM{v} in the last 12 months; Regular = ≥ {d} bills in the last 12 months; Lapsed = no visit for over {l} days",
++  "VIP:近 12 个月消费至少 (RM)": "VIP: spent in last 12 months at least (RM)",
++  "WhatsApp 范本": "WhatsApp templates",
++  "WhatsApp(空白)": "WhatsApp (blank)",
++  "{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了、报价开出 {q} 天还没成交、装修进度 {s} 天没更新。按 WhatsApp 或「已联络」后就会从这里消失。": "Birthdays within {b} days, leads not contacted {l} days after being added, follow-up dates that have arrived, quotations not closed after {q} days, and renovation progress not updated for {s} days. They leave this list once you press WhatsApp or \"Contacted\".",
++  "{d} 天后生日 🎂": "Birthday in {d} days 🎂",
++  "{d} 更新": "updated {d}",
++  "{m} 各业务员的顾客": "{m} customers by agent",
++  "{m} 月": "Month {m}",
++  "{n} 张单": "{n} bills",
++  "{w} 于 {d} 登记": "recorded by {w} on {d}",
++  "← 回顾客名单": "← Back to customers",
++  "一般": "Normal",
++  "上次修改": "Last changed",
++  "上次联络": "last contacted",
++  "下次联络": "Next contact",
++  "下次联络日期(到期会出现在跟进提醒)": "Next contact date (appears in follow-ups when due)",
++  "不同意": "No",
++  "不收促销": "No promotions",
++  "不是本人 / 删掉": "Not the customer / discard",
++  "不知道 / 不填": "Unknown / skip",
++  "不限最后消费": "Any last purchase",
++  "业务员": "Agent",
++  "业务员 {a}": "agent {a}",
++  "两边都买过": "Bought at both",
++  "之后有买": "Bought later",
++  "买过": "bought",
++  "买过 {c}": "Bought {c}",
++  "买过:全部类别": "Bought: any category",
++  "买过类别": "Categories bought",
++  "今天生日 🎂": "Birthday today 🎂",
++  "今天约好联络": "Follow-up due today",
++  "会放进目前筛选结果里「同意收促销」的 {y} 位(另外 {x} 位未同意或未确认,不会放进去)。之后在「促销活动」看这批人发送后 30 / 60 天的消费。": "Adds the {y} customers in the current list who agreed to promotions ({x} others have not agreed or are unconfirmed and are left out). Check their spending 30 / 60 days after sending under \"Campaigns\".",
++  "你没有「顾客资料」的权限。需要的话请找管理员在「员工与权限」开通。": "You don't have access to Customers. Ask an admin to grant it in \"Staff & access\".",
++  "你的权限是「只看」:可以看,不能改。": "You have view-only access: you can look but not change anything.",
++  "促销活动": "Campaigns",
++  "修改": "Edit",
++  "修改纪录": "Change history",
++  "储存": "Save",
++  "全部": "All",
++  "全部类型": "All types",
++  "全部都有电话 👍": "All bills have a phone number 👍",
++  "全部门市": "All stores",
++  "公司": "Company",
++  "其他": "Other",
++  "内容": "Message",
++  "内容里的 {name} 会换成顾客名字。": "{name} in the message is replaced with the customer's name.",
++  "分级": "Tier",
++  "分级与提醒": "Tiers and reminders",
++  "删除": "Delete",
++  "删除活动「{n}」?名单与成效纪录都会删掉。": "Delete campaign \"{n}\"? Its list and results will be deleted.",
++  "删除范本「{n}」?": "Delete template \"{n}\"?",
++  "动作": "Action",
++  "动工 / 水电": "Started / plumbing & wiring",
++  "单上客户名称": "Customer name on bill",
++  "单号": "Doc no.",
++  "单数": "Bills",
++  "原因": "Reason",
++  "发送日期": "Sent on",
++  "取消": "Cancel",
++  "取消合并": "Undo merge",
++  "取消合并 {a}?它的购买纪录会回到自己的号码(已合并过来的资料留在这里)。": "Undo merging {a}? Its purchases go back to its own number (details already merged stay here).",
++  "只有管理员可以改分级门槛与提醒天数。": "Only admins can change the tier thresholds and reminder days.",
++  "只有这些人会被汇出 / 放进活动": "only these are exported / added to campaigns",
++  "可推荐 {c}": "suggest {c}",
++  "各装修阶段推荐的类别": "Suggested categories per renovation stage",
++  "合并": "Merge",
++  "合并进来": "Merge in",
++  "合并重复顾客": "Merge duplicate customers",
++  "同一个人的另一个电话": "Same customer's other phone",
++  "同意": "Yes",
++  "同意收促销": "Agreed to promotions",
++  "同意收促销:不限": "Promotions: any",
++  "同意收促销只能是 同意 / 不同意 / 未确认": "Promotion consent must be yes / no / not confirmed",
++  "同意收促销讯息": "Agrees to receive promotions",
++  "名单": "List",
++  "名单里没有「同意收促销」的顾客，活动没有建立": "No one on the list agreed to receive promotions, so the campaign was not created",
++  "名字": "Name",
++  "回头客": "Returning",
++  "回头客占比": "Returning share",
++  "回头客营业额": "Returning sales",
++  "地区": "Area",
++  "地区(例:Skudai、Mount Austin、新加坡)": "Area (e.g. Skudai, Mount Austin, Singapore)",
++  "地址": "Address",
++  "地址(选填)": "Address (optional)",
++  "地址太长": "Address is too long",
++  "坐标不对": "Invalid coordinates",
++  "基本资料": "Details",
++  "填 AutoCount 的 Item Group,用逗号分开,例:SANITARY, KITCHEN": "AutoCount Item Groups separated by commas, e.g. SANITARY, KITCHEN",
++  "备注": "Note",
++  "备注(例:装修中、喜欢黑色款)": "Note (e.g. renovating, likes black finish)",
++  "安装": "Installation",
++  "完工": "Completed",
++  "屋主": "Homeowner",
++  "已储存。": "Saved.",
++  "已取消合并。": "Merge undone.",
++  "已合并。": "Merged.",
++  "已合并进来的号码:": "Numbers merged in:",
++  "已建立活动,名单 {n} 位。": "Campaign created with {n} customers.",
++  "已登记": "Signed up",
++  "已登记 {p}。": "Saved {p}.",
++  "已联络": "Contacted",
++  "已补资料": "With details",
++  "已转单": "Converted",
++  "常客": "Regular",
++  "常客:近 12 个月至少几张单": "Regular: bills in last 12 months at least",
++  "建档": "Created",
++  "建立": "Create",
++  "建立促销活动": "Create campaign",
++  "待确认": "Pending",
++  "待跟进": "To follow up",
++  "快速登记": "Quick sign-up",
++  "成效 = 名单上的顾客在发送日之后 30 / 60 天内来买的人数与金额(含没看到讯息自己来的,当参考)。在「顾客」分页筛好名单后按「用这份名单建立促销活动」。": "Results = how many people on the list bought, and how much, within 30 / 60 days after the send date (including those who came without seeing the message, so treat it as a guide). Filter a list on the \"Customers\" tab, then press \"Create campaign from this list\".",
++  "手机号码": "Mobile number",
++  "打开这位顾客": "Open customer",
++  "承包商": "Contractor",
++  "把 {o} 的购买纪录与资料合并到 {m}?之后两个号码都会显示成同一位顾客(可以再取消合并)。": "Merge {o}'s purchases and details into {m}? Both numbers will then show as one customer (you can undo this).",
++  "把下面网址做成 QR 贴在柜台;顾客扫码填完就直接存进顾客资料,在「跟进」分页的「最近扫码登记的顾客」看得到。": "Turn these links into QR codes at the counter. What customers fill in is saved straight into their record; see \"Recent QR sign-ups\" on the \"Follow-up\" tab.",
++  "报价 {d} 天还没成交": "Quotation open for {d} days",
++  "报价 {n}": "Quote {n}",
++  "报价:开出几天还没成交就提醒": "Quotation: remind after (days) without a sale",
++  "报价:超过几天就不再追": "Quotation: stop following after (days)",
++  "报价单({n} 张)": "Quotations ({n})",
++  "报告": "Reports",
++  "排序": "Order",
++  "新增范本": "Add template",
++  "新增顾客": "Add customer",
++  "新客": "New",
++  "新客 = 那个月第一次买;回头客 = 以前买过、那个月又来;流失 = 最后一次消费满 {l} 天、在那个月变成流失的人数。只算门市散客,本月是到今天为止。": "New = first purchase that month; Returning = bought before and came again that month; Lapsed = customers whose last purchase reached {l} days that month. Store walk-in customers only; this month is up to today.",
++  "新客营业额": "New customer sales",
++  "新顾客电话": "New customer phone",
++  "日": "Day",
++  "日期": "Date",
++  "时间": "Time",
++  "显示更多": "Show more",
++  "最后消费": "Last purchase",
++  "最近扫码登记的顾客({n} 位,近 14 天)": "Recent QR sign-ups ({n}, last 14 days)",
++  "最近消费": "Recent",
++  "月": "Month",
++  "月份": "Month",
++  "有填名字 / 生日 / 地区等": "name / birthday / area filled in",
++  "有填装修阶段": "Has renovation stage",
++  "有报价没成交": "Open quotation",
++  "未分类": "No type",
++  "未成交": "Not closed",
++  "未成交报价 RM {a}": "Open quotations RM {a}",
++  "未确认": "Unconfirmed",
++  "本月生日 {b} 位": "{b} birthdays this month",
++  "来买的顾客": "Buying customers",
++  "柜台 / 手机用,30 秒填完;只会补上有填的栏位": "For the counter or a phone, 30 seconds; only the fields you fill are saved",
++  "查询失败:": "Query failed: ",
++  "标题(按钮上显示)": "Title (shown on the button)",
++  "每月顾客报告": "Monthly customer report",
++  "水工": "Plumber",
++  "汇出同意名单 {n} 位 (Excel)": "Export {n} who agreed (Excel)",
++  "汇出名单": "Export list",
++  "没买过 {c}": "Never bought {c}",
++  "没买过:不限": "Never bought: any",
++  "没抓到电话的门市单据(近 60 天)": "Store bills without a phone number (last 60 days)",
++  "没有权限": "No access",
++  "没有消费纪录": "No purchases",
++  "没有符合的顾客": "No matching customers",
++  "泥水 / 贴砖": "Masonry / tiling",
++  "活动": "Campaign",
++  "活动名称(例:10 月水龙头 8 折)": "Campaign name (e.g. October taps 20% off)",
++  "活动要有名称": "The campaign needs a name",
++  "流失": "Lapsed",
++  "流失:超过几天没来": "Lapsed: no visit for more than (days)",
++  "消费最多": "Top spenders",
++  "清除筛选": "Clear filters",
++  "潜在客": "Lead",
++  "潜在客,建档 {d} 天还没联络": "Lead, added {d} days ago, not contacted",
++  "潜在客:建档几天没联络就提醒": "Lead: remind after (days) without contact",
++  "状态": "Status",
++  "现有:{n}": "Current: {n}",
++  "生日": "Birthday",
++  "生日(月 / 日)": "Birthday (month / day)",
++  "生日:提前几天提醒": "Birthday: remind (days) before",
++  "生日日": "Birthday day",
++  "生日月": "Birthday month",
++  "生日月份": "Birthday month",
++  "生日要月、日都填,或都不填": "Fill in both month and day for the birthday, or neither",
++  "生日要月、日都填，或都不填": "Fill in both month and day of the birthday, or neither",
++  "用这份名单建立促销活动": "Create campaign from this list",
++  "电话": "Phone",
++  "电话 / 账号": "Phone / account",
++  "电话(WhatsApp)": "Phone (WhatsApp)",
++  "电话、名字或备注": "Phone, name or note",
++  "电邮": "Email",
++  "目前没有要跟进的顾客 👍": "Nobody to follow up right now 👍",
++  "看不出电话号码": "Can't read a phone number",
++  "看不出电话号码：两边都要填完整手机号": "Can't read a phone number: enter a full mobile number on both sides",
++  "看不出电话号码：请输入完整手机号，例如 012-3456789 或 +65 9123 4567": "Can't read a phone number: enter a full mobile number, e.g. 012-3456789 or +65 9123 4567",
++  "确认": "Confirm",
++  "符合 {n} 位,其中同意收促销 {y} 位": "{n} match, {y} agreed to promotions",
++  "类型": "Type",
++  "累计消费": "Total spent",
++  "累计消费至少 RM": "Total spent at least RM",
++  "约好联络日已过 {d} 天": "Follow-up date passed {d} days ago",
++  "联络": "Contact",
++  "范本要有标题和内容": "A template needs a title and a message",
++  "营业额": "Sales",
++  "装修:{s}": "Renovation: {s}",
++  "装修进度": "Renovation progress",
++  "装修进度 {d} 天没更新": "Renovation progress not updated for {d} days",
++  "装修进度:几天没更新就提醒": "Renovation: remind after (days) without update",
++  "装修阶段": "Renovation stage",
++  "装修阶段:不限": "Renovation: any",
++  "装修阶段已更新。": "Renovation stage updated.",
++  "装修阶段推荐格式不对": "The renovation-stage recommendations are in the wrong format",
++  "规划中": "Planning",
++  "讯息内容(选填,留底用)": "Message (optional, for the record)",
++  "设定": "Settings",
++  "设定值不合理（VIP 门槛 ≥ 0、常客至少 1 张单、流失至少 30 天、潜在客跟进至少 1 天、报价跟进至少 1 天、报价最多追至少 7 天、装修进度至少 7 天）": "Settings out of range (VIP threshold ≥ 0, regular at least 1 bill, lapsed at least 30 days, lead follow-up at least 1 day, quote follow-up at least 1 day, quote chase at least 7 days, renovation stage at least 7 days)",
++  "设计师": "Designer",
++  "请输入完整手机号": "Please enter the full mobile number",
++  "请选择": "Choose",
++  "谁": "Who",
++  "账号型顾客没有电话,不能 WhatsApp": "Account customer without a phone number; WhatsApp not available",
++  "购买历史({n} 张单)": "Purchase history ({n} bills)",
++  "超过 12 个月没来": "Not for 12+ months",
++  "跟进": "Follow-up",
++  "跟进提醒({n} 位)": "Follow-ups ({n})",
++  "载入中…": "Loading…",
++  "近 12 个月": "Last 12 months",
++  "近 12 个月有消费 {a} 位": "{a} bought in the last 12 months",
++  "还没买过": "Never bought",
++  "还没有活动": "No campaigns yet",
++  "还没有纪录": "No history yet",
++  "还没有购买纪录": "no purchases yet",
++  "这两个号码已经是同一位顾客": "These two numbers are already the same customer",
++  "这个动作只有管理员可以做。": "Only an admin can do this.",
++  "这个月没有门市散客的单": "No store customer bills this month",
++  "这个阶段可以推荐:": "Suggest at this stage:",
++  "这些单的客户名称没有手机号(或号码少一位),顾客不会出现在名单里。请在 AutoCount 把客户名称改成「名字 + 手机号」,隔天同步后就会补上。": "These bills have no mobile number in the customer name (or a digit is missing), so the customer is not in the list. Change the customer name in AutoCount to \"name + mobile number\"; they appear after the next daily sync.",
++  "这笔登记已经处理过（或不存在），请重新整理页面": "This sign-up was already handled (or doesn't exist). Please refresh the page",
++  "进行中": "running",
++  "退货": "return",
++  "金额": "Amount",
++  "门市": "Store",
++  "门市顾客以电话认人,总部与 JB 合并;购买纪录每天中午从 AutoCount 同步。开单时客户名称写「名字 + 手机号」,顾客才会出现在这里。": "Store customers are matched by phone number, HQ and JB combined; purchases sync from AutoCount daily around noon. Write \"name + mobile number\" as the customer name when billing, or the customer will not appear here.",
++  "顾客": "Customers",
++  "顾客人数": "Customers",
++  "顾客扫 QR 送出就直接存进顾客资料:已有的名字 / 生日不会被盖掉,地址、电邮与同意收促销以顾客填的为准;每笔改动都在顾客的「修改纪录」。可以在这里打 WhatsApp 欢迎新顾客。": "Customers who scan the QR are saved straight into the customer records: existing names / birthdays are kept; address, email and the promotion choice follow what the customer entered. Every change is in the customer's change history. Use this list to welcome new customers on WhatsApp.",
++  "顾客自己登记的 QR": "Self sign-up QR",
++  "顾客资料": "Customers",
++  "首次消费": "first purchase",
++};
++
++/** 带编号的错误讯息（资料库 raise exception 的 %） */
++export const CUST_PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
++  [/^(.+) 已经合并到别的顾客，请先取消那次合并$/, (m) => `${m[1]} is already merged into another customer. Undo that merge first`],
++  [/^(.+) 没有合并过$/, (m) => `${m[1]} was never merged`],
++  [/^找不到范本 #(\d+)$/, (m) => `Template #${m[1]} not found`],
++  // 资料库存的「谁改的」（bi.customer_profile.consent_by / updated_by、修改纪录的 by）
++  [/^顾客自己扫码登记（(.+)）$/, (m) => `Customer's own QR sign-up (${m[1]})`],
++  [/^顾客自己登记（(.+) 确认）$/, (m) => `Customer's own sign-up (confirmed by ${m[1]})`],
++];
+diff --git a/portal/src/i18n-dict-db.ts b/portal/src/i18n-dict-db.ts
+index af663dc..efe330b 100644
+--- a/portal/src/i18n-dict-db.ts
++++ b/portal/src/i18n-dict-db.ts
+@@ -14,6 +14,7 @@ export const DICT_DB: Record<string, string> = {
+   "人事": "HR",
+   "薪资": "Payroll",
+   "报表": "Reports",
++  "顾客资料": "Customers",
+   "我的待办、待审批、各模块入口": "My to-dos, pending approvals, module shortcuts",
+   "跨部门交办事项：指派、期限、进度、留言": "Cross-department tasks: assignee, due date, progress, comments",
+   "通用申请与审批：请假、采购、折扣、报销…": "Requests & approvals: leave, purchases, discounts, expenses…",
+@@ -21,6 +22,9 @@ export const DICT_DB: Record<string, string> = {
+   "库存查询、预留、拣货、收货": "Stock lookup, reservations, picking, receiving",
+   "送货排程、签收、安装跟踪": "Delivery schedule, proof of delivery, installation tracking",
+   "客户、销售订单、业绩": "Customers, sales orders, performance",
++  "门市顾客名单、跟进提醒、一键 WhatsApp、顾客扫码登记、促销活动":
++    "Store customer list, follow-up reminders, one-tap WhatsApp, customer QR sign-up, promotions",
++  "这个动作只有管理员可以做。": "Only an admin can do this.",
+   "应收、账龄、催收提醒": "Receivables, ageing, collection reminders",
+   "佣金计算、审批、报表": "Commission calculation, approval, reports",
+   "员工档案、打卡、请假": "Staff records, attendance, leave",
+diff --git a/portal/src/pages/Customers.tsx b/portal/src/pages/Customers.tsx
+new file mode 100644
+index 0000000..6d7ebbf
+--- /dev/null
++++ b/portal/src/pages/Customers.tsx
+@@ -0,0 +1,187 @@
++// 顾客资料：门市顾客以电话认人、总部与 JB 合并；跟进提醒、一键 WhatsApp、快速登记、扫码登记、促销活动、每月报告。
++// 路由 #/customers/<分页>；一位顾客 #/customers/c/<顾客编号>（电话 60… 或账号 A:公司:代号）。
++// 资料与 BI 的顾客资料页（loyalty.html）共用 bi.customer_*；权限 = 「顾客资料」模块（migration 20261016_ops_customers.sql）：
++// 只看 = 看；可编辑 = 改资料、登记、联络；可审批 = 汇出、合并、活动、范本；管理员 = 分级门槛、删活动。
++// 这一页自己带中英文（cust/dict.ts），所以整页 translate="no"。
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { go } from "../router";
++import { ErrorBox, Tabs } from "../ui";
++import {
++  custRole, CustRole, Customer, DEFAULT_SETTINGS, errText, fmtNum, followUps, rpc, Settings, t, Template, daysSince,
++} from "../cust-api";
++import { CustomerList } from "../cust/List";
++import { CustomerPanel } from "../cust/Panel";
++import { FollowUpList, QuickRegister, Signups } from "../cust/Follow";
++import { Campaigns, MissingPhone, MonthlyReport } from "../cust/Reports";
++import { SettingsTab } from "../cust/SettingsTab";
++import "../cust.css";
++
++type Tab = "follow" | "list" | "campaigns" | "report" | "setup";
++
++export default function Customers({ sub, arg }: { sub?: string; arg?: string }) {
++  const [role, setRole] = useState<CustRole | null | undefined>(undefined);
++  const [list, setList] = useState<Customer[] | null>(null);
++  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
++  const [templates, setTemplates] = useState<Template[]>([]);
++  const [error, setError] = useState("");
++  const [roleErr, setRoleErr] = useState("");
++  const [settingsErr, setSettingsErr] = useState("");
++  const [settingsLoaded, setSettingsLoaded] = useState(false);   // 还没拿到真的设定前，设定分页不给存（免得把预设值存回去）
++  const lastTab = useRef<Tab>("follow");
++  const scrollAt = useRef(0);        // 打开顾客前名单卷到哪里，回来时卷回去
++
++  const load = useCallback(async () => {
++    // bi_customers_all 回传一个 JSON 阵列：API 每次最多回 1,000 列，直接读 bi_customers 只会拿到前 1,000 位
++    try {
++      const r = await rpc<Customer[]>("bi_customers_all");
++      setList((r ?? []).map((c) => ({ ...c, categories: c.categories ?? [] })));
++      setError("");
++    } catch (e) {
++      setError(errText(e));
++      setList((old) => old ?? []);
++    }
++  }, []);
++  const loadSettings = useCallback(async () => {
++    // 两个各自套用：范本拿不到不能连设定都丢掉（不然分级、提醒照预设值算）
++    const [s, w] = await Promise.allSettled([rpc<Partial<Settings> | null>("bi_customer_settings"), rpc<Template[]>("bi_wa_templates")]);
++    if (s.status === "fulfilled") {
++      const v = s.value;
++      if (v) setSettings({ ...DEFAULT_SETTINGS, ...v, stage_reco: v.stage_reco ?? DEFAULT_SETTINGS.stage_reco });
++      setSettingsLoaded(true);
++    }
++    if (w.status === "fulfilled") setTemplates(w.value ?? []);
++    const bad = [s, w].find((x) => x.status === "rejected") as PromiseRejectedResult | undefined;
++    setSettingsErr(bad ? errText(bad.reason) : "");
++  }, []);
++  const loadAll = useCallback(() => {
++    setRoleErr("");
++    // 拿不到角色（断线等）不当成「没有权限」，给重试
++    custRole().then((r) => setRole(r ?? null)).catch((e) => setRoleErr(errText(e)));
++    load();
++    loadSettings();
++  }, [load, loadSettings]);
++  useEffect(loadAll, [loadAll]);
++
++  let memberId = "";
++  if (sub === "c" && arg) {
++    try { memberId = decodeURIComponent(arg); } catch { memberId = arg; }
++  }
++  // 从顾客回到名单：卷回原来的位置（名单一直挂着，筛选条件也还在）
++  useEffect(() => {
++    if (!memberId && scrollAt.current) {
++      const y = scrollAt.current;
++      scrollAt.current = 0;
++      requestAnimationFrame(() => window.scrollTo({ top: y }));
++    }
++  }, [memberId]);
++
++  const follow = useMemo(() => followUps(list ?? [], settings), [list, settings]);
++  const totals = useMemo(() => {
++    const all = list ?? [];
++    const month = new Date().getMonth() + 1;
++    return {
++      count: all.length,
++      active: all.filter((c) => daysSince(c.last_date) <= 365).length,
++      profiled: all.filter((c) => c.profile_updated_at).length,
++      birthday: all.filter((c) => c.birth_month === month).length,
++      consent: all.filter((c) => c.consent === "yes").length,
++    };
++  }, [list]);
++
++  if (roleErr) {
++    return (
++      <div translate="no">
++        <ErrorBox error={t("查询失败:") + roleErr} />
++        <button className="ghost" onClick={loadAll}>{t("重试")}</button>
++      </div>
++    );
++  }
++  if (role === undefined || list === null) {
++    return <div translate="no">{error ? <ErrorBox error={error} /> : <p className="muted">{t("载入中…")}</p>}</div>;
++  }
++  if (role === null) {
++    return (
++      <div translate="no" className="card narrow">
++        <h2>{t("没有权限")}</h2>
++        <p>{t("你没有「顾客资料」的权限。需要的话请找管理员在「员工与权限」开通。")}</p>
++        <ErrorBox error={error} />
++      </div>
++    );
++  }
++
++  const canEdit = role !== "viewer";
++  const canManage = role === "owner" || role === "manager";
++  const isOwner = role === "owner";
++  const tabs: [Tab, string][] = [["follow", t("跟进")], ["list", t("顾客")]];
++  if (canManage) tabs.push(["campaigns", t("促销活动")]);
++  tabs.push(["report", t("报告")]);
++  if (canManage) tabs.push(["setup", t("设定")]);
++
++  const open = (id: string) => {
++    if (!memberId) scrollAt.current = window.scrollY;
++    go(`/customers/c/${encodeURIComponent(id)}`);
++    // 在这一笔浏览纪录上做记号：「返回」只在这种纪录上用浏览器的上一页（直接开连结进来的就回分页，不会跳出营运系统）
++    window.history.replaceState({ ...(window.history.state ?? {}), custFromPage: true }, "");
++    window.scrollTo({ top: 0 });
++  };
++  const back = () => {
++    if (window.history.state?.custFromPage) window.history.back();
++    else go(`/customers/${lastTab.current}`);
++  };
++  const categoriesOf = (id: string) => list.find((c) => c.member_id === id)?.categories ?? [];
++  if (!memberId && tabs.some(([k]) => k === sub)) lastTab.current = sub as Tab;
++  else if (!memberId) lastTab.current = "follow";
++  // 打开一位顾客时，原来的分页还挂着（藏起来），回来时筛选、捲动位置都在
++  const tab: Tab = lastTab.current;
++
++  return (
++    <div translate="no">
++      <div className="page-head">
++        <h1>{t("顾客资料")}</h1>
++      </div>
++      <p className="muted small">
++        {t("门市顾客以电话认人,总部与 JB 合并;购买纪录每天中午从 AutoCount 同步。开单时客户名称写「名字 + 手机号」,顾客才会出现在这里。")}
++      </p>
++      <ErrorBox error={error} />
++      {settingsErr && <ErrorBox error={t("查询失败:") + settingsErr} />}
++      {memberId && (
++        <CustomerPanel key={memberId} id={memberId} role={role} settings={settings} templates={templates}
++                       categoriesOf={categoriesOf} onBack={back} onSaved={load} onOpen={open} />
++      )}
++      <div hidden={!!memberId}>
++        {/* 藏起来时量不到宽度，「右边还有分页」的淡出提示会算错：回来时重新挂上 */}
++        <div className="filters"><Tabs key={memberId ? "hidden" : "shown"} value={tab} options={tabs} onChange={(k) => go(`/customers/${k}`)} /></div>
++        {(tab === "follow" || tab === "list") && (
++          <div className="kpis">
++            <div className="kpi"><b>{fmtNum(totals.count)}</b>
++              <span>{t("顾客人数")} · {t("近 12 个月有消费 {a} 位", { a: fmtNum(totals.active) })}</span></div>
++            <div className="kpi"><b>{fmtNum(totals.profiled)}</b><span>{t("已补资料")} · {t("有填名字 / 生日 / 地区等")}</span></div>
++            <div className="kpi"><b>{fmtNum(totals.consent)}</b><span>{t("同意收促销")} · {t("只有这些人会被汇出 / 放进活动")}</span></div>
++            <div className="kpi"><b>{fmtNum(follow.length)}</b>
++              <span>{t("待跟进")} · {t("本月生日 {b} 位", { b: fmtNum(totals.birthday) })}</span></div>
++          </div>
++        )}
++        {tab === "follow" && (
++          <>
++            {canEdit && <QuickRegister onSaved={load} onOpen={open} />}
++            <FollowUpList items={follow} settings={settings} templates={templates} canEdit={canEdit} onOpen={open} onTouched={load} />
++            <Signups canEdit={canEdit} onDone={load} onOpen={open} />
++          </>
++        )}
++        {tab === "list" && (
++          <CustomerList list={list} settings={settings} role={role} onOpen={open} />
++        )}
++        {tab === "campaigns" && <Campaigns isOwner={isOwner} list={list} settings={settings} />}
++        {tab === "report" && (
++          <>
++            <MonthlyReport settings={settings} />
++            <MissingPhone />
++          </>
++        )}
++        {tab === "setup" && (
++          <SettingsTab isOwner={isOwner} loaded={settingsLoaded} settings={settings} templates={templates} onChanged={loadSettings} />
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/portal/supabase/migrations/20261016_ops_customers.sql b/portal/supabase/migrations/20261016_ops_customers.sql
+new file mode 100644
+index 0000000..0717b72
+--- /dev/null
++++ b/portal/supabase/migrations/20261016_ops_customers.sql
+@@ -0,0 +1,151 @@
++-- 顾客资料模块（2026-10-14）：把 BI 的顾客资料页（loyalty.html）搬进营运系统，使用者：「我要把这个系统连接在员工多部门里面」，
++-- 权限选「照部门权限」：
++--   只看            = 看顾客名单、购买历史、跟进提醒、每月报告（不能改）
++--   可编辑（销售 / 门市）= 再加：补资料、快速登记、WhatsApp / 已联络、装修进度
++--   可审批（主管、管理层）= 再加：汇出同意名单 CSV、合并重复顾客、建促销活动、改 WhatsApp 范本
++--   管理员           = 再加：改分级门槛与提醒天数、删除促销活动（= BI 的 owner）
++-- 送货部不开（他们在「送货」就看得到这张 DO 的顾客名字、电话、地址）；其他部门看不到。
++--
++-- 资料**不搬家**：顾客资料、购买历史、扫码登记、活动都还在 BI 的 bi.customer_* 表，前端直接呼叫 BI 原本的 public.bi_customer* /
++-- bi_campaign* / bi_wa_template* 函数（与 BI 网页共用同一份，两边改的互相看得到）。这些函数开头原本是 bi.customer_require(角色)
++-- 只认 BI 名单（bi.allowed_users）；这里改成 bi.crm_require：BI 名单的人照旧，另外认营运系统员工的「顾客资料」模块权限
++-- （管理员 → owner、可审批 → manager、可编辑 → sales、只看 → 只能叫读取的函数）。
++-- 送货的 bi_delivery_* 与 BI 送货页用的 bi_customer_set_address / bi_customer_set_geo 不动（营运系统走 ops_dlv_*，有自己的权限）。
++-- 「只看」只能叫下面 DO 段列出的读取函数（名单写死，不是看 STABLE：BI 以后改函数时不会意外把写入的函数开给只看的人）。
++-- 模块开关 ready = false 的期间，营运系统的员工一律进不来（BI 名单的人照旧）；20261016b 打开。
++--
++-- **以后在 BI 改任何顾客资料函数，开头要写 bi.crm_require(…)，不要再用 bi.customer_require**，不然营运系统的员工会被挡掉
++-- （挡掉 = 比较严，不会多开）；分店用 bi.crm_company()，不要用 public.bi_company()（营运系统的员工不在 BI 名单，会变成不限分店）。
++-- 新的读取函数要给「只看」的人用，第二个参数给 true，并加进 DO 段的 v_read 名单。重套这个档会把漏掉的改过来（可以重复套用）。
++-- 对 AutoCount 仍只读。模块上线开关（ops.module.ready）放在 20261016b_ops_customers_ready.sql，等前端部署好才套。
++
++-- ------------------------------------------------------------ 模块与部门预设
++insert into ops.module (key, name, phase, ready, sort, description) values
++  ('customers', '顾客资料', 2, false, 65, '门市顾客名单、跟进提醒、一键 WhatsApp、顾客扫码登记、促销活动')
++on conflict (key) do update set name = excluded.name, phase = excluded.phase, sort = excluded.sort,
++                                description = excluded.description;
++-- 只补没有的（管理员之后在「员工与权限」改过的不盖掉）
++insert into ops.dept_module (department, module, level) values
++  ('sales', 'customers', 'edit'), ('mgmt', 'customers', 'approve')
++on conflict (department, module) do nothing;
++
++-- ------------------------------------------------------------ 权限
++-- 营运系统员工在顾客资料的角色：管理员 = owner、可审批 = manager、可编辑 = sales、只看 = viewer；不是员工 / 没开 = null
++create or replace function bi.crm_ops_role() returns text
++language plpgsql stable set search_path = '' as $$
++declare
++  me ops.staff := ops.current_staff();
++begin
++  -- 模块还没上线（前端还没部署）：营运系统的员工一律没有
++  if me.id is null or not coalesce((select m.ready from ops.module m where m.key = 'customers'), false) then
++    return null;
++  end if;
++  if me.role = 'admin' then
++    return 'owner';
++  end if;
++  return case ops.module_level(me, 'customers')
++           when 'approve' then 'manager' when 'edit' then 'sales' when 'view' then 'viewer' end;
++end $$;
++
++-- 取代 bi.customer_require：BI 名单的人照旧看 BI 角色；营运系统员工看「顾客资料」模块权限。
++-- p_read_only = true（读取的函数）时「只看」的人也放行，但只限一般员工就能用的（角色清单有 sales 的）。
++create or replace function bi.crm_require(p_roles text[], p_read_only boolean default false) returns text
++language plpgsql stable set search_path = '' as $$
++declare
++  v_bi text;
++  v_ops text := bi.crm_ops_role();
++begin
++  if coalesce((select public.bi_is_allowed()), false) then
++    v_bi := (select public.bi_role());
++    if coalesce(v_bi = any(p_roles), false) then
++      return v_bi;
++    end if;
++  end if;
++  if coalesce(v_ops = any(p_roles), false) then
++    return v_ops;
++  end if;
++  if coalesce(v_ops = 'viewer' and p_read_only and 'sales' = any(p_roles), false) then
++    return v_ops;
++  end if;
++  -- 营运系统的员工（不是 BI 顾客资料的角色）：用营运系统的说法，前端有英文
++  if not coalesce(v_bi in ('owner', 'manager', 'sales'), false) and (ops.current_staff()).id is not null then
++    if not ('manager' = any(p_roles)) then
++      raise exception '这个动作只有管理员可以做。' using errcode = '42501';
++    end if;
++    raise exception '你没有「顾客资料」模块的%权限，请找管理员开通。',
++      case when 'sales' = any(p_roles) then case when p_read_only then '查看' else '编辑' end else '审批' end
++      using errcode = '42501';
++  end if;
++  raise exception '没有权限：顾客资料只开放给 %', array_to_string(p_roles, ' / ');
++end $$;
++
++-- 「没抓到电话的单据」限分店：BI 名单的人照 BI 的 company；营运系统员工照自己的分店（全部分店 = 不限）
++create or replace function bi.crm_company() returns text
++language plpgsql stable set search_path = '' as $$
++declare
++  me ops.staff;
++begin
++  if coalesce((select public.bi_is_allowed()), false)
++     and coalesce((select public.bi_role()) in ('owner', 'manager', 'sales'), false) then
++    return (select public.bi_company());
++  end if;
++  me := ops.current_staff();
++  return case when me.id is null or me.branch = 'ALL' then null else me.branch end;
++end $$;
++
++revoke all on function bi.crm_ops_role() from public;
++revoke all on function bi.crm_require(text[], boolean) from public;
++revoke all on function bi.crm_company() from public;
++
++-- 前端用：我在顾客资料是什么角色（决定显示哪些按钮；真正的检查在每个函数里）。两边都有就取高的。
++create or replace function public.ops_cust_role() returns text
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  v_bi text;
++begin
++  if coalesce((select public.bi_is_allowed()), false) then
++    v_bi := (select public.bi_role());
++  end if;
++  return (select r from unnest(array[v_bi, bi.crm_ops_role()]) r
++           where r in ('owner', 'manager', 'sales', 'viewer')
++           order by array_position(array['owner', 'manager', 'sales', 'viewer'], r) limit 1);
++end $$;
++revoke all on function public.ops_cust_role() from public, anon;
++grant execute on function public.ops_cust_role() to authenticated;
++
++-- ------------------------------------------------------------ 顾客资料函数改用 bi.crm_require
++-- 读出每个函数目前的定义，只把 bi.customer_require(array[…]) 换成 bi.crm_require(array[…][, true])、public.bi_company()
++-- 换成 bi.crm_company()，其他一个字都不动（create or replace：拥有者、security definer、search_path、授权都保留）。
++-- 送货的 bi_delivery_* 与 BI 送货页的 bi_customer_set_address / bi_customer_set_geo 不在范围内。
++do $$
++declare
++  -- 「只看」可以叫的读取函数（还要是 STABLE 才算）；其他的只给可编辑以上
++  v_read text[] := array['bi_customers', 'bi_customer', 'bi_customer_log', 'bi_customer_settings', 'bi_wa_templates',
++                         'bi_customer_signups', 'bi_customer_monthly', 'bi_customer_agents', 'bi_customer_missing_phone',
++                         'bi_campaigns', 'bi_campaign_members'];
++  f record;
++  def text;
++  n int := 0;
++begin
++  for f in
++    select p.oid, p.proname, p.provolatile
++      from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
++     where ns.nspname = 'public'
++       and p.prosrc like '%bi.customer_require(%'
++       and (p.proname like 'bi\_customer%' or p.proname like 'bi\_campaign%' or p.proname like 'bi\_wa\_template%')
++       and p.proname not in ('bi_customer_set_address', 'bi_customer_set_geo')
++  loop
++    def := pg_get_functiondef(f.oid);
++    def := regexp_replace(def, 'bi\.customer_require\((array\[[^]]*\])\)',
++             case when f.proname = any(v_read) and f.provolatile in ('s', 'i') then 'bi.crm_require(\1, true)'
++                  else 'bi.crm_require(\1)' end, 'g');
++    def := replace(def, 'public.bi_company()', 'bi.crm_company()');
++    if def like '%bi.customer_require(%' or def like '%bi_company(%' then
++      raise exception '% 里有认不得的 bi.customer_require / bi_company 写法，请手动改成 bi.crm_require / bi.crm_company',
++        f.oid::regprocedure;
++    end if;
++    execute def;
++    n := n + 1;
++  end loop;
++  raise notice '顾客资料函数改用 bi.crm_require：% 个', n;
++end $$;
+diff --git a/portal/supabase/migrations/20261016b_ops_customers_ready.sql b/portal/supabase/migrations/20261016b_ops_customers_ready.sql
+new file mode 100644
+index 0000000..ccd1a54
+--- /dev/null
++++ b/portal/supabase/migrations/20261016b_ops_customers_ready.sql
+@@ -0,0 +1,3 @@
++-- 顾客资料模块上线开关（2026-10-14）：前端（src/pages/Customers.tsx 等）部署到 homeworks-ops 之后再套这个档。
++-- 先套的话，侧栏「顾客资料」会连到 #/customers，但旧版前端没有这一页（显示「没有权限」）。
++update ops.module set ready = true where key = 'customers';
+diff --git a/portal/supabase/tests/cust_test.sql b/portal/supabase/tests/cust_test.sql
+new file mode 100644
+index 0000000..c829dfa
+--- /dev/null
++++ b/portal/supabase/tests/cust_test.sql
+@@ -0,0 +1,172 @@
++-- 顾客资料测试（接在 sop_test.sql 之后跑）。BI 的权限函数与顾客资料函数的 stub 在 stub_supabase.sql 最后。
++\set ON_ERROR_STOP 1
++create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
++begin
++  perform set_config('request.jwt.claims', json_build_object('email', p_email)::text, false);
++end $$;
++create or replace function pg_temp.expect_error(p_sql text, p_like text) returns void language plpgsql as $$
++begin
++  execute p_sql;
++  raise exception 'expected error "%" from: %', p_like, p_sql;
++exception when others then
++  if sqlerrm like 'expected error%' or sqlerrm not like '%' || p_like || '%' then
++    raise;
++  end if;
++end $$;
++grant execute on all functions in schema pg_temp to authenticated;
++
++-- 0. 改写：顾客资料函数换成 bi.crm_require（读取的多一个 true），送货的不动；「没电话的单」改用 bi.crm_company
++do $$ begin
++  assert (select prosrc from pg_proc where oid = 'public.bi_customers()'::regprocedure)
++         like '%bi.crm_require(array[''owner'', ''manager'', ''sales''], true)%', 'stable gets read-only flag';
++  assert (select prosrc from pg_proc where oid = 'public.bi_customer_save(text, text)'::regprocedure)
++         like '%bi.crm_require(array[''owner'', ''manager'', ''sales''])%', 'volatile has no flag';
++  assert (select prosrc from pg_proc where oid = 'public.bi_customer_set_settings(numeric)'::regprocedure)
++         like '%v_role text := bi.crm_require(array[''owner''])%', 'assignment form rewritten';
++  assert (select prosrc from pg_proc where oid = 'public.bi_customer_missing_phone(integer)'::regprocedure)
++         like '%bi.crm_company()%', 'missing phone uses crm_company';
++  assert (select prosrc from pg_proc where oid = 'public.bi_delivery_stub_check()'::regprocedure)
++         like '%bi.customer_require(%', 'delivery untouched';
++  assert (select prosrc from pg_proc where oid = 'public.bi_customer_set_geo(text)'::regprocedure)
++         like '%bi.customer_require(%', 'BI delivery geo untouched';
++  assert (select prosrc from pg_proc where oid = 'public.bi_customer_stub_reader()'::regprocedure)
++         like '%bi.crm_require(array[''owner'', ''manager'', ''sales''])%', 'stable but not in read list: no flag';
++  assert not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
++                      where n.nspname = 'public' and p.proname ~ '^bi_(customer|campaign|wa_template)'
++                        and p.proname not in ('bi_customer_set_address', 'bi_customer_set_geo')
++                        and p.prosrc like '%bi.customer_require(%'), 'no CRM function left on customer_require';
++  assert (select prosecdef from pg_proc where oid = 'public.bi_customers()'::regprocedure), 'still security definer';
++  assert has_function_privilege('authenticated', 'public.bi_customers()', 'execute'), 'grant kept';
++  assert (select name from ops.module where key = 'customers') = '顾客资料', 'module';
++  assert (select level from ops.dept_module where department = 'sales' and module = 'customers') = 'edit', 'sales edit';
++  assert (select level from ops.dept_module where department = 'mgmt' and module = 'customers') = 'approve', 'mgmt approve';
++  assert not exists (select 1 from ops.dept_module where module = 'customers' and department not in ('sales', 'mgmt')),
++    'other departments none';
++end $$;
++
++-- 员工：门市主管（sales manager）、送货部司机（dlv_test 建的）、仓库只看（个人例外）
++select set_config('cust.wh', (select id::text from ops.staff where email = 'hqwh@example.com'), false);
++select set_config('cust.hqsales', (select id::text from ops.staff where email = 'hqsales@example.com'), false);
++select set_config('cust.buyer', (select id::text from ops.staff where email = 'buyer@example.com'), false);
++set role authenticated;
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save('{"email":"salesmgr@example.com","name":"门市主管","department":"sales","branch":"HOMEWORKSSOUTHERN","role":"manager"}');
++select public.ops_staff_save(jsonb_build_object(
++  'id', current_setting('cust.wh')::bigint,
++  'email', 'hqwh@example.com', 'overrides', jsonb_build_object('customers', 'view')));
++
++-- 1. 管理员（BI owner）：owner，什么都能做
++do $$ begin
++  assert public.ops_cust_role() = 'owner', 'boss owner';
++  assert (public.bi_customer_set_settings(9000)->>'role') = 'owner', 'boss settings';
++  assert public.bi_campaigns() = '[]'::jsonb, 'boss campaigns';
++end $$;
++
++-- 2. 门市（只在营运系统、BI 名单没有）：sales = 看、改，不能建活动 / 改设定；「没电话的单」只看自己分店
++select pg_temp.as_user('hqsales@example.com');
++do $$ declare r jsonb; begin
++  assert public.ops_cust_role() = 'sales', 'hqsales sales: ' || coalesce(public.ops_cust_role(), 'null');
++  r := public.bi_customer_save('60123456789', '陈先生');
++  assert r->>'updated_by' = 'hqsales@example.com' and r->>'name' = '陈先生', 'save: ' || r::text;
++  assert exists (select 1 from public.bi_customers() c where c.member_id = '60123456789'), 'list';
++  assert (select array_agg(doc_no) from public.bi_customer_missing_phone(60)) = array['CS-1'], 'HQ only';
++end $$;
++select pg_temp.expect_error('select public.bi_campaigns()', '你没有「顾客资料」模块的审批权限');
++select pg_temp.expect_error('select public.bi_customer_set_settings(1)', '这个动作只有管理员可以做');
++-- 送货的 BI 函数照旧只认 BI 名单
++select pg_temp.expect_error('select public.bi_delivery_stub_check()', '没有权限：顾客资料只开放给');
++
++-- 3. 门市主管（JB）：manager = 可以建活动，不能改设定；「没电话的单」只看 JB
++select pg_temp.as_user('salesmgr@example.com');
++do $$ begin
++  assert public.ops_cust_role() = 'manager', 'sales manager';
++  assert public.bi_campaigns() = '[]'::jsonb, 'manager campaigns';
++  assert (select array_agg(doc_no) from public.bi_customer_missing_phone(60)) = array['CS-2'], 'JB only';
++end $$;
++select pg_temp.expect_error('select public.bi_customer_set_settings(1)', '只有管理员');
++
++-- 4. 只看（仓库「仓库看PO」的个人例外）：只能叫读取的函数
++select pg_temp.as_user('hqwh@example.com');
++do $$ begin
++  assert public.ops_cust_role() = 'viewer', 'viewer';
++  assert exists (select 1 from public.bi_customers()), 'viewer reads list';
++end $$;
++select pg_temp.expect_error($q$select public.bi_customer_save('60123456789', 'x')$q$, '你没有「顾客资料」模块的编辑权限');
++select pg_temp.expect_error('select public.bi_campaigns()', '审批权限');
++select pg_temp.expect_error('select public.bi_customer_stub_reader()', '编辑权限');   -- 不在只看名单的读取函数 = 当成要可编辑
++
++-- 5. 送货部司机、其他部门：看不到
++select pg_temp.as_user('driver@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'driver none'; end $$;
++select pg_temp.expect_error('select * from public.bi_customers()', '你没有「顾客资料」模块的查看权限');
++select pg_temp.as_user('hr@example.com');
++select pg_temp.expect_error('select * from public.bi_customers()', '查看权限');
++
++-- 6. 个人例外「无」：门市也可以被拿掉
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save(jsonb_build_object(
++  'id', current_setting('cust.hqsales')::bigint,
++  'email', 'hqsales@example.com', 'overrides', jsonb_build_object('customers', 'none')));
++select pg_temp.as_user('hqsales@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'override none'; end $$;
++select pg_temp.expect_error('select * from public.bi_customers()', '查看权限');
++
++-- 7. BI 名单的人照旧：BI 店长（manager）可以；BI 订货员（buyer）也是营运系统员工 → 营运系统的说法
++select pg_temp.as_user('mgr@example.com');
++do $$ begin
++  assert public.ops_cust_role() = 'manager', 'bi manager';
++  assert public.bi_campaigns() = '[]'::jsonb, 'bi manager campaigns';
++end $$;
++select pg_temp.as_user('buyer@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'buyer none'; end $$;
++select pg_temp.expect_error('select * from public.bi_customers()', '你没有「顾客资料」模块的查看权限');
++
++-- 7b. BI 订货员 + 营运系统给了「顾客资料 = 可编辑」：可以改，不能建活动（营运系统的说法）
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save(jsonb_build_object('id', current_setting('cust.buyer')::bigint, 'email', 'buyer@example.com',
++                                                'overrides', jsonb_build_object('customers', 'edit')));
++select pg_temp.as_user('buyer@example.com');
++do $$ begin
++  assert public.ops_cust_role() = 'sales', 'buyer + ops edit';
++  perform public.bi_customer_save('60123456789', '陈先生');
++end $$;
++select pg_temp.expect_error('select public.bi_campaigns()', '你没有「顾客资料」模块的审批权限');
++-- 营运系统的管理员（不在 BI 名单）= owner
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save('{"email":"custadmin@example.com","name":"顾客测试管理员","department":"mgmt","branch":"ALL","role":"admin"}');
++select pg_temp.as_user('custadmin@example.com');
++do $$ begin
++  assert public.ops_cust_role() = 'owner', 'ops admin owner';
++  assert (public.bi_customer_set_settings(1)->>'role') = 'owner', 'ops admin settings';
++  assert (select count(*) from public.bi_customer_missing_phone(60)) = 2, 'ALL branch sees both';
++end $$;
++
++-- 8. 不在任何名单：BI 的说法；anon 叫不到角色函数
++select pg_temp.as_user('stranger@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'stranger none'; end $$;
++select pg_temp.expect_error('select * from public.bi_customers()', '没有权限：顾客资料只开放给');
++reset role;
++do $$ begin
++  assert not has_function_privilege('anon', 'public.ops_cust_role()', 'execute'), 'anon cannot';
++  assert not has_function_privilege('authenticated', 'bi.crm_require(text[], boolean)', 'execute'), 'gate not callable';
++end $$;
++
++-- 9. 模块开关关着（前端还没部署）：营运系统的员工进不来，BI 名单的人照旧
++update ops.module set ready = false where key = 'customers';
++set role authenticated;
++select pg_temp.as_user('salesmgr@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'not ready: none'; end $$;
++select pg_temp.expect_error('select * from public.bi_customers()', '你没有「顾客资料」模块的查看权限');
++select pg_temp.as_user('boss@example.com');
++do $$ begin assert public.ops_cust_role() = 'owner', 'BI owner unaffected'; end $$;
++reset role;
++update ops.module set ready = true where key = 'customers';
++
++-- 10. 最后上班日过了：营运系统的权限跟着没了
++update ops.staff set last_day = ops.today() - 1 where email = 'salesmgr@example.com';
++set role authenticated;
++select pg_temp.as_user('salesmgr@example.com');
++do $$ begin assert public.ops_cust_role() is null, 'offboarded none'; end $$;
++reset role;
++
++select 'cust_test ok';
+diff --git a/portal/supabase/tests/run.sh b/portal/supabase/tests/run.sh
+index 042b1c0..906b6ec 100644
+--- a/portal/supabase/tests/run.sh
++++ b/portal/supabase/tests/run.sh
+@@ -20,3 +20,4 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/profile_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/po_do_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/receive_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/sop_test.sql"
++psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/cust_test.sql"
+diff --git a/portal/supabase/tests/stub_supabase.sql b/portal/supabase/tests/stub_supabase.sql
+index b917613..6aaeca5 100644
+--- a/portal/supabase/tests/stub_supabase.sql
++++ b/portal/supabase/tests/stub_supabase.sql
+@@ -136,3 +136,91 @@ create table bi.delivery_run (id bigint generated always as identity primary key
+   stops jsonb, created_at timestamptz default now(), created_by text, token text unique, token_expires timestamptz);
+ create table bi.delivery_pod (id bigint generated always as identity primary key, run_id bigint, stop_key text, doc_no text,
+   status text, note text, photos text[] default '{}', lat numeric, lng numeric, created_at timestamptz default now());
++
++-- 顾客资料（2026-10-14）：BI 的权限函数与几个有代表性的顾客资料函数（正式环境由 BI 的 migration customer_* 建立，这里只取开头的
++-- 权限检查；20261016_ops_customers.sql 会把 bi.customer_require 换成 bi.crm_require）
++create function public.bi_is_allowed() returns boolean language sql stable security definer set search_path = '' as $$
++  select exists (select 1 from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', '')))
++$$;
++create function public.bi_role() returns text language sql stable security definer set search_path = '' as $$
++  select au.role from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
++$$;
++create function public.bi_company() returns text language sql stable security definer set search_path = '' as $$
++  select au.company from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
++$$;
++create function bi.customer_require(p_roles text[]) returns text language plpgsql stable set search_path = '' as $$
++declare
++  v_role text := (select public.bi_role());
++begin
++  if not coalesce((select public.bi_is_allowed()), false) or v_role is null or not (v_role = any(p_roles)) then
++    raise exception '没有权限：顾客资料只开放给 %', array_to_string(p_roles, ' / ');
++  end if;
++  return v_role;
++end;
++$$;
++revoke all on function bi.customer_require(text[]) from public;
++create function public.bi_customers() returns table (member_id text, name text)
++language plpgsql stable security definer set search_path = '' as $$
++begin
++  perform bi.customer_require(array['owner', 'manager', 'sales']);
++  return query select p.member_id, p.name from bi.customer_profile p order by 1;
++end;
++$$;
++create function public.bi_customer_save(p_member text, p_name text) returns jsonb
++language plpgsql volatile security definer set search_path = '' as $$
++declare
++  v_who text := coalesce(auth.jwt() ->> 'email', 'unknown');
++begin
++  perform bi.customer_require(array['owner', 'manager', 'sales']);
++  insert into bi.customer_profile as p (member_id, name, created_by, updated_by) values (p_member, p_name, v_who, v_who)
++  on conflict (member_id) do update set name = excluded.name, updated_by = v_who, updated_at = now();
++  return (select to_jsonb(x) from bi.customer_profile x where x.member_id = p_member);
++end;
++$$;
++create function public.bi_campaigns() returns jsonb language plpgsql stable security definer set search_path = '' as $$
++begin
++  perform bi.customer_require(array['owner', 'manager']);
++  return '[]'::jsonb;
++end;
++$$;
++create function public.bi_customer_set_settings(p_vip numeric) returns jsonb
++language plpgsql volatile security definer set search_path = '' as $$
++declare
++  v_role text := bi.customer_require(array['owner']);
++begin
++  return jsonb_build_object('role', v_role, 'vip', p_vip);
++end;
++$$;
++create function public.bi_customer_missing_phone(p_days integer) returns table (company text, doc_no text)
++language plpgsql stable security definer set search_path = '' as $$
++#variable_conflict use_column
++declare
++  v_company text := (select public.bi_company());
++begin
++  perform bi.customer_require(array['owner', 'manager', 'sales']);
++  return query select x.company, x.doc_no from (values ('HOMEWORKSSB', 'CS-1'), ('HOMEWORKSSOUTHERN', 'CS-2')) x (company, doc_no)
++   where (v_company is null or x.company = v_company) order by 2;
++end;
++$$;
++-- 不在「只看」名单的读取函数：只看的人叫不到
++create function public.bi_customer_stub_reader() returns text language plpgsql stable security definer set search_path = '' as $$
++begin
++  return bi.customer_require(array['owner', 'manager', 'sales']);
++end;
++$$;
++-- BI 送货页用的顾客坐标：不在改写范围
++create function public.bi_customer_set_geo(p_member text) returns text language plpgsql volatile security definer set search_path = '' as $$
++begin
++  return bi.customer_require(array['owner', 'manager', 'sales']);
++end;
++$$;
++-- 送货的 BI 函数不在改写范围（营运系统走 ops_dlv_*）
++create function public.bi_delivery_stub_check() returns text language plpgsql stable security definer set search_path = '' as $$
++begin
++  return bi.customer_require(array['owner', 'manager', 'sales']);
++end;
++$$;
++grant execute on function public.bi_is_allowed(), public.bi_role(), public.bi_company(), public.bi_customers(),
++  public.bi_customer_save(text, text), public.bi_campaigns(), public.bi_customer_set_settings(numeric),
++  public.bi_customer_missing_phone(integer), public.bi_delivery_stub_check(), public.bi_customer_stub_reader(),
++  public.bi_customer_set_geo(text) to authenticated;
+-- 
+2.43.0
+
