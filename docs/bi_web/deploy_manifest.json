@@ -52,7 +52,7 @@
  "src/pages/Payables.tsx": "f56a059a74eee76ac034662d70d19515e6d6f4cd",
  "src/pages/PriceEffect.tsx": "3e635a1d65aa7179e945d87e8548ceddd7845a9a",
  "src/pages/ProfitLoss.tsx": "3db7146af4653131f3963ceac696e469467172d3",
- "src/pages/Purchasing.tsx": "ea45e03152e797099ee651723a87829421dd8ff1",
+ "src/pages/Purchasing.tsx": "68efff719f70997ab0ffbab5915de8f3bda9d119",
  "src/pages/Receivables.tsx": "2f73513c5ccfcb0f929d94bff04079bf321b21b0",
  "src/pages/SalesLines.tsx": "8491423dea2ed99a6f9384db457ca69ad0caddc6",
  "src/pages/SlowMovers.tsx": "103f5125d85e7e7402345ebfbb191ba6170f67e4",
@@ -65,5 +65,5 @@
  "src/pages/Health.tsx": "2bb280762b972e6b71e8eb00798d1d3f1760f653",
  "src/pages/Margin.tsx": "b8d7cc28c926038264340b8f19680d82621220ec",
  "src/pages/Targets.tsx": "97728c17325c927be54d5a37798dad67c1b052a6",
- "src/i18n/cscode.ts": "7dd770a3b455c0f321482fca83f09b789fc0a797"
+ "src/i18n/cscode.ts": "b154e6244a3ac22c672ae0a70e21d0e2079d1ce3"
 }

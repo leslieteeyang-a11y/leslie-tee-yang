@@ -161,7 +161,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
   // 凑柜候选:同组、不紧急但 30 天内也要补的商品(仅"需要处理"视角下展示)
   const fillMap = useMemo(() => {
     const m = new Map<string, Suggest[]>();
-    if (scope === 'all' || !rows) return m;
+    if (scope === 'all' || !rows || oosOnly || owedOnly) return m; // 「只看…」模式下凑柜(一定还有货)是杂讯
     const k = q.trim().toLowerCase();
     for (const r of rows) {
       if (!r.fill_candidate || r.action_status) continue;
@@ -171,7 +171,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       const l = m.get(key) ?? []; l.push(r); m.set(key, l);
     }
     return m;
-  }, [rows, scope, q, csFilter, groupBy]);
+  }, [rows, scope, q, csFilter, groupBy, oosOnly, owedOnly]);
 
   const suppliers = useMemo(() => {
     const m = new Map<string, { name: string; n: number }>();
@@ -271,14 +271,15 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
             })}
           </select>
         )}
-        <label className="muted" title={t('近 90 天至少卖出这么多件才列出;欠分行或已经没货(现存 ≤ 0)的商品不受门槛限制,一律列出')}>{t('走量门槛')}</label>
-        <select value={minQ} onChange={(e) => setMinQ(Number(e.target.value))}>
-          <option value={10}>{t('90 天 ≥{n} 件', { n: 10 })}</option>
-          <option value={30}>{t('90 天 ≥{n} 件', { n: 30 })}</option>
-          <option value={100}>{t('90 天 ≥{n} 件', { n: 100 })}</option>
-        </select>
-        {/* 老板看不到藏在查询里的规则(2026-10-14「这个没看到」),所以直接写在门槛旁边 */}
-        <span className="muted" style={{ fontSize: 12 }} title={t('没货的商品不管近 90 天卖多少,一律列出;要单独看就勾右边「只看没货」')}>{t('+ 没货的一律列出')}</span>
+        {/* 规则写进老板看的那个下拉的选项文字(2026-10-14「这个没看到」);label 与下拉包成一组,手机折行时不会被拆开 */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+          <label className="muted" title={t('近 90 天至少卖出这么多件才列出;欠分行或已经没货(现存 ≤ 0)的商品不受门槛限制,一律列出')}>{t('走量门槛')}</label>
+          <select value={minQ} onChange={(e) => setMinQ(Number(e.target.value))}>
+            <option value={10}>{t('90 天 ≥{n} 件 + 没货的', { n: 10 })}</option>
+            <option value={30}>{t('90 天 ≥{n} 件 + 没货的', { n: 30 })}</option>
+            <option value={100}>{t('90 天 ≥{n} 件 + 没货的', { n: 100 })}</option>
+          </select>
+        </span>
         <select value={supFilter} onChange={(e) => setSupFilter(e.target.value)}>
           <option value="">{t('全部供应商')}</option>
           {suppliers.map(([k, v]) => <option key={k} value={k}>{v.name} ({v.n})</option>)}
@@ -480,7 +481,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       })}
       <p className="muted" style={{ fontSize: 12 }}>
         {t('口径:日均销量 = 近 90 天净销量 ÷ 90(分行提前预定的马桶/盆柜/水槽已剔除);')}
-        {t('走量门槛只筛还有货的商品——欠分行或现存 ≤ 0 的一律列出;')}
+        {t('走量门槛只筛还有货的商品——欠分行或现存 ≤ 0 的一律列出(名单只含近 90 天有卖的商品,断货超过 90 天又不欠分行的不在内);')}
         <strong>{t('现存 = 自有可卖库存')}</strong>{t('(不含次品/展示仓,也不含 JB 仓——那是分行预定的货);')}
         <strong>{t('欠分行')}</strong>{t(' = PRE (JB) 的负数,即分行预定了但我们还没货,已直接加进建议订量并标"来不及";在途 = 120 天内未收完的 PO。')}
         <strong>{t('来不及')}</strong>{t(' = 现存撑不到交期结束;')}<strong>{t('该下单')}</strong>{t(' = 现存+在途 ≤ 交期+安全天数。')}

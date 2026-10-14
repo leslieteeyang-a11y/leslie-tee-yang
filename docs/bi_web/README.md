@@ -131,3 +131,25 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   index 302ad583…），manifest 已 `--commit cscode`。
 - BOM 的最终解法：CSV 匯出改成 `String.fromCharCode(0xfeff) + …`，档案里既没有不可见字元也没有 `\uFEFF` 跳脱，内嵌部署与本地 SHA 一致。
 
+## 2026-10-14（晚，第二轮）：老板「现在再加一条「现存 ≤ 0」这个没看到」——把规则显示在画面上
+- 老板去「走量门槛」下拉找「现存 ≤ 0」找不到：上一版只改了查询条件，画面上一个字都没变（tooltip 手机上看不到、页尾注脚在几百行之后）。
+- 先做了一版（commit 27f338e）：门槛旁灰字「+ 没货的一律列出」+ 琥珀色勾选框「只看没货(现存 ≤ 0)({n})」。跑 Workflow 审查（4 路：程式 / 老板手机 UX /
+  双语字典 / 数据口径，每条 must/should 由 3 位反驳者独立复核；第一次有 19 个反驳者撞到 session 用量上限，`resumeFromRunId` 重跑一次）。
+  反驳者**否决**了：把「只看没货」做成下拉第四个选项（会把状态藏进下拉；357 项没货里 83 项徽章是「来不及」不是「已断货」，改名反而词不对数）、
+  件数改成筛选后口径（目前 0 行已处理，改了反而难懂）、状态列加按钮（与勾选框重复）、空状态文案（厂号是伺服器端重抓，件数会跟着变）。
+  反驳者**确认**了：灰字夹在两个下拉中间会被读成「全部供应商」的前缀或「+ 新增」按钮；候选名单只含近 90 天有卖的商品（见下）；SQL 副本没同步。
+- 最终版（本次部署）：规则写进下拉选项文字「90 天 ≥30 件 + 没货的」、拿掉灰字、label 与下拉包成 inline-flex 一组（手机折行不拆开）、保留琥珀色勾选框、
+  「只看没货 / 只看欠分行」时不显示凑柜建议、页尾口径补「名单只含近 90 天有卖的商品」、字典去掉「勾右边」位置词与 on-hand 连字号、
+  `docs/bi_sql/cs_code_view.sql` 副本补齐 v3 的 loaded10/30。
+- 部署：`dpl_7TSztDz3UXC1owtoGsebyrqKa1gu`（2026-10-14 14:28 UTC，production），Purchasing 68efff71…、cscode b154e624…、index 302ad583…，manifest 已 `--commit cscode`。
+- **内嵌部署抄错一个字的教训**：第一次 production 部署 `dpl_GAP8V7nRZKCjWyoqLYHatydu5meY` 建置成功，但 Vercel 上的 Purchasing.tsx SHA 是 583fdd08…、本地是 68efff71…——
+  5 万字的内嵌内容里有一处走样（中文转成 \uXXXX 时抄错一个十六进位就变成另一个汉字，建置照样过）；`get_deployment_file_contents` 只回 4KB、找不出差异。
+  以后**大档一律这样部署**：(1) 先不带 `target` 部署到 preview（不动 production）；(2) `list_deployment_files` 核对 uid = 本地 sha1；(3) 相符后再建一个 production 部署，
+  **全部档案用 `{file, sha}` 参照、不再内嵌**（档案已在 Vercel 内容库，这个呼叫只有 7KB，且用 production 环境变数重新建置；不用 `request_promote`，
+  promote 不重建、会把 preview 环境变数的产物推上线）；不符就重做 (1)。本次 preview `dpl_CsUjFgni2fqjAH3K2nnjzkWjyvpT`。
+- **待老板决定（数据审查发现）**：`bi_purchase_suggest` 的候选集要求近 90 天有卖或欠分行，所以「近一年有卖、断货超过 90 天、不欠分行」的商品整个不在订货页——
+  HOMEWORKSSB 有 **487 项**（q365 ≥10：174、≥30：116、≥100：62；214 项最后一次销售在 180 天内；22 项已有在途 PO）。例：ST000272 SUPER FUILD 角阀 SF-1020 一年卖 3,600 件、
+  最后销售 2026-07-10、现存 0，页面上看不到。注意 `mv_purchase_sold` 里近 90 天没卖的 q90 是 **NULL 不是 0**，查数要用 `coalesce(q90,0)`（我第一次用 `q90 = 0` 只查到 1 项）。
+  若要纳入：另开 migration 用 `create or replace view` 把 base 的 WHERE 加 `or (coalesce(s.q365,0) > 0 and coalesce(st.on_hand,0) <= 0)`（栏位清单不变，不放 drop），
+  前端 `.or` 规则与 bi_cs_code 的 loaded 自动跟着变；建议加门槛（q365 ≥ 门槛）以免 313 项一年卖不到 10 件的旧品把清单顶满；这些行 days_left 为 null 会排最前。
+
