@@ -6,7 +6,7 @@
 .dos.cancelled { background: var(--soft); color: var(--muted); text-decoration: line-through; }
 .isk.short, .isk.damaged { background: var(--red-soft); color: var(--red); }
 .isk.over { background: var(--amber-soft); color: var(--amber); }
-.isk.wrong { background: #f1e8fd; color: #7b3fc4; }
+.isk.wrong { background: var(--purple-soft); color: var(--purple); }
 .isd.pending { background: var(--card); color: var(--red); border: 1px solid var(--red-soft); }
 .isd.await { background: var(--primary-soft); color: var(--primary); }
 .isd.cancelled { background: var(--soft); color: var(--muted); }
@@ -18,7 +18,7 @@
 .tag.warn { background: var(--red-soft); color: var(--red); }
 .amber { color: var(--amber); }
 .okc { color: var(--green); font-weight: 700; }
-button.danger-solid { background: var(--red); color: #fff; }
+button.danger-solid { background: var(--red-fill); color: var(--on-fill); }
 .file-btn { flex: 0 0 auto; width: auto; white-space: nowrap; flex-direction: row; display: inline-flex; align-items: center; cursor: pointer;
   padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--primary); font-weight: 600; margin-top: 6px; align-self: flex-start; }
 .table-wrap.flat { box-shadow: none; border: 1px solid var(--line); }
@@ -36,7 +36,7 @@ button.danger-solid { background: var(--red); color: #fff; }
 .podo-table tr.podo-zero td.sticky { background: var(--tint); }
 input.podo-num { width: 76px; text-align: right; padding: 6px 8px; }
 button.podo-full { margin-top: 4px; padding: 3px 10px; }
-.tag.cs.hit { background: var(--primary); color: #fff; }
+.tag.cs.hit { background: var(--primary); color: var(--on-fill); }
 .podo-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
 .podo-tags .tag { margin-left: 0; }
 input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
@@ -60,7 +60,7 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 .podo-sum { background: var(--primary-soft); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
 .podo-sum.warn { background: var(--amber-soft); color: var(--amber); }
 .podo-preview { max-height: 46vh; overflow-y: auto; }
-.podo-preview tr.podo-miss td { background: #fff8f0; }
+.podo-preview tr.podo-miss td { background: var(--warm-row); }
 .podo-missing { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
 
 /* 厂家问题 / 在路上 */
@@ -99,8 +99,8 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 /* 点货（#/purchasing/receive） */
 .podo-recv-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
 .podo-recv-sum a { margin-left: auto; }
-.recv-table tr.recv-diff td { background: #fffaf2; }
-.recv-table tr.recv-diff td.sticky { background: #fffaf2; }
+.recv-table tr.recv-diff td { background: var(--warm-row); }
+.recv-table tr.recv-diff td.sticky { background: var(--warm-row); }
 input.podo-num.changed { border-color: var(--amber); background: var(--amber-soft); }
 .recv-state span { display: block; }
 .recv-state button { display: block; margin-top: 4px; padding: 3px 10px; }
@@ -140,18 +140,18 @@ label.recv-note { display: flex; flex-direction: column; gap: 4px; margin-top: 1
   justify-content: center; font-weight: 700; font-size: .75rem; flex: 0 0 auto; }
 .sop-steps li small { font-size: .7rem; }
 .sop-steps li.done { background: var(--green-soft); color: var(--green); }
-.sop-steps li.done .n { background: var(--green); color: #fff; }
+.sop-steps li.done .n { background: var(--green); color: var(--on-fill); }
 .sop-steps li.skip { background: var(--amber-soft); color: var(--amber); }
-.sop-steps li.cur { background: var(--primary); color: #fff; }
+.sop-steps li.cur { background: var(--primary); color: var(--on-fill); }
 .sop-steps li.cur .n { color: var(--primary); }
-.sop-steps li.cur small { color: #fff; }
+.sop-steps li.cur small { color: var(--on-fill); }
 .sop-now { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 8px 0 0; }
 .sop-now .tag { margin-left: 0; }
-tr.podo-overdue td { background: #fff5f5; }
+tr.podo-overdue td { background: var(--red-row); }
 
 /* 要厂家怎么处理、缺零件 */
 .isr { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; display: inline-block; margin: 1px 4px 1px 0;
-  background: #f1e8fd; color: #7b3fc4; }
+  background: var(--purple-soft); color: var(--purple); }
 .isk.part { background: var(--primary-soft); color: var(--primary); }
 .podo-kinds { flex-wrap: wrap; gap: 4px 14px; }
 
@@ -191,7 +191,7 @@ tr.podo-overdue td { background: #fff5f5; }
 .podo-owed-hint li { margin: 2px 0; }
 .podo-owed-hint .tag { margin: 0 6px 0 0; }
 .podo-wa-ask { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
-.podo-owed { border: 1px solid var(--amber); background: #fffaf2; border-radius: 8px; padding: 8px 12px; margin: 6px 0 8px; }
+.podo-owed { border: 1px solid var(--amber); background: var(--warm-row); border-radius: 8px; padding: 8px 12px; margin: 6px 0 8px; }
 .podo-owed-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
 .podo-owed-head > span { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .podo-factory { margin: 6px 0 12px 10px; padding-left: 10px; border-left: 3px solid var(--line); }

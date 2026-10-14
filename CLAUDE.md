@@ -261,7 +261,21 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   进货取消只有仓库「可审批」而且要写原因。单价只给订货「可编辑」与 admin（`ops.sees_prices`）。
   **Supabase MCP 也挡 `drop function`**（apply_migration 卡 60 秒后 cancelled）：所以 `ops_wh_move_mark` 旧的 3 个参数版本留著转接、新的 4 个参数版本参数全必填。
   **人手**（上线当天）：仓库部 1 位在职、开单部 0 位 → 开单部要先开账号（员工与权限 / 加入申请选「开单部」）才有人开 GRN；在那之前管理层（仓库可审批）也能标已输入。
-- **配色与字体（2026-10-14，使用者从三套方案选 A「清爽水青」；HomeWorks 与 Hemos 同一套；没有官方品牌手册，是 Claude 配的，使用者之后若给 logo / 品牌色就照那个改）**：全部颜色在 `portal/src/style.css` 的 `:root` 变数（`--nav` 侧栏 #0b3d4c、`--nav-2`、`--primary` 按键 / 连结 #0e7489、`--primary-soft` #e2f2f5、`--bg` #f2f6f7、`--text` #152a31、`--muted` #566c74、`--line`、`--soft` / `--tint` / `--hover` / `--track` 等中性色、`--shadow`、`--backdrop`；状态色 `--red` #c62828 / `--green` #18794e / `--amber` #a54e07 三套共用）。**新画面不要写死颜色，一律用这些变数**（旧名 `--navy` / `--blue` 已改成 `--nav` / `--primary`）；打印（工资单、条码标签、厂家问题清单）维持黑白、发错型号的紫色与警示列的暖色底是刻意的。字体：英文 / 数字 Plus Jakarta Sans、中文思源黑体（`index.html` 从 Google Fonts 载入，`--font`）。logo = `public/icon.svg`（水青房子，侧栏与登入页用同一个 `<img className="logo">`），`icon-192.png` 由 SVG 转出；theme-color / manifest #0b3d4c。对比度都 ≥ 4.5。方案预览页 https://claude.ai/artifact/K7HnDyHkbf1VRRW1CGHuUv 。前端部署 `dpl_3nCoCXPTTjdSateMaZA94UEL7iGP`（112 个档 uid 与本机 SHA1 一致）。
+- **配色与字体 = HomeWorks BI 同一套（2026-10-14 使用者：「根据 homeworks BI 的颜色和字体」；取代同日稍早的配色 A「清爽水青」，A 的部署 `dpl_3nCoCXPTTjdSateMaZA94UEL7iGP`）**：
+  出处是 BI（Vercel `homeworks-bi`）`src/styles.css` 开头的注解「品牌主题:深蓝渐变暗色(依据用户提供的调色板规范)」——渐变 #111721 / #171D35 / #272D50、
+  卡片 #20293E、点缀 #DBE8FA（按键底，上面的字 #111721）、次要文字 #94A3B8、警示 #EF4444、字 #FFFFFF、字体「卓健橄榄简体」（`'ZhuoJianJianTi', '卓健橄榄简体', system-ui…`，
+  标题 32 / 正文 15）。BI 没有载入网页字体，只有装了这个字体的电脑才看得到，其他装置用内建字体；营运系统照做（`index.html` 不再载 Google Fonts）。
+  BI 的 styles.css 只有开头约 1.5 KB 抓得到（MCP `get_deployment_file_contents` 会截断，repo 里也没有副本），所以元件细节（分页、表格、按键形状）是照调色板自己配的。
+  BI 目标页的灯号固定色：绿 #22C55E、黄 #F59E0B（BI 的 `--good` 是浅蓝，不是绿）。
+  全部颜色在 `portal/src/style.css` 的 `:root`（`color-scheme: dark`；`--grad` 页面渐层、`--nav`/`--nav-2` 侧栏、`--primary` #dbe8fa、**`--on-fill` #111721 = 亮色底（点缀、红、绿、橙）上的字**、
+  `--card`、`--input`（输入框底比卡片深一阶）、`--text`、`--muted`、`--line`/`--line-strong`、`--soft`/`--tint`/`--hover`/`--track`、`--card-shadow`、`--backdrop`；
+  状态：`--red` #f87171 是**字**（#EF4444 在卡片上对比只有 3.8）、`--red-fill` #ef4444 是**实心底**、`--green` #22c55e、`--amber` #f59e0b 与各自的 `-soft`；
+  `--purple`/`--purple-soft` 发错型号、`--warm-row` / `--red-row` 要注意 / 逾期的列）。淡底色都是「颜色 × 透明度叠在卡片上」算好的不透明色（sticky 栏位要不透明）。
+  **新画面不要写死颜色，一律用变数；按键底若不是 `--primary` 要自己设 `color`**（预设按键字是 `--on-fill` 深色，深色底会看不到）。
+  `style.css` 档尾 `@media print` 把变数换回白底黑字；工资单（`.ps`）、条码标签（`.label`）在画面上是白纸、刻意不变。
+  logo `public/icon.svg` = 浅蓝 #dbe8fa 方块 + 深蓝 #283060 房子（BI 的 theme-color 与图示线条色），`icon-192.png` 由 SVG 转出；BI 自己的图示是白底深蓝线条
+  「斜屋顶 + 铁锤」（`favicon-48.png`，大图抓不全），使用者若要两边用同一个 logo，请他给原图档。theme-color / manifest #111721。
+  前端部署 `THEME_BI_DEPLOY_PENDING`。
 - 路线图（AttendX 搬迁顺序，使用者 2026-10-01 选定）：打卡 + 补卡 ✓ → 请假 ✓ →（插队：仓库第一版 ✓）→ 薪资 ✓（移植 HR 原系统）→ 加班（按打卡自动算，接到薪资的加班时数）；其余：2 销售；
   3 仓库 + 送货（✓ 2026-10-08）；4 收款、佣金、报表；5 HR、薪资。**使用者决定（2026-09-26）：所有功能统一在营运系统，
   HR 打卡也做在 `portal/` 的 hr 模块**，不沿用 7 月建的 Vercel 专案 `hr-attendance-app`（Next.js，

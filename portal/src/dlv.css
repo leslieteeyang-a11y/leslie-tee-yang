@@ -29,7 +29,7 @@ table.dlv-stops td { vertical-align: top; }
 .dv-top h1 { margin: 0; }
 .dv-lang { display: flex; gap: 4px; }
 .dv-lang button { background: var(--card); color: var(--text); border: 1px solid var(--line); padding: 4px 10px; font-weight: 500; }
-.dv-lang button.on { background: var(--nav); color: #fff; border-color: var(--nav); }
+.dv-lang button.on { background: var(--primary); color: var(--on-fill); border-color: var(--primary); }
 .dv-head { font-size: .9rem; color: var(--muted); margin-bottom: 12px; }
 .dv-head b { color: var(--text); font-size: 1rem; }
 .dv-bar { height: 8px; border-radius: 4px; background: var(--line); margin: 6px 0; overflow: hidden; }
@@ -38,12 +38,12 @@ table.dlv-stops td { vertical-align: top; }
 .dv-stop.dv-delivered { border-color: var(--green); }
 .dv-stop.dv-failed { border-color: var(--red); }
 .dv-title { display: flex; gap: 10px; align-items: center; cursor: pointer; }
-.dv-no { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--nav); color: #fff; display: grid; place-items: center; font-weight: 600; }
+.dv-no { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: var(--on-fill); display: grid; place-items: center; font-weight: 600; }
 .dv-main { flex: 1; min-width: 0; }
 .dv-caret { color: var(--muted); }
-.dv-tag { display: inline-block; margin-left: 6px; font-size: .75rem; padding: 1px 8px; border-radius: 10px; color: #fff; }
+.dv-tag { display: inline-block; margin-left: 6px; font-size: .75rem; padding: 1px 8px; border-radius: 10px; color: var(--on-fill); }
 .dv-tag-delivered { background: var(--green); }
-.dv-tag-failed { background: var(--red); }
+.dv-tag-failed { background: var(--red-fill); }
 .dv-addr { margin: 10px 0 6px; }
 .dv-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .dv a.dv-btn { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--bg); font-size: .9rem; }
@@ -57,11 +57,11 @@ table.dlv-stops td { vertical-align: top; }
 .dv-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .dv-thumb { position: relative; }
 .dv-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
-.dv-thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; padding: 0; background: var(--red); font-size: .75rem; }
+.dv-thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; padding: 0; background: var(--red-fill); color: var(--on-fill); font-size: .75rem; }
 .dv label.dv-note { margin-top: 10px; }
 .dv .dv-actions button { flex: 1; padding: 12px; font-size: 1rem; }
-.dv .dv-actions button.dv-ok { background: var(--green); }
-.dv .dv-actions button.dv-no-btn { background: var(--red); flex: 0 0 auto; padding: 12px 16px; }
+.dv .dv-actions button.dv-ok { background: var(--green); color: var(--on-fill); }
+.dv .dv-actions button.dv-no-btn { background: var(--red-fill); color: var(--on-fill); flex: 0 0 auto; padding: 12px 16px; }
 .dv-redo { margin-top: 8px; }
 
 /* 手机：排单表改成一站一张卡（表格横向太挤） */

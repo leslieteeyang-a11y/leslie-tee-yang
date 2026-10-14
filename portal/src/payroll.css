@@ -1,5 +1,5 @@
 /* 薪资模块 */
-.pay-totbar { background: var(--nav); color: #fff; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pay-totbar { background: var(--nav); color: #fff; border: 1px solid var(--nav-line); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
 .pay-totbar > div { display: flex; justify-content: space-between; gap: 12px; }
 .pay-totbar b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 .pay-totbar .muted { color: var(--nav-text); }
