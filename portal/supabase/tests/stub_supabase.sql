@@ -224,3 +224,27 @@ grant execute on function public.bi_is_allowed(), public.bi_role(), public.bi_co
   public.bi_customer_save(text, text), public.bi_campaigns(), public.bi_customer_set_settings(numeric),
   public.bi_customer_missing_phone(integer), public.bi_delivery_stub_check(), public.bi_customer_stub_reader(),
   public.bi_customer_set_geo(text) to authenticated;
+-- BI 三个分页搬进营运系统（2026-10-16）：补货建议视图用到的 BI 表 / 视图（正式环境是 BI 的物化视图与视图，这里当表），
+-- （public.bi_is_allowed / bi_role / bi_company 由上面顾客资料那段提供，public.bi_purchase_suggest 也用它们）
+alter table bi.v_supplier_param add column currency text, add column is_active boolean default true, add column po_name text,
+  add column po_24m bigint, add column last_po date, add column n_rcv bigint, add column hist_lead_days int,
+  add column safety_days int, add column cover_days int, add column lead_override int, add column safety_override int,
+  add column cover_override int, add column china_override boolean, add column note text, add column updated_by text,
+  add column updated_at timestamptz, add column order_cycle_days int, add column order_due boolean, add column days_since_po int,
+  add column short_pct numeric;
+alter table bi.dim_item add column price1 numeric, add column price2 numeric, add column price3 numeric, add column price4 numeric;
+create table bi.mv_purchase_sold (company text, item_code text, q90 numeric, q365 numeric, q90_branch_excl numeric, q30 numeric,
+  q90_ly numeric, first_sale_win date, last_sale date);
+create table bi.v_item_supplier (company text, item_code text, supplier_code text, last_supplier_code text, last_supplier_name text,
+  last_price numeric, last_po_date date, last_po_no text, po_24m bigint, qty_12m numeric, supplier_override text,
+  min_order_qty numeric, pack_size numeric, exclude boolean, item_note text);
+create table bi.buyer_item_action (id bigint generated always as identity primary key, company text not null, item_code text not null,
+  action text not null, qty numeric, until_date date, note text, created_by text, created_at timestamptz not null default now());
+create table bi.buyer_item_setting (company text not null, item_code text not null, supplier_code text, min_order_qty numeric,
+  pack_size numeric, exclude boolean not null default false, note text, updated_by text, updated_at timestamptz not null default now(),
+  primary key (company, item_code));
+create table bi.buyer_supplier_setting (company text not null, creditor_code text not null, lead_days int, safety_days int,
+  cover_days int, is_china boolean, note text, updated_by text, updated_at timestamptz not null default now(), alias text,
+  order_cycle_days int, primary key (company, creditor_code));
+create table bi.buyer_brand_supplier (company text not null, item_type text not null, supplier_code text, note text,
+  updated_by text, updated_at timestamptz not null default now(), primary key (company, item_type));

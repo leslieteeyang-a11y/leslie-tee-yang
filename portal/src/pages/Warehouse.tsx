@@ -13,9 +13,11 @@ import { CountTab } from "../wh/Count";
 import { ReviewTab } from "../wh/Review";
 import { AgedTab } from "../wh/Aged";
 import { GrnTab } from "../wh/Grn";
+import { StockTab } from "../wh/Stock";
+import { SlowTab } from "../wh/Slow";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "count" | "moves" | "grn" | "review" | "aged" | "labels";
+type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
 export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
@@ -29,12 +31,14 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
   const canEdit = meta.level !== "view";
   const canApprove = meta.level === "approve";
   const tabs: [Tab, string][] = [["lookup", "查货"]];
+  tabs.push(["stock", "库存总表"]);   // 从 BI 搬进来（2026-10-16）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
   // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
   if (canGrn(me)) tabs.push(["grn", "待开进货单"]);
   if (canApprove) tabs.push(["review", "差异审核"]);
   tabs.push(["aged", "旧货"]);
+  tabs.push(["slow", "滞销品"]);     // 从 BI 搬进来（2026-10-16）
   tabs.push(["labels", "印条码"]);
   const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "lookup";
   const locs = meta.locations.filter((l) => l.company === co);
@@ -57,6 +61,8 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
       {tab === "grn" && <GrnTab company={co} multi={meta.companies.length > 1} canCancel={canCancelReceive(me)} />}
       {tab === "review" && <ReviewTab company={co} meta={meta} onMeta={setMeta} />}
       {tab === "aged" && <AgedTab company={co} />}
+      {tab === "stock" && <StockTab company={co} />}
+      {tab === "slow" && <SlowTab company={co} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
     </>
   );

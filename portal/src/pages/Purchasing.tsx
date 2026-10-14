@@ -13,8 +13,11 @@ const DoEditor = lazy(() => import("../podo/DoEditor"));
 const IssuesTab = lazy(() => import("../podo/Issues"));
 const TransitTab = lazy(() => import("../podo/Transit"));
 const ReceiveTab = lazy(() => import("../podo/Receive"));
+// 从 BI 搬进来的补货建议、供应商交期（2026-10-16）
+const Replenish = lazy(() => import("../rpl/Replenish"));
+const Suppliers = lazy(() => import("../rpl/Suppliers"));
 
-type Tab = "po" | "do" | "issues" | "transit" | "receive" | "shipments" | "item";
+type Tab = "po" | "replenish" | "do" | "issues" | "transit" | "receive" | "shipments" | "leadtime" | "item";
 
 // 路由：#/purchasing（PO）、#/purchasing/do（厂家到货）、#/purchasing/do/new、#/purchasing/do/<id>、#/purchasing/issues（厂家问题）、
 // #/purchasing/transit（在路上）、#/purchasing/receive（点货清单）、#/purchasing/receive/<DO id>（点一张）、
@@ -24,11 +27,13 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
   // 看不到厂家的人（分行、门市、电商）：没有未到货 PO / 货柜，只有在路上与查 SKU 到货（只显示产品、数量、ETA）
   const sup = seesSupplier(me);
   const tabs: [Tab, string][] = sup ? [["po", "未到货 PO"]] : [];
+  tabs.push(["replenish", "补货建议"]);
   if (canEdit) tabs.push(["do", "厂家到货"], ["issues", "厂家问题"]);
   tabs.push(["transit", "在路上"]);
   // 货到了：仓库部（或订货可编辑的人）点每个型号实际收到几件
   if (canReceive(me)) tabs.push(["receive", "点货"]);
   if (sup) tabs.push(["shipments", "货柜"]);
+  if (sup) tabs.push(["leadtime", "供应商交期"]);
   tabs.push(["item", "查 SKU 到货"]);
   // #/purchasing/noeta：首页「N 张 PO 还没 ETA，要问厂家」点进来 = 未到货 PO 只列这些
   const noEta = sub === "noeta" && sup;
@@ -45,6 +50,8 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
         {tab === "issues" && <IssuesTab me={me} />}
         {tab === "transit" && <TransitTab me={me} />}
         {tab === "receive" && <ReceiveTab key={arg1 ?? ""} me={me} idParam={arg1} />}
+        {tab === "replenish" && <Replenish branchAll={me.staff.branch === "ALL"} />}
+        {tab === "leadtime" && <Suppliers company={me.staff.branch === "ALL" ? "HOMEWORKSSB" : me.staff.branch} />}
       </Suspense>
       {tab === "shipments" && <ShipmentTab me={me} canEdit={canEdit} />}
       {tab === "item" && <ItemTab />}

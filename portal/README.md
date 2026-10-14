@@ -18,6 +18,7 @@
 | `src/att/`、`src/att-api.ts`、`src/att.css` | 打卡模块：Today（打卡、补下班卡、外勤签到）、Camera（自拍）、Records（逐日纪录、月报 CSV）、Board（团队今天）、Corrections（补卡）、Settings（HR 设定） |
 | `src/podo/`、`src/podo-api.ts`、`src/podo.css`、`src/i18n-dict-podo.ts` | 订货页的厂家到货（`#/purchasing/do`、`/do/new`、`/do/<id>`：选厂家 → 选 PO → 上传厂家 DO → 分给各分店 → 确认）、厂家问题（`/issues`：按厂家分组、厂家会补 / 取消、Excel、打印）、在路上（`/transit`：JB 只看 JB）。`podo/parse.ts` 在浏览器读 Excel / CSV（SheetJS CE 0.20.3，npm 套件 `@e965/xlsx`，动态载入）；档案放 Storage 私有 bucket `ops-po`。这四个画面用 `React.lazy`，点到才下载。在路上的算法（同厂家同型号一起算、起算点）写在 migration `20261012_ops_po_do.sql` §3 |
 | `src/pages/Delivery.tsx`、`src/dlv/`、`src/dlv-api.ts`、`src/dlv.css` | 送货：Plan（一键排单、最短路线、WhatsApp 司机）、Runs（排单纪录、签收照片）、Mine（员工司机签收）、Setup（出发点、外包司机）、DriverSign（司机签收页，`#/driver?t=` 不用登入）、HomeCard（首页提醒） |
+| `src/rpl/`、`src/rpl-api.ts`、`src/rpl.css`、`src/wh/Stock.tsx`、`src/wh/Slow.tsx`、`src/i18n-dict-rpl.ts` | 2026-10-14 从 BI 搬来的四页：订货模块的「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有这页）、仓库模块的「库存总表」（`#/warehouse/stock`）与「滞销品」（`/slow`）。资料仍是 BI 同步进来的 `bi.*` 表，算法沿用 BI 的视图（`bi.v_purchase_suggest`）；函数 `ops_rpl_*` / `ops_wh_stock` / `ops_wh_slow` 在 migration `20261016_ops_bi_pages.sql`。补货建议与供应商交期用 `React.lazy` |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
 | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
@@ -78,3 +79,20 @@ Vercel 自己 `npm install` + `vite build`。
   按「已送达 / 送不成」（要写原因）。照片在 Storage 私有 bucket `delivery-pod/<代码>/`。
 - 权限：`ops_dlv_*` 函数开头检查 `delivery` 模块等级与分店；签收连结代码只给可编辑的人与这趟的司机。照片路径里有连结代码，所以照片同样只给这些人（连结过期后只看的人也看得到）。
 - 英文模式：`translate="no"` 的区块不翻（司机签收页自带中 / 英 / 马来文）；`window.confirm` 用 `dlv-api.ts` 的 `ui()` 先翻。
+
+## 从 BI 搬来的四页（2026-10-14）
+
+老板决定把 BI 的「订货 / 库存 / 滞销品」搬到营运系统，BI 那边拿掉。搬法与权限：
+
+- **补货建议**（订货 → 补货建议）：近 90 天走量 ≥ 门槛（10 / 30 / 100）、或欠分行、或现存 ≤ 0 的商品，按急迫度排；
+  已下单 / 暂不订 / 留言、商品设定（最小订量、包装数、不再提醒、指定供应商）写进 BI 的 `bi.buyer_*` 表（与 BI 共用）。
+  订货「只看」可看；看不到厂家的人看不到供应商 / 厂号 / 在途 PO 号；看不到进货单价的人看不到上次单价；
+  改动要订货「可编辑」。**撤销是软撤销**（`bi.buyer_item_action.undone_at / undone_by`，视图不再算它）：
+  Supabase MCP 的 `apply_migration` 看到 `delete` 会等人确认，无人确认整段取消，所以不用 delete。
+- **供应商交期**（订货 → 供应商交期）：交期 / 安全 / 覆盖 / 订货周期、品牌 → 默认供应商；看得到厂家的人可看，订货「可编辑」可改。
+- **库存总表**（仓库 → 库存总表）：商品 × 仓位现存量、售价 P2–P4、负库存筛选、搜寻；成本只给仓库「可审批」。
+- **滞销品**（仓库 → 滞销品）：最后进货超过 6 / 3–6 个月还没售完；成本只给仓库「可审批」。
+- BI 的 `public.bi_purchase_suggest` 拆成 `bi.v_purchase_suggest`（只算）+ 原视图（加 BI 名单检查），栏位不变，
+  老板在 BI 看到的数字与之前一样（2,590 行对 2,590 行）。
+- Migration 已分六段套到 Supabase（`ops_bi_pages_1_views` ～ `ops_bi_pages_6_grants`），档案 `20261016_ops_bi_pages.sql` 可重跑。
+  测试 `supabase/tests/rpl_test.sql`（stub 补了 `bi.mv_purchase_sold`、`bi.buyer_*` 等表）。

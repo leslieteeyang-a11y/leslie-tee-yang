@@ -1,0 +1,27 @@
+/* 补货建议 / 供应商交期 / 库存总表 / 滞销品（从 BI 搬进来，2026-10-16） */
+.rpl-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.rpl-filters select, .rpl-filters input[type="search"], .rpl-filters input[type="text"] { width: auto; min-width: 0; }
+.rpl-filters input.search { flex: 1; min-width: 160px; }
+.rpl-filters label.check { white-space: nowrap; }
+.rpl-group { margin-bottom: 14px; }
+.rpl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rpl-head h3 { margin: 0; font-size: 1.05rem; }
+.rpl-head .spacer { flex: 1; }
+.rpl-head .fold { cursor: pointer; color: var(--muted); }
+.urg { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .8rem; white-space: nowrap; }
+.urg.out { background: var(--red-soft); color: var(--red); }
+.urg.late { background: var(--red-soft); color: var(--red); }
+.urg.now { background: rgba(245, 158, 11, .15); color: var(--amber); }
+.urg.ok { background: rgba(34, 197, 94, .15); color: #16a34a; }
+.rpl-neg { color: var(--red); font-weight: 600; }
+.rpl-note { font-size: .8rem; color: var(--muted); }
+input.rpl-qty { width: 76px; text-align: right; }
+.rpl-setting { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; padding: 6px 2px; font-size: .9rem; }
+.rpl-setting label { display: flex; flex-direction: column; gap: 2px; }
+.rpl-setting label.check { flex-direction: row; align-items: center; gap: 6px; }
+.rpl-setting .grow { flex: 1; min-width: 180px; }
+.rpl-fill { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.rpl-fill summary { cursor: pointer; }
+tr.rpl-done td { opacity: .55; }
+.rpl-foot { font-size: .8rem; color: var(--muted); margin-top: 12px; }
+.pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
