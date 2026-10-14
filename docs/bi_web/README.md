@@ -120,3 +120,14 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 - 待办（审查提的、这次没做）：`bi_purchase_suggest` 的 cs_code 第二支退路（代理账号最近一张 PO 的名称）会把 29 个商品贴上与自己无关的厂号
   （CS017 +9、CS032 +12…），且随代理下一张 PO 漂移；要改成「该代理只出现过一个厂号时才用」或直接拿掉退路，另开 migration。
 
+## 2026-10-14（晚）：没货的商品不受走量门槛限制（老板「虽然卖的少，但没货了还是要给我知道啊」）
+- 载入规则从「q90 ≥ 门槛 或 欠分行」改成「q90 ≥ 门槛 或 欠分行 或 **现存 ≤ 0**」：`Purchasing.tsx` rows 查询的 `.or()` 加 `on_hand.lte.0`；
+  门槛标签加 tooltip、页尾口径加一句「走量门槛只筛还有货的商品」。门槛 30 下多出 183 行没货商品，CS007 / CS020 / CS052 / CS060 各出现 1 项。
+- 伺服器一次最多 1000 行，门槛 10 加没货商品已有 1,127 行 → rows 改用 `.range()` 翻页最多 3 页（3,000 行），排序加第二键 `item_code` 让分页稳定；
+  超过 3,000 行时的警告文字取代原本的 1000 行警告。
+- 视图 `public.bi_cs_code` v3（migration `cs_code_view_v3_out_of_stock`，SQL 副本已同步）：`loaded10/30/100` 的口径同步加 `on_hand <= 0`，
+  核对 55 个码三个门槛仍 0 个不符。提示框文字改成「…都不到门槛、也都还有货，所以没列出来」。
+- 部署：`dpl_6ttGuYm5Z3wbn82wyhdLaaoiakbx`（2026-10-14 12:07 UTC，production），三个内嵌档 SHA 已核对（Purchasing ea45e031…、cscode 7dd770a3…、
+  index 302ad583…），manifest 已 `--commit cscode`。
+- BOM 的最终解法：CSV 匯出改成 `String.fromCharCode(0xfeff) + …`，档案里既没有不可见字元也没有 `\uFEFF` 跳脱，内嵌部署与本地 SHA 一致。
+

@@ -88,14 +88,27 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
     let alive = true; // 过期回应保护:使用者已再换厂号/门槛时,丢掉先发后到的回应(2026-10-14 审查)
     (async () => {
       setRows(null);
+      // 载入规则:销量 ≥ 门槛,或欠分行,或现存 ≤ 0——卖得少但已经没货的也要列出来(老板 2026-10-14)
       // 选了厂号就在伺服器端过滤:不然 1000 行上限会把排在后面的厂号整个切掉(2026-10-14)
-      let qy = supabase.from('bi_purchase_suggest').select('*').eq('company', COMPANY).eq('exclude', false)
-        .or(`q90.gte.${minQ},owed_branch.gt.0`);
-      if (csFilter) qy = qy.eq('cs_code', csFilter);
-      const a = await qy.order('days_left', { nullsFirst: true }).limit(1000);
-      if (!alive) return;
-      setErr(a.error ? a.error.message : null);
-      setRows((a.data ?? []) as Suggest[]);
+      const build = () => {
+        let qy = supabase.from('bi_purchase_suggest').select('*').eq('company', COMPANY).eq('exclude', false)
+          .or(`q90.gte.${minQ},owed_branch.gt.0,on_hand.lte.0`);
+        if (csFilter) qy = qy.eq('cs_code', csFilter);
+        return qy.order('days_left', { nullsFirst: true }).order('item_code'); // 第二排序键让分页稳定
+      };
+      // 伺服器一次最多回 1000 行;门槛 10 加上没货商品已超过,所以最多翻 3 页(紧急的排前面,翻到的都是还能卖很久的)
+      const acc: Suggest[] = [];
+      let errMsg: string | null = null;
+      for (let page = 0; page < 3; page++) {
+        const res = await build().range(page * 1000, page * 1000 + 999);
+        if (!alive) return;
+        if (res.error) { errMsg = res.error.message; break; }
+        const got = (res.data ?? []) as Suggest[];
+        acc.push(...got);
+        if (got.length < 1000) break;
+      }
+      setErr(errMsg);
+      setRows(acc);
     })();
     return () => { alive = false; };
   }, [minQ, tick, csFilter]);
@@ -219,7 +232,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       () => window.alert(t('已复制 {n} 行到剪贴板(可直接贴到 Excel / WhatsApp)', { n: list.length })),
       () => window.alert(t('复制失败,请用下载'))
     );
-    const csv = '﻿' + [head, ...lines].map((a) => a.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const csv = String.fromCharCode(0xfeff) + [head, ...lines].map((a) => a.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -256,7 +269,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
             })}
           </select>
         )}
-        <label className="muted">{t('走量门槛')}</label>
+        <label className="muted" title={t('近 90 天至少卖出这么多件才列出;欠分行或已经没货(现存 ≤ 0)的商品不受门槛限制,一律列出')}>{t('走量门槛')}</label>
         <select value={minQ} onChange={(e) => setMinQ(Number(e.target.value))}>
           <option value={10}>{t('90 天 ≥{n} 件', { n: 10 })}</option>
           <option value={30}>{t('90 天 ≥{n} 件', { n: 30 })}</option>
@@ -287,7 +300,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
           <div className="notice" style={{ borderColor: '#f59e0b' }}>
             {t('厂号 {c}:', { c: csSel.cs_code })}
             {Number(csSel.items) > 0
-              ? t('有 {n} 个商品近 90 天有卖,但每个都不到门槛 {q} 件,所以没列出来。', { n: csSel.items, q: minQ })
+              ? t('有 {n} 个商品近 90 天有卖,但每个都不到门槛 {q} 件、也都还有货,所以没列出来。', { n: csSel.items, q: minQ })
               : Number(csSel.items_last_po) > 0
                 ? t('最近向这个厂号进货的 {n} 个商品,近 90 天都没卖出,分行也没预订(刚进的新货还没开卖时也会这样)。', { n: csSel.items_last_po })
                 : t('这个厂号开过 PO,但它的商品后来都改向别的厂号下单了,现在没有商品挂在它名下。')}
@@ -298,9 +311,9 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
           </div>
         );
       })()}
-      {rows && rows.length >= 1000 && !csFilter && (
+      {rows && rows.length >= 3000 && !csFilter && (
         <div className="notice" style={{ borderColor: '#f59e0b' }}>
-          {t('符合条件的商品超过 1000 行,只载入了最急的前 1000 行,还能卖比较久的商品没显示。请把走量门槛调高,或先选一个厂号(选了厂号就不受 1000 行限制)。')}
+          {t('符合条件的商品超过 3000 行,只载入了最急的前 3000 行,还能卖比较久的商品没显示。请把走量门槛调高,或先选一个厂号。')}
         </div>
       )}
       {dueSups.length > 0 && (
@@ -458,6 +471,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       })}
       <p className="muted" style={{ fontSize: 12 }}>
         {t('口径:日均销量 = 近 90 天净销量 ÷ 90(分行提前预定的马桶/盆柜/水槽已剔除);')}
+        {t('走量门槛只筛还有货的商品——欠分行或现存 ≤ 0 的一律列出;')}
         <strong>{t('现存 = 自有可卖库存')}</strong>{t('(不含次品/展示仓,也不含 JB 仓——那是分行预定的货);')}
         <strong>{t('欠分行')}</strong>{t(' = PRE (JB) 的负数,即分行预定了但我们还没货,已直接加进建议订量并标"来不及";在途 = 120 天内未收完的 PO。')}
         <strong>{t('来不及')}</strong>{t(' = 现存撑不到交期结束;')}<strong>{t('该下单')}</strong>{t(' = 现存+在途 ≤ 交期+安全天数。')}

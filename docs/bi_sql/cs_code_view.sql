@@ -26,7 +26,7 @@ with codes as (
          count(*) filter (where exclude) as excluded,
          count(*) filter (where not exclude and (q90 >= 10  or owed_branch > 0)) as loaded10,
          count(*) filter (where not exclude and (q90 >= 30  or owed_branch > 0)) as loaded30,
-         count(*) filter (where not exclude and (q90 >= 100 or owed_branch > 0)) as loaded100
+         count(*) filter (where not exclude and (q90 >= 100 or owed_branch > 0 or on_hand <= 0)) as loaded100
   from public.bi_purchase_suggest
   where cs_code is not null
   group by 1, 2
