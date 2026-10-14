@@ -167,6 +167,16 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 **资料不搬家**（仍是 `bi.delivery_*`），资料库部分正式环境已套（`ops_delivery` + `ops_delivery_review_fixes` + `ops_delivery_fixes2` + BI 的 `driver_run_geo`）；
 那边部署前端后再套模块开关 `20261008c`。经两轮多人审查（照片路径含签收代码 → 只看的人只给张数；查 DO 不回内部备注与金额；重复排单不重复计；
 找位置期间不盖掉编辑…）。BI 的旧送货页（`/delivery.html`、`/driver.html`）先留着，资料两边相通；要不要关掉由使用者决定。
+**顾客资料搬进营运系统（2026-10-14）**：使用者「我要把这个系统连接在员工多部门里面」，选「顾客资料」+「照部门权限」。整页搬到营运系统
+`#/customers`（模块 `customers`「顾客资料」：销售 / 门市 = 可编辑、管理层 = 可审批、其他部门看不到，只看要用个人例外开）。资料**不搬家**，
+前端直接叫 BI 原本的 `bi_customer*` / `bi_campaign*` / `bi_wa_template*`；portal migration `20261016_ops_customers.sql` 把这些函数开头的
+`bi.customer_require` 换成 **`bi.crm_require`**（BI 名单照旧 + 营运系统模块权限：admin = owner、可审批 = manager、可编辑 = sales、只看 = 只能叫
+固定名单里的读取函数；模块 `ready = false` 时营运系统员工一律没有），`public.bi_company()` 换成 `bi.crm_company()`。**以后在这边改任何顾客资料
+函数，开头要写 `bi.crm_require(…)`、分店用 `bi.crm_company()`**，不要再用 `bi.customer_require` / `bi_company()`（不然营运系统员工被挡、或 JB
+员工看到全部分店）；新的读取函数要给只看的人用，第二个参数 `true` 并加进那个 migration 的 `v_read` 名单。`bi_delivery_*` 与 BI 送货页的
+`bi_customer_set_address` / `_set_geo` 维持只认 BI 名单。交接包 `docs/ops_customers/`（HANDOFF.md + patch，以营运系统 `dbe274c` 为底）。
+BI 的 `/loyalty.html` 先留着，两边资料相通。
+
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
