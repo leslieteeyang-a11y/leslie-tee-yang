@@ -257,7 +257,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   ③ **仓库点货**（订货或仓库「可编辑」；不能再直接「标记到货」）：每个型号好货 / 坏货、改分店分配、来错的货；少 / 坏 / 多 / 来错自动记厂家问题。
   ④ **点货后库存跟著变（不写 AutoCount）**：点货产生 `ops.wh_move` kind = `receive`（pending，仓位照 `ops.podo_recv_loc`：总部 = PO 行仓位、其他分店 = PRE (分店)），
   `ops.wh_pending` 加进查商品 / 盘点「应有」；新部门 **开单部 `billing`**（仓库只看 + `ops.grn_can_mark`，看得到厂家）在「仓库 → 待开进货单」照单在 AutoCount 开 GRN、
-  按已输入填 GRN 号；AutoCount 已有新 GRN 只提示「可能已输入」（`grn_avail` 先出先到），不自动标；点货时 AutoCount 已经有 GRN 的记 `pre_grn`（不重复算库存）。
+  按已输入填 GRN 号；AutoCount 已有新 GRN 只提示「可能已输入」（`grn_avail` 先出先到），不自动标；点货时 AutoCount 已经有 GRN 的记 `pre_grn`（不重复算库存，还是等开单部核对后标已输入；使用者 2026-10-14 确认照这样做）。
   进货取消只有仓库「可审批」而且要写原因。单价只给订货「可编辑」与 admin（`ops.sees_prices`）。
   **Supabase MCP 也挡 `drop function`**（apply_migration 卡 60 秒后 cancelled）：所以 `ops_wh_move_mark` 旧的 3 个参数版本留著转接、新的 4 个参数版本参数全必填。
   **人手**（上线当天）：仓库部 1 位在职、开单部 0 位 → 开单部要先开账号（员工与权限 / 加入申请选「开单部」）才有人开 GRN；在那之前管理层（仓库可审批）也能标已输入。
