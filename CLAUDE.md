@@ -242,7 +242,10 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - **订货 SOP + 仓库点货 + 开单部（2026-10-13 上线）**：migration `20261014_ops_po_receive.sql`（正式环境 `ops_po_receive_1`～`_3`）+
   `20261015_ops_po_sop.sql`（`ops_po_sop_1`～`_9`，照「-- ====」切；**要先套 20261014，套过 20261015 之后不要再重跑 20261014**）；
   套完 248 个 ops / public.ops_* 函数与本机比对，这两个 migration 碰到的全部一致（另外 9 个旧函数只差函数内的中文注解，正式环境当初套的是去掉注解的版本）。
-  前端部署 `DEPLOY_ID_PENDING`。使用者决定：
+  前端部署 `dpl_GGYYXrDRb8M4SWbVd6JDVhMZrtaS`（112 个档 uid 与本机 SHA1 一致）。**前端档案要 ≤ 约 35 KB**：Vercel MCP 上传要把整个档案的 base64
+  写进一次呼叫，太大（DoEditor 79 KB、Receive 56 KB）或某些内容会被截断 / 挡下，所以拆成 `podo/doRows.ts`、`DoProblems.tsx`、`DoViews.tsx`、
+  `DoSections.tsx`、`RecvForm.tsx`、`RecvReceipt.tsx`；真的传不上去的档可以在 `create_deployment` 用 `encoding: "utf-8"` 直接内嵌原始码（RecvForm.tsx 这次就是），
+  部署后用 `list_deployment_files` 核对 uid。使用者决定：
   ① **只有订货部（采购）开厂家到货**（物流部改回订货「只看」、看不到厂家）；一步接一步：选 PO → 出货 → 分店（一打开就列四间分店；JB 账套只能分 JB，
   触发器 `supplier_do_outlet_guard`）→ ETA → 确认（订货部）→ 点货（仓库部）→ 厂家问题（采购决定）→ 进货待开 GRN（开单部）；`ops.podo_json.sop`
   回目前第几步、等哪个部门；草稿从开单起 24 小时没确认标红；首页提醒：`do_draft_stale`、`po_no_eta`（PO 没 ETA 要问厂家：中国货 ≥ 30 天、本地 ≥ 7 天、
