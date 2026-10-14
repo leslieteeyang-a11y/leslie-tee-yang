@@ -166,7 +166,9 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 `git am` 实测无冲突、那边全部测试 + 新的 `dlv_test.sql` 通过、build 通过），ZIP `HomeWorks-送货模块-给营运系统-2026-10-08.zip` 已交给使用者上传到那边。
 **资料不搬家**（仍是 `bi.delivery_*`），资料库部分正式环境已套（`ops_delivery` + `ops_delivery_review_fixes` + `ops_delivery_fixes2` + BI 的 `driver_run_geo`）；
 那边部署前端后再套模块开关 `20261008c`。经两轮多人审查（照片路径含签收代码 → 只看的人只给张数；查 DO 不回内部备注与金额；重复排单不重复计；
-找位置期间不盖掉编辑…）。BI 的旧送货页（`/delivery.html`、`/driver.html`）先留着，资料两边相通；要不要关掉由使用者决定。
+找位置期间不盖掉编辑…）。**2026-10-14 使用者决定 BI 的旧送货页关掉**：`delivery.html` 转到营运系统 `#/delivery`、`driver.html?t=…`
+带着签收代码转到营运系统 `#/driver?t=…`（旧的 WhatsApp 连结照样能签收）、BI 顾客资料页拿掉内嵌的送货排单（overlay 底 dpl_7TSztDz3UXC1owtoGsebyrqKa1gu，
+要使用者在 SERVER 更新 ZIP 后双击 deploy_bi_web.bat）。
 **顾客资料搬进营运系统（2026-10-14）**：使用者「我要把这个系统连接在员工多部门里面」，选「顾客资料」+「照部门权限」。整页搬到营运系统
 `#/customers`（模块 `customers`「顾客资料」：销售 / 门市 = 可编辑、管理层 = 可审批、其他部门看不到，只看要用个人例外开）。资料**不搬家**，
 前端直接叫 BI 原本的 `bi_customer*` / `bi_campaign*` / `bi_wa_template*`；portal migration `20261016_ops_customers.sql` 把这些函数开头的
@@ -177,7 +179,9 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 `bi_customer_set_address` / `_set_geo` 维持只认 BI 名单。交接包 `docs/ops_customers/`（HANDOFF.md + patch，以营运系统 `dbe274c` 为底，
 `git am` 实测无冲突、测试与 build 通过），ZIP `HomeWorks-顾客资料-给营运系统-2026-10-14.zip` 交给使用者上传到那边。**正式环境 2026-10-14 已套
 `ops_customers`**（23 个函数改写，模块 `ready = false` → 营运系统员工还进不来，BI 不受影响）；那边部署前端后再套 `ops_customers_ready`。
-经两轮多人审查（资料库第二轮零问题；前端修了表单被盖掉、筛选消失、设定用预设值存回去、横向卷动等）。BI 的 `/loyalty.html` 先留着，两边资料相通。
+经两轮多人审查（资料库第二轮零问题；前端修了表单被盖掉、筛选消失、设定用预设值存回去、横向卷动等）。**使用者问「资料可以一起搬家吗？」（2026-10-14）**：资料本来就只有一份（同一个 Supabase），两边只是入口，不搬（购买纪录是 BI 每天从
+AutoCount 同步的、扫码登记 / 报价提醒 / 送货地址都读同一份）；做法是关掉 BI 的入口。使用者决定：BI `/loyalty.html` **等营运系统的顾客资料上线、试用后再关**
+（改成转到营运系统 `#/customers`，到时再改 overlay）；顾客扫码登记 `/join.html` **留在 BI 原网址**（QR 海报不用重印）；旧送货页一起关（见上）。
 
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`

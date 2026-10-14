@@ -4,12 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#283060" />
+    <meta name="robots" content="noindex" />
     <title>送货排单 · Homeworks</title>
+    <!-- 2026-10-14 使用者决定：送货排单只用「HomeWorks 营运系统」的「送货」，这一页改成转过去（资料本来就是同一份） -->
+    <script>location.replace('https://homeworks-ops.vercel.app/#/delivery');</script>
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/delivery/main.tsx"></script>
+  <body style="margin:0;padding:24px;font-family:system-ui,sans-serif;background:#111721;color:#fff">
+    <p>送货排单已经搬到「HomeWorks 营运系统」，正在打开…<br />Delivery planning has moved to HomeWorks Operations. Opening…</p>
+    <p><a style="color:#dbe8fa" href="https://homeworks-ops.vercel.app/#/delivery">https://homeworks-ops.vercel.app/#/delivery</a></p>
   </body>
 </html>

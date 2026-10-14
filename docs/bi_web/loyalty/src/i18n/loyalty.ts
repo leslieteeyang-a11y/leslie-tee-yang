@@ -314,6 +314,8 @@ const loyalty: Record<string, string> = {
   '这天没有 DO(或还没同步)': 'No DOs that day (or not synced yet)',
   '送货地址': 'Delivery address',
   '送货排单': 'Delivery planner',
+  '送货排单已经搬到「HomeWorks 营运系统」的「送货」(资料是同一份)。': 'Delivery planning has moved to "Delivery" in HomeWorks Operations (same data).',
+  '打开送货': 'Open Delivery',
   '选司机': 'Choose driver',
   '预览给司机的讯息': 'Preview the driver message',
   '今天要送的 DO 单号': 'DO numbers to deliver today',

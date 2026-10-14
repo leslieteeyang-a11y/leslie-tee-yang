@@ -163,26 +163,97 @@ LIVE_V3 = {
     "src/pages/Loyalty.tsx": "8b3be3b6f19c09f79f48779689f50bbb1b7f71c8",
     "src/pages/Delivery.tsx": "97583ca0f3c8a92eee8dd9a2fa9acd17b3cc13f7",
 }
-CHANGED = ["src/i18n/loyalty.ts", "src/loyalty/loyalty.css", "src/pages/Delivery.tsx", "vite.config.ts"]  # 司机提示、备注、完整货品、签收
-NEW_FILES = ["driver.html", "src/driver/driver.css", "src/driver/main.tsx"]   # 司机签收拍照页
+# 2026-10-14 另一个对话部署的 dpl_7TSztDz3UXC1owtoGsebyrqKa1gu（加了 Health / Margin / Targets 等页；10-07 司机签收版已在线上）。
+# 之后的改版以它为底：送货只用营运系统，delivery.html / driver.html 转过去、顾客资料页拿掉内嵌的送货排单
+LIVE_V4 = {
+    "delivery.html": "a0350088b26053b2efe2b955b729b20bba377f46",
+    "driver.html": "bee7bb6fd5d21b3f2e6b5e70e7c2204f63bfe33f",
+    "index.html": "14c5ed2ba590151838e4d7b63b17756a6ec56d8f",
+    "join.html": "179df2c8160175ab5d0aec1dac02e01f34c13b93",
+    "loyalty.html": "997523778355146e1492fdc53dafb7dd799c6ac6",
+    "package-lock.json": "25d922800a7da5bb5ac10e6898047de85fb97d40",
+    "package.json": "8bc640f8a020816a2e22dc1d14b9be0f15aab55f",
+    "public/apple-touch-icon.png": "e38465ae462c2a6f438f658fec73ce374b787406",
+    "public/favicon-48.png": "89fa1beed9b2e4d55732e2545ad3c5ffc5b11b78",
+    "public/icon-192.png": "2a79e48d00a1d1b0ed37064dc16c54baf8ef7068",
+    "public/icon-512.png": "1e664e69386f0e2d2498259ce330a28dcf1b9676",
+    "public/manifest.webmanifest": "6ee33a1a49b3e418cf6ec61235183f9d6d4e7b69",
+    "src/App.tsx": "827f947a5ab7e17c3a2aeaaa04877464365c7002",
+    "src/components/AdsEditor.tsx": "31fd0c1353ff92009424add432dcc56648419adf",
+    "src/components/ChartCard.tsx": "d207aca20edbc2ec25b264681db97c10c243c346",
+    "src/components/Login.tsx": "692b19745d077f644fd457f14fc33f2056367c8d",
+    "src/components/SalesCompare.tsx": "52ea9d2d83a1bd8f2371081ee4d1bd5283a935c5",
+    "src/delivery/main.tsx": "2364db70d1c2c2afb61f2324cbd9a381f6a97935",
+    "src/driver/driver.css": "9c61f04065dddee75f8af8e513f7a55a96d5c18f",
+    "src/driver/main.tsx": "2c98ab8abe9b7106206947aaa1a25eeb8b12c88c",
+    "src/i18n/core.ts": "71cfc562a51a3fa3cdeb9b876d185318a061ffa9",
+    "src/i18n/cscode.ts": "b154e6244a3ac22c672ae0a70e21d0e2079d1ce3",
+    "src/i18n/ecom.ts": "1e12ad8d7c3912631489cde5ec147ab884a461d7",
+    "src/i18n/finance.ts": "fcbe52558c21da8474043b924bbcf801d1659e93",
+    "src/i18n/health.ts": "0e77f101863a8eb373e2f5a5b5dfcc773de12d2e",
+    "src/i18n/index.ts": "302ad5832d9d883265a591e0b795a725ac58541c",
+    "src/i18n/loyalty.ts": "d97a8b0c8788b3167a45c303ad028bd37bfb9311",
+    "src/i18n/manager.ts": "481180239b2081b9fc494638561a9285dddb73ff",
+    "src/i18n/margin.ts": "e55307b52d6ab06cde445b041f7b17f743fac0d6",
+    "src/i18n/pages1.ts": "6041f381439190d52e2132d0d762a91710c778ad",
+    "src/i18n/pages2.ts": "3793b307290b37004ddcb0b092cc5a7c811c758a",
+    "src/i18n/purchasing.ts": "dfb21c222e81ae6d6c4aa58714e66799b42a5d86",
+    "src/i18n/targets.ts": "ef16c87ce3ee4fcc31753c6a8ca17cbcba5129ba",
+    "src/join/join.css": "484edb74e0e9c1146c8663dd23faf62c3ab1b73c",
+    "src/join/main.tsx": "5ae8796bf527c30812caf3d7fdc71c58abb14e5f",
+    "src/lib/format.ts": "af7abdd9d040ecf9c50dae5169ee09b8471302fc",
+    "src/lib/i18n.tsx": "03baeb9dd5ff9f64b53a247dbe7505ede3782882",
+    "src/lib/supabase.ts": "aea7b969c880d9afa04a98db6c799bd950072241",
+    "src/loyalty/loyalty.css": "78eb340f3cfd0f2be661993f2762df50f0fbc114",
+    "src/loyalty/main.tsx": "ce948bb608a0565da78d6b4c4e42c13ea9dfec89",
+    "src/main.tsx": "6e1bcd1034b2597e9900dc72e52c0279399978c8",
+    "src/pages/Alerts.tsx": "255c021141e9643b16e555c3e86ff8ae4d4bf9cf",
+    "src/pages/BranchActual.tsx": "95bffc1151f6881f7b8f2044bd01e52c3cdacc59",
+    "src/pages/Dashboard.tsx": "c28a659514a39e7c4f2ed4eb3f534f9a90318b67",
+    "src/pages/Delivery.tsx": "8b221c8421e04cf43012e6e9b5a0f8cf015aef8a",
+    "src/pages/EcomReport.tsx": "af6ac3a8a2165d4d6b274a4796db9361eb12e22e",
+    "src/pages/Health.tsx": "2bb280762b972e6b71e8eb00798d1d3f1760f653",
+    "src/pages/ItemRanking.tsx": "34324d8973926b8afe248a58dc0f0aba218ab82d",
+    "src/pages/Loyalty.tsx": "8b3be3b6f19c09f79f48779689f50bbb1b7f71c8",
+    "src/pages/Manager.tsx": "8f2c78164363c5cfc3a1558bb350d7a574f1a52b",
+    "src/pages/Margin.tsx": "b8d7cc28c926038264340b8f19680d82621220ec",
+    "src/pages/OnePager.tsx": "6e4b22b55a5571ff2b5a2d280a82c90fa1eb8cd5",
+    "src/pages/OpenOrders.tsx": "9db16568e24ee4aaa384daabb88ce19f1556e6e1",
+    "src/pages/Payables.tsx": "f56a059a74eee76ac034662d70d19515e6d6f4cd",
+    "src/pages/PriceEffect.tsx": "3e635a1d65aa7179e945d87e8548ceddd7845a9a",
+    "src/pages/ProfitLoss.tsx": "3db7146af4653131f3963ceac696e469467172d3",
+    "src/pages/Purchasing.tsx": "68efff719f70997ab0ffbab5915de8f3bda9d119",
+    "src/pages/Receivables.tsx": "2f73513c5ccfcb0f929d94bff04079bf321b21b0",
+    "src/pages/SalesLines.tsx": "8491423dea2ed99a6f9384db457ca69ad0caddc6",
+    "src/pages/SlowMovers.tsx": "103f5125d85e7e7402345ebfbb191ba6170f67e4",
+    "src/pages/StockAnomaly.tsx": "bd95c6506235f4a4d05f6a3e2ed5cafe38a254a3",
+    "src/pages/StockPage.tsx": "cc2e3a4be739114e88c929ac74d2d8eadde12b38",
+    "src/pages/SyncLog.tsx": "b3c879a5707b20567780e792c3101572e7763bd8",
+    "src/pages/Targets.tsx": "97728c17325c927be54d5a37798dad67c1b052a6",
+    "src/styles.css": "90e574f01ff2bc7fc6a4dc38fa4ffbef527bd5cc",
+    "tsconfig.json": "14e9d5e9e0c89c7bfd84bf5068ef8d3b06612bac",
+    "vite.config.ts": "ed0e7a144cf351d9c44e6d518855ced2708d843b",
+}
+CHANGED = ["delivery.html", "driver.html", "src/i18n/loyalty.ts", "src/loyalty/main.tsx", "src/pages/Loyalty.tsx"]
+NEW_FILES: list[str] = []
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
     assert "overlay.json" not in overlay                   # 说明档本身不上传
-    plan = d.plan_files(LIVE_V3, overlay, replaces)
+    plan = d.plan_files(LIVE_V4, overlay, replaces)
     assert plan["added"] == NEW_FILES
     assert sorted(plan["replaced"]) == CHANGED
-    assert sorted(plan["same"]) == ["delivery.html", "join.html", "loyalty.html", "src/delivery/main.tsx", "src/i18n/index.ts",
-                                    "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
-                                    "src/pages/Loyalty.tsx"]
+    assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/delivery/main.tsx", "src/driver/driver.css",
+                                    "src/driver/main.tsx", "src/i18n/index.ts", "src/join/join.css", "src/join/main.tsx",
+                                    "src/loyalty/loyalty.css", "src/pages/Delivery.tsx", "vite.config.ts"]
     sent = {f["file"]: f for f in plan["files"]}
-    assert set(sent) == set(LIVE_V3) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
-    for path, sha in LIVE_V3.items():
+    assert set(sent) == set(LIVE_V4) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
+    for path, sha in LIVE_V4.items():
         if path not in overlay:
             assert sent[path] == {"file": path, "sha": sha}  # 没改的档原样引用线上那一版
     assert set(plan["upload"]) == set(plan["replaced"]) | set(plan["added"])
-    assert "src/loyalty/loyalty.css" in LIVE_V3              # 被换掉的档线上都有
+    assert "src/loyalty/loyalty.css" in LIVE_V4              # 被换掉的档线上都有
 
 
 def test_overlay_refuses_a_site_it_was_not_based_on():
@@ -196,15 +267,15 @@ def test_overlay_refuses_a_site_it_was_not_based_on():
 
 def test_rerun_after_deploy_is_a_no_op():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    after = {**LIVE_V3, **{p: d.sha1(b) for p, b in overlay.items()}}
+    after = {**LIVE_V4, **{p: d.sha1(b) for p, b in overlay.items()}}
     plan = d.plan_files(after, overlay, replaces)
     assert plan["upload"] == {} and sorted(plan["same"]) == sorted(overlay)
 
 
 def test_stops_when_someone_changed_a_replaced_file_online():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = {**LIVE_V3, "src/pages/Delivery.tsx": "f" * 40}
-    with pytest.raises(d.DeployError, match="Delivery.tsx.*被改过"):
+    changed = {**LIVE_V4, "src/pages/Loyalty.tsx": "f" * 40}
+    with pytest.raises(d.DeployError, match="Loyalty.tsx.*被改过"):
         d.plan_files(changed, overlay, replaces)
 
 
@@ -253,7 +324,7 @@ class FakeVercel:
 
     def live_files(self, deployment_id):
         if deployment_id == "dpl_old":
-            return dict(LIVE_V3)
+            return dict(LIVE_V4)
         return {f["file"]: f["sha"] for f in self.created}
 
     def upload(self, data):
@@ -283,10 +354,10 @@ def run(monkeypatch, check_only=False, final_state="READY"):
 def test_deploy_uploads_only_changed_files_and_prints_new_page(monkeypatch, capsys):
     fake = run(monkeypatch)
     overlay, _ = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_V3.get(p)]  # 跟线上一样的不重传
+    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_V4.get(p)]  # 跟线上一样的不重传
     assert sorted(changed) == sorted(CHANGED + NEW_FILES)
     assert sorted(fake.uploaded) == sorted(d.sha1(overlay[p]) for p in changed)
-    assert len(fake.created) == len(LIVE_V3) + len(NEW_FILES)
+    assert len(fake.created) == len(LIVE_V4) + len(NEW_FILES)
     out = capsys.readouterr().out
     assert "https://homeworks-bi.vercel.app/" in out and "完成" in out
 
@@ -443,10 +514,8 @@ def test_invalid_token_is_not_blamed_on_scope(monkeypatch):
 
 
 def test_overlay_accepts_an_earlier_version_of_the_same_overlay_as_base():
-    """使用者可能已部署 10-07a（备注版）再部署签收版：线上是我们自己前一版也要能换（2026-10-07）。"""
-    overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    after_07a = {**LIVE_V3, "src/pages/Delivery.tsx": "db194555375303ec92de79aee8909df0ef6c1345",
-                 "src/i18n/loyalty.ts": "7bd47fc5bcafe1bb6e7e36c09419ece3a9698195",
-                 "src/loyalty/loyalty.css": "0a3ffb9e47f76da7b33bf65aa9932d561b2fa4d8"}
-    plan = d.plan_files(after_07a, overlay, replaces)
-    assert sorted(plan["replaced"]) == CHANGED and plan["added"] == NEW_FILES
+    """replaces 的底可以是清单：使用者不一定每一版都部署，线上是我们自己前一版也要能换（2026-10-07 起）。"""
+    plan = d.plan_files({"a.txt": "old1"}, {"a.txt": b"new"}, {"a.txt": ["old0", "old1"]})
+    assert plan["replaced"] == ["a.txt"]
+    with pytest.raises(d.DeployError, match="被改过"):
+        d.plan_files({"a.txt": "someone-else"}, {"a.txt": b"new"}, {"a.txt": ["old0", "old1"]})

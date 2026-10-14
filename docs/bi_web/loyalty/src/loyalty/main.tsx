@@ -60,7 +60,7 @@ function LoyaltyApp() {
           <button className={lang === 'zh' ? 'active' : ''} onClick={() => switchLang('zh')}>中文</button>
           <button className={lang === 'en' ? 'active' : ''} onClick={() => switchLang('en')}>EN</button>
         </div>
-        <a className="btn" href="/delivery.html">{t('送货排单')}</a>
+        <a className="btn" href="https://homeworks-ops.vercel.app/#/delivery" target="_blank" rel="noreferrer">{t('送货排单')}</a>
         <a className="btn" href="/">{t('BI 看板')}</a>
         <button className="btn" onClick={() => supabase.auth.signOut()}>{t('登出')}</button>
       </div>

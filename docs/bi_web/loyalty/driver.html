@@ -4,13 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#283060" />
     <meta name="robots" content="noindex" />
     <title>HomeWorks 司机签收</title>
+    <!-- 2026-10-14：司机签收改用营运系统的签收页（同一个签收代码、同一份资料）。旧的 WhatsApp 连结 driver.html?t=… 带着代码转过去，照样能签收 -->
+    <script>
+      (function () {
+        var t = new URLSearchParams(location.search).get('t') || '';
+        location.replace('https://homeworks-ops.vercel.app/#/driver' + (t ? '?t=' + encodeURIComponent(t) : ''));
+      })();
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/driver/main.tsx"></script>
+  <body style="margin:0;padding:24px;font-family:system-ui,sans-serif;background:#111721;color:#fff">
+    <p>正在打开签收页… / Opening the delivery sign-off page… / Sedang membuka halaman tandatangan…</p>
   </body>
 </html>
