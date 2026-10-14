@@ -39,6 +39,9 @@ td.cu-wide { min-width: 160px; }
 .cu-alias button { margin-left: 4px; }
 .cu-tpl { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .cu-sel td { background: var(--primary-soft); }
+.cu-sel td:first-child { box-shadow: inset 3px 0 0 var(--primary); font-weight: 700; }  /* 选中的月份要跟滑过的列分得出来 */
+td.cu-type { min-width: 7em; }  /* 类型是中文时不要被挤成一字一行 */
+td.cu-cats { min-width: 11em; }  /* 买过类别太窄会让整列变很高 */
 .cu-scroll { overflow-x: auto; margin: 8px 0; }
 .cu-items { background: var(--tint); padding: 6px 10px 10px; }
 .cu-items table td { border-bottom-color: var(--line); padding: 4px 8px; }

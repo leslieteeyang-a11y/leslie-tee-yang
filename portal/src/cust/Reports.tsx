@@ -181,7 +181,7 @@ export function MonthlyReport({ settings }: { settings: Settings }) {
                   {agents.length === 0 && <tr><td colSpan={5} className="muted">{t("这个月没有门市散客的单")}</td></tr>}
                   {agents.map((a) => (
                     <tr key={a.agent}>
-                      <td>{a.agent}</td>
+                      <td>{a.agent === "(空白)" ? t("(空白)") : a.agent}</td>
                       <td className="num">{fmtNum(a.customers)}</td>
                       <td className="num">{fmtNum(a.returning_customers)}</td>
                       <td className="num">{fmtNum(a.new_customers)}</td>

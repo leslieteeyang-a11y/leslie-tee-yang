@@ -34,10 +34,10 @@ export function CustomerList({ list, settings, role, onOpen }: {
 
   function exportCsv() {
     downloadCsv(`customers_${localISO()}.csv`,
-      [t("电话(WhatsApp)"), t("电话"), t("名字"), t("分级"), t("类型"), t("地区"), t("地址"), t("生日"), t("门市"), t("首次消费"),
+      [t("电话(WhatsApp)"), t("电话"), t("名字"), t("分级"), t("类型"), t("地区"), t("地址"), t("生日月"), t("生日日"), t("门市"), t("首次消费"),
         t("最后消费"), t("单数"), t("累计消费"), t("近 12 个月"), t("买过类别"), t("备注")],
       agreed.map((c) => [waNumber(c.member_id), fmtMember(c.member_id), cleanName(c.name), t(TIER_LABEL[tierOf(c, settings)]),
-        c.customer_type, c.area, c.address, c.birth_month ? `${c.birth_month}/${c.birth_day}` : "", c.stores, c.first_date,
+        c.customer_type, c.area, c.address, c.birth_month ?? "", c.birth_day ?? "", c.stores, c.first_date,
         c.last_date, c.doc_count, num(c.spent).toFixed(2), num(c.spent_12m).toFixed(2), c.categories.join(" "), c.note]));
   }
 
@@ -155,13 +155,13 @@ export function CustomerList({ list, settings, role, onOpen }: {
                   <TierTag tier={tierOf(c, settings)} />
                   {num(c.quote_open) > 0 && <span className="cu-tag cu-quote">{t("报价 {n}", { n: num(c.quote_open) })}</span>}
                 </td>
-                <td>{c.customer_type ? t(c.customer_type) : ""}{c.reno_stage ? ` · ${t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage)}` : ""}</td>
+                <td className="cu-type">{c.customer_type ? t(c.customer_type) : ""}{c.reno_stage ? ` · ${t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage)}` : ""}</td>
                 <td>{c.area}</td>
-                <td>{c.stores}</td>
+                <td className="nowrap">{c.stores}</td>
                 <td className="nowrap">{fmtDay(c.last_date)}</td>
                 <td className="num">{fmtNum(c.spent, 2)}</td>
                 <td className={"num" + (num(c.spent_12m) ? "" : " muted")}>{num(c.spent_12m) ? fmtNum(c.spent_12m, 2) : "–"}</td>
-                <td className="muted small">{c.categories.join(" · ")}</td>
+                <td className="muted small cu-cats">{c.categories.join(" · ")}</td>
               </tr>
             ))}
           </tbody>

@@ -188,6 +188,7 @@ export const CUST_EN: Record<string, string> = {
   "状态": "Status",
   "现有:{n}": "Current: {n}",
   "生日": "Birthday",
+  "(空白)": "(blank)",
   "生日(月 / 日)": "Birthday (month / day)",
   "生日:提前几天提醒": "Birthday: remind (days) before",
   "生日日": "Birthday day",

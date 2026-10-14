@@ -295,8 +295,11 @@ export function pct(a: number, b: number): string {
 }
 
 function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v == null ? "" : String(v);
+  // 防 CSV 公式注入：地址 / 地区 / 名字可由公开的扫码登记页写入；= + - @ Tab CR 开头的文字前面加 '，
+  // 纯数字（WhatsApp 电话 +60…、金额 -12.50）照原样，Excel 不会当成公式
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+  return /[",\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 export function downloadCsv(filename: string, header: string[], rows: unknown[][]): void {
   const text = "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
