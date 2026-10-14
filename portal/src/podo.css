@@ -1,18 +1,18 @@
 /* 厂家到货 / 厂家问题 / 在路上（订货页的新分页） */
 .dos, .isk, .isd, .iss { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; display: inline-block; margin: 1px 4px 1px 0; }
-.dos.draft { background: #eef1f5; color: var(--muted); }
+.dos.draft { background: var(--soft); color: var(--muted); }
 .dos.confirmed { background: var(--amber-soft); color: var(--amber); }
 .dos.arrived { background: var(--green-soft); color: var(--green); }
-.dos.cancelled { background: #eef1f5; color: var(--muted); text-decoration: line-through; }
+.dos.cancelled { background: var(--soft); color: var(--muted); text-decoration: line-through; }
 .isk.short, .isk.damaged { background: var(--red-soft); color: var(--red); }
 .isk.over { background: var(--amber-soft); color: var(--amber); }
 .isk.wrong { background: #f1e8fd; color: #7b3fc4; }
-.isd.pending { background: #fff; color: var(--red); border: 1px solid var(--red-soft); }
-.isd.await { background: var(--blue-soft); color: var(--blue); }
-.isd.cancelled { background: #eef1f5; color: var(--muted); }
+.isd.pending { background: var(--card); color: var(--red); border: 1px solid var(--red-soft); }
+.isd.await { background: var(--primary-soft); color: var(--primary); }
+.isd.cancelled { background: var(--soft); color: var(--muted); }
 .iss.resolved { background: var(--green-soft); color: var(--green); }
-.iss.void { background: #eef1f5; color: var(--muted); text-decoration: line-through; }
-.tag.outlet { background: #eef1f5; color: var(--text); }
+.iss.void { background: var(--soft); color: var(--muted); text-decoration: line-through; }
+.tag.outlet { background: var(--soft); color: var(--text); }
 .tag.transit { background: var(--amber-soft); color: var(--amber); display: inline-block; margin: 3px 4px 0 0; white-space: nowrap; }
 .tag.transit a { color: inherit; }
 .tag.warn { background: var(--red-soft); color: var(--red); }
@@ -20,7 +20,7 @@
 .okc { color: var(--green); font-weight: 700; }
 button.danger-solid { background: var(--red); color: #fff; }
 .file-btn { flex: 0 0 auto; width: auto; white-space: nowrap; flex-direction: row; display: inline-flex; align-items: center; cursor: pointer;
-  padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--blue); font-weight: 600; margin-top: 6px; align-self: flex-start; }
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--primary); font-weight: 600; margin-top: 6px; align-self: flex-start; }
 .table-wrap.flat { box-shadow: none; border: 1px solid var(--line); }
 
 /* 编辑画面 */
@@ -29,14 +29,14 @@ button.danger-solid { background: var(--red); color: #fff; }
 .podo-files .text-btn { text-align: left; white-space: normal; overflow-wrap: anywhere; }
 .podo-items h3:first-child { margin-top: 0; }
 .podo-table td { vertical-align: top; }
-.podo-table th.sticky, .podo-table td.sticky { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 180px; max-width: 280px; }
-.podo-table th.sticky { background: #fafbfd; }
+.podo-table th.sticky, .podo-table td.sticky { position: sticky; left: 0; background: var(--card); z-index: 1; min-width: 180px; max-width: 280px; }
+.podo-table th.sticky { background: var(--tint); }
 .podo-table tfoot td { border-top: 2px solid var(--line); }
-.podo-table tr.podo-zero td { background: #fbfcfe; }
-.podo-table tr.podo-zero td.sticky { background: #fbfcfe; }
+.podo-table tr.podo-zero td { background: var(--tint); }
+.podo-table tr.podo-zero td.sticky { background: var(--tint); }
 input.podo-num { width: 76px; text-align: right; padding: 6px 8px; }
 button.podo-full { margin-top: 4px; padding: 3px 10px; }
-.tag.cs.hit { background: var(--blue); color: #fff; }
+.tag.cs.hit { background: var(--primary); color: #fff; }
 .podo-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
 .podo-tags .tag { margin-left: 0; }
 input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
@@ -57,7 +57,7 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 .podo-sheet label { flex: 0 0 auto; }
 .podo-sheet label.inline { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 6px; font-size: .85rem; }
 .podo-sheet label.inline select { width: auto; max-width: 180px; padding: 5px 6px; }
-.podo-sum { background: var(--blue-soft); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+.podo-sum { background: var(--primary-soft); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
 .podo-sum.warn { background: var(--amber-soft); color: var(--amber); }
 .podo-preview { max-height: 46vh; overflow-y: auto; }
 .podo-preview tr.podo-miss td { background: #fff8f0; }
@@ -70,7 +70,7 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 .podo-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .podo-acts .error { flex-basis: 100%; }
 .podo-issues tr.inactive-soft td { color: var(--muted); }
-.podo-do-row td { background: #f6f8fb; }
+.podo-do-row td { background: var(--tint); }
 .podo-do-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 
 @media (max-width: 800px) {
@@ -134,16 +134,16 @@ label.recv-note { display: flex; flex-direction: column; gap: 4px; margin-top: 1
 .sop { padding: 10px 12px; }
 .sop.overdue { border: 1px solid var(--red); }
 .sop-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
-.sop-steps li { display: flex; align-items: center; gap: 5px; padding: 4px 9px 4px 4px; border-radius: 99px; background: #eef1f5; color: var(--muted);
+.sop-steps li { display: flex; align-items: center; gap: 5px; padding: 4px 9px 4px 4px; border-radius: 99px; background: var(--soft); color: var(--muted);
   font-size: .82rem; }
-.sop-steps li .n { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: inline-flex; align-items: center;
+.sop-steps li .n { width: 20px; height: 20px; border-radius: 50%; background: var(--card); display: inline-flex; align-items: center;
   justify-content: center; font-weight: 700; font-size: .75rem; flex: 0 0 auto; }
 .sop-steps li small { font-size: .7rem; }
 .sop-steps li.done { background: var(--green-soft); color: var(--green); }
 .sop-steps li.done .n { background: var(--green); color: #fff; }
 .sop-steps li.skip { background: var(--amber-soft); color: var(--amber); }
-.sop-steps li.cur { background: var(--blue); color: #fff; }
-.sop-steps li.cur .n { color: var(--blue); }
+.sop-steps li.cur { background: var(--primary); color: #fff; }
+.sop-steps li.cur .n { color: var(--primary); }
 .sop-steps li.cur small { color: #fff; }
 .sop-now { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 8px 0 0; }
 .sop-now .tag { margin-left: 0; }
@@ -152,7 +152,7 @@ tr.podo-overdue td { background: #fff5f5; }
 /* 要厂家怎么处理、缺零件 */
 .isr { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; display: inline-block; margin: 1px 4px 1px 0;
   background: #f1e8fd; color: #7b3fc4; }
-.isk.part { background: var(--blue-soft); color: var(--blue); }
+.isk.part { background: var(--primary-soft); color: var(--primary); }
 .podo-kinds { flex-wrap: wrap; gap: 4px 14px; }
 
 /* 收到的型号：搜我们的商品 / 不是我们的产品 */
@@ -160,11 +160,11 @@ tr.podo-overdue td { background: #fff5f5; }
 .our-pick.chosen { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px;
   border: 1px solid var(--green); border-radius: 8px; background: var(--green-soft); }
 .our-pick-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.our-pick-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow-y: auto; background: #fff; }
+.our-pick-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow-y: auto; background: var(--card); }
 .our-pick-list li + li { border-top: 1px solid var(--line); }
 .our-pick-list button { width: 100%; text-align: left; background: none; color: var(--text); padding: 7px 10px; border-radius: 0;
   font-weight: 400; white-space: normal; }
-.our-pick-list button:hover { background: var(--blue-soft); }
+.our-pick-list button:hover { background: var(--primary-soft); }
 .our-pick-not { align-self: flex-start; }
 
 /* 开单画面：这批的问题 */
@@ -196,7 +196,7 @@ tr.podo-overdue td { background: #fff5f5; }
 .podo-owed-head > span { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 .podo-factory { margin: 6px 0 12px 10px; padding-left: 10px; border-left: 3px solid var(--line); }
 .podo-factory h4 { margin: 8px 0 4px; display: flex; gap: 8px; align-items: center; }
-.tag.cs { background: #eef1f5; color: var(--text); }
+.tag.cs { background: var(--soft); color: var(--text); }
 .wa-lang { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
 textarea.wa-text { width: 100%; font-family: inherit; font-size: .9rem; line-height: 1.45; }
 .wa-toggle { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }

@@ -22,7 +22,7 @@ export default function Login() {
     <div className="login">
       <form className="card" onSubmit={submit}>
         <div className="login-brand">
-          <span className="logo">⌂</span>
+          <img className="logo" src="/icon.svg" alt="" />
           <div>
             <h1>HomeWorks 营运系统</h1>
             <p>员工登入（与 HomeWorks BI 同一组账号）</p>

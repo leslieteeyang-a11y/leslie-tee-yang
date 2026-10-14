@@ -8,9 +8,9 @@
 .wh-found li, .wh-todo li { gap: 10px; }
 .wh-item h2 { margin: 0; }
 .wh-item h3 { margin: 16px 0 6px; font-size: 1rem; }
-.wh-item tr.total td { font-weight: 600; border-top: 2px solid var(--line, #e5e7eb); }
+.wh-item tr.total td { font-weight: 600; border-top: 2px solid var(--line); }
 .wh-todo { padding: 4px 14px; }
-.wh-todo .go { color: var(--blue); font-weight: 600; white-space: nowrap; }
+.wh-todo .go { color: var(--primary); font-weight: 600; white-space: nowrap; }
 .wh-bulk { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .wh-bulk .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .wh-bulk .row input { flex: 1; min-width: 180px; }
@@ -47,7 +47,7 @@ select.narrow-select { width: auto; }
 /* 旧货：上方数字可点来切换 */
 button.kpi { border: 2px solid transparent; text-align: left; cursor: pointer; font: inherit; min-width: 0; }
 button.kpi span, button.kpi small { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
-button.kpi.on { border-color: var(--blue); }
+button.kpi.on { border-color: var(--primary); }
 .kpi small { color: var(--muted); font-size: .8rem; }
 
 /* 进货待入 AutoCount / 待开进货单（2026-10-15） */

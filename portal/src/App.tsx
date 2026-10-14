@@ -141,7 +141,7 @@ export default function App() {
       </header>
       <nav className={"side" + (menuOpen ? " open" : "")}>
         <a href="#/" className="brand">
-          <span className="logo">⌂</span>
+          <img className="logo" src="/icon.svg" alt="" />
           <span>HomeWorks<br /><small>营运系统</small></span>
         </a>
         {visible.map((m) => (
