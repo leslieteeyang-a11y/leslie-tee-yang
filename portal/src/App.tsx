@@ -21,12 +21,13 @@ import MyProfile from "./pages/MyProfile";
 import Join from "./pages/Join";
 import JoinStatus from "./pages/JoinStatus";
 import Delivery from "./pages/Delivery";
+import Customers from "./pages/Customers";
 import { DriverPage } from "./dlv/DriverSign";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
 
 const ICON: Record<string, string> = {
-  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", leave: "✈", warehouse: "▦", delivery: "⛟", sales: "¤",
+  dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", leave: "✈", warehouse: "▦", delivery: "⛟", customers: "☏", sales: "¤",
   collection: "₪", commission: "%", hr: "☺", payroll: "▤", reports: "▥", admin: "⚙",
 };
 
@@ -104,6 +105,9 @@ export default function App() {
       break;
     case "delivery":
       page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
+      break;
+    case "customers":
+      page = can(me, "customers", "view") ? <Customers sub={arg} arg={arg2} /> : <NoAccess />;
       break;
     case "payroll":
       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;

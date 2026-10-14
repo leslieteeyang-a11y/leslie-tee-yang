@@ -14,6 +14,7 @@ export const DICT_DB: Record<string, string> = {
   "人事": "HR",
   "薪资": "Payroll",
   "报表": "Reports",
+  "顾客资料": "Customers",
   "我的待办、待审批、各模块入口": "My to-dos, pending approvals, module shortcuts",
   "跨部门交办事项：指派、期限、进度、留言": "Cross-department tasks: assignee, due date, progress, comments",
   "通用申请与审批：请假、采购、折扣、报销…": "Requests & approvals: leave, purchases, discounts, expenses…",
@@ -21,6 +22,9 @@ export const DICT_DB: Record<string, string> = {
   "库存查询、预留、拣货、收货": "Stock lookup, reservations, picking, receiving",
   "送货排程、签收、安装跟踪": "Delivery schedule, proof of delivery, installation tracking",
   "客户、销售订单、业绩": "Customers, sales orders, performance",
+  "门市顾客名单、跟进提醒、一键 WhatsApp、顾客扫码登记、促销活动":
+    "Store customer list, follow-up reminders, one-tap WhatsApp, customer QR sign-up, promotions",
+  "这个动作只有管理员可以做。": "Only an admin can do this.",
   "应收、账龄、催收提醒": "Receivables, ageing, collection reminders",
   "佣金计算、审批、报表": "Commission calculation, approval, reports",
   "员工档案、打卡、请假": "Staff records, attendance, leave",

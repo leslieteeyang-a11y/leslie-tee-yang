@@ -136,3 +136,91 @@ create table bi.delivery_run (id bigint generated always as identity primary key
   stops jsonb, created_at timestamptz default now(), created_by text, token text unique, token_expires timestamptz);
 create table bi.delivery_pod (id bigint generated always as identity primary key, run_id bigint, stop_key text, doc_no text,
   status text, note text, photos text[] default '{}', lat numeric, lng numeric, created_at timestamptz default now());
+
+-- 顾客资料（2026-10-14）：BI 的权限函数与几个有代表性的顾客资料函数（正式环境由 BI 的 migration customer_* 建立，这里只取开头的
+-- 权限检查；20261016_ops_customers.sql 会把 bi.customer_require 换成 bi.crm_require）
+create function public.bi_is_allowed() returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', '')))
+$$;
+create function public.bi_role() returns text language sql stable security definer set search_path = '' as $$
+  select au.role from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+$$;
+create function public.bi_company() returns text language sql stable security definer set search_path = '' as $$
+  select au.company from bi.allowed_users au where lower(au.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+$$;
+create function bi.customer_require(p_roles text[]) returns text language plpgsql stable set search_path = '' as $$
+declare
+  v_role text := (select public.bi_role());
+begin
+  if not coalesce((select public.bi_is_allowed()), false) or v_role is null or not (v_role = any(p_roles)) then
+    raise exception '没有权限：顾客资料只开放给 %', array_to_string(p_roles, ' / ');
+  end if;
+  return v_role;
+end;
+$$;
+revoke all on function bi.customer_require(text[]) from public;
+create function public.bi_customers() returns table (member_id text, name text)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform bi.customer_require(array['owner', 'manager', 'sales']);
+  return query select p.member_id, p.name from bi.customer_profile p order by 1;
+end;
+$$;
+create function public.bi_customer_save(p_member text, p_name text) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_who text := coalesce(auth.jwt() ->> 'email', 'unknown');
+begin
+  perform bi.customer_require(array['owner', 'manager', 'sales']);
+  insert into bi.customer_profile as p (member_id, name, created_by, updated_by) values (p_member, p_name, v_who, v_who)
+  on conflict (member_id) do update set name = excluded.name, updated_by = v_who, updated_at = now();
+  return (select to_jsonb(x) from bi.customer_profile x where x.member_id = p_member);
+end;
+$$;
+create function public.bi_campaigns() returns jsonb language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform bi.customer_require(array['owner', 'manager']);
+  return '[]'::jsonb;
+end;
+$$;
+create function public.bi_customer_set_settings(p_vip numeric) returns jsonb
+language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_role text := bi.customer_require(array['owner']);
+begin
+  return jsonb_build_object('role', v_role, 'vip', p_vip);
+end;
+$$;
+create function public.bi_customer_missing_phone(p_days integer) returns table (company text, doc_no text)
+language plpgsql stable security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  v_company text := (select public.bi_company());
+begin
+  perform bi.customer_require(array['owner', 'manager', 'sales']);
+  return query select x.company, x.doc_no from (values ('HOMEWORKSSB', 'CS-1'), ('HOMEWORKSSOUTHERN', 'CS-2')) x (company, doc_no)
+   where (v_company is null or x.company = v_company) order by 2;
+end;
+$$;
+-- 不在「只看」名单的读取函数：只看的人叫不到
+create function public.bi_customer_stub_reader() returns text language plpgsql stable security definer set search_path = '' as $$
+begin
+  return bi.customer_require(array['owner', 'manager', 'sales']);
+end;
+$$;
+-- BI 送货页用的顾客坐标：不在改写范围
+create function public.bi_customer_set_geo(p_member text) returns text language plpgsql volatile security definer set search_path = '' as $$
+begin
+  return bi.customer_require(array['owner', 'manager', 'sales']);
+end;
+$$;
+-- 送货的 BI 函数不在改写范围（营运系统走 ops_dlv_*）
+create function public.bi_delivery_stub_check() returns text language plpgsql stable security definer set search_path = '' as $$
+begin
+  return bi.customer_require(array['owner', 'manager', 'sales']);
+end;
+$$;
+grant execute on function public.bi_is_allowed(), public.bi_role(), public.bi_company(), public.bi_customers(),
+  public.bi_customer_save(text, text), public.bi_campaigns(), public.bi_customer_set_settings(numeric),
+  public.bi_customer_missing_phone(integer), public.bi_delivery_stub_check(), public.bi_customer_stub_reader(),
+  public.bi_customer_set_geo(text) to authenticated;

@@ -185,6 +185,21 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `bi.delivery_*` / BI 同步时间照常更新、首页与打卡能用。没提供升级或版本仍 < 14.18 → 开 Supabase 支援单引用 PostgREST #5196。
   2026-10-09 使用者截图确认：Infrastructure 页**没有** Service Versions / Upgrade project（= 目前没有可升级版本）→ 已给使用者英文支援单范本，等 Supabase 回覆。
   BI 网页没有这个重送，遇到时重新整理即可。
+- 顾客资料（模块 key `customers`，2026-10-14，使用者：「我要把这个系统连接在员工多部门里面」→ 选「顾客资料」+「照部门权限」；另一个 Claude 对话在 BI 分支
+  `claude/pensive-fermi-gtqw9c` 做的，以 ZIP 交过来，交接说明在那边 `docs/ops_customers/HANDOFF.md`）：把 BI 的顾客资料页（`/loyalty.html`）整页搬进来，
+  `#/customers/<分页>`（跟进 / 顾客 / 促销活动 / 报告 / 设定），一位顾客 `#/customers/c/<顾客编号>`。**资料不搬家**：前端直接叫 BI 原本的
+  `bi_customer*` / `bi_campaign*` / `bi_wa_template*`（`bi.customer_*` 表，两边同一份）。migration `20261016_ops_customers.sql`（= `ops_customers`，
+  **正式环境 2026-10-14 已套**，23 个函数改写、只看名单 11 个）把这些函数开头的 `bi.customer_require` 换成 `bi.crm_require`：BI 名单照旧；营运系统员工看
+  「顾客资料」模块权限（admin = owner：分级门槛、删活动；可审批 = manager：汇出同意名单 CSV、合并顾客、促销活动、WhatsApp 范本；可编辑 = sales：改资料、
+  快速登记、联络、装修进度；只看 = 只能叫 migration 里 `v_read` 名单的读取函数）；**模块 `ready = false` 时营运系统员工一律没有**（`bi.crm_ops_role`），
+  前端部署 READY 后才套 `20261016b_ops_customers_ready.sql`（= `ops_customers_ready`）。部门预设：销售 / 门市 = 可编辑、管理层 = 可审批，其他部门没有
+  （送货部在「送货」看得到 DO 的顾客名字 / 电话 / 地址）；只看要用个人例外开。`public.bi_company()` 换成 `bi.crm_company()`（营运系统员工照自己的分店，
+  只有「没抓到电话的单据」用到；顾客名单本来就是总部 + JB 合并）。送货的 `bi_delivery_*` 与 BI 送货页的 `bi_customer_set_address` / `_set_geo` 不动。
+  前端 `src/pages/Customers.tsx`、`src/cust/*`、`src/cust-api.ts`、`src/cust.css`；**这页自己带中英文**（整页 `translate="no"`，`t()` 查 `src/cust/dict.ts`，
+  大多照抄 BI 的英文字典；字典没有的退回营运系统字典 = 资料库错误讯息），新增这页的文字加进 `cust/dict.ts`。角色从 `ops_cust_role()` 拿（只决定按键，
+  真正的检查在每个函数）。测试 `tests/cust_test.sql`（BI 权限函数与几个代表性顾客资料函数的 stub 在 `stub_supabase.sql` 最后）。BI 的 `/loyalty.html`
+  先留着，两边相通。BI 那边以后改顾客资料函数要写 `bi.crm_require` / `bi.crm_company`（已写进 BI 分支的 CLAUDE.md）；重套 `20261016_ops_customers.sql`
+  会把漏掉的改过来。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
