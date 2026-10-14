@@ -9,7 +9,7 @@
 .wh-item h2 { margin: 0; }
 .wh-item h3 { margin: 16px 0 6px; font-size: 1rem; }
 .wh-item tr.total td { font-weight: 600; border-top: 2px solid var(--line); }
-.wh-todo { padding: 4px 14px; }
+.list.wh-todo { padding: 4px 14px; }  /* style.css 的 .list 在后面载入，要比它具体 */
 .wh-todo .go { color: var(--primary); font-weight: 600; white-space: nowrap; }
 .wh-bulk { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .wh-bulk .row { display: flex; gap: 8px; flex-wrap: wrap; }

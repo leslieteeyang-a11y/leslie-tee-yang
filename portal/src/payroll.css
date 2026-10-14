@@ -40,6 +40,8 @@ tr.total td { font-weight: 600; }
   #pay-print { display: block; }
   #pay-print .ps { border: none; max-width: none; break-after: page; page-break-after: always; }
   html, body { background: #fff !important; margin: 0; padding: 0; }
+  .pay-totbar { background: none; color: var(--text); border-color: var(--line); }
+  .pay-totbar .muted { color: var(--muted); }
 }
 /* 英文模式：工资单只留英文 */
 html[lang="en"] .ps .zh { display: none; }

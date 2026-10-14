@@ -241,13 +241,13 @@ function Types({ canEdit }: { canEdit: boolean }) {
             <tbody>
               {rows.map((t) => (
                 <tr key={t.code} className={t.active ? "" : "off"}>
-                  <td><b>{t.name}</b>{!t.active && <span className="muted small">{" · 停用"}</span>}</td>
-                  <td>{t.rule === "annual" ? "8 / 12 / 16" : t.rule === "sick" ? "14 / 18 / 22"
+                  <td className="nowrap"><b>{t.name}</b>{!t.active && <span className="muted small">{" · 停用"}</span>}</td>
+                  <td className="nowrap">{t.rule === "annual" ? "8 / 12 / 16" : t.rule === "sick" ? "14 / 18 / 22"
                        : t.rule === "none" ? (Number(t.days) > 0 ? `每次最多 ${daysLabel(t.days)}` : "不限") : daysLabel(t.days)}</td>
                   <td className="hide-sm small">{RULE_LABEL[t.rule]}{t.half_day ? " · 可请半天" : ""}{t.calendar_days ? " · 日历天" : ""}{t.need_attachment ? " · 要附证明" : ""}
                     {Number(t.min_service_months) > 0 ? ` · 到职满 ${t.min_service_months} 个月` : ""}</td>
                   <td className="hide-sm small muted">{t.note}</td>
-                  <td>{canEdit && <a href="#" onClick={(e) => { e.preventDefault(); setOpen(t); }}>修改</a>}</td>
+                  <td className="nowrap">{canEdit && <a href="#" onClick={(e) => { e.preventDefault(); setOpen(t); }}>修改</a>}</td>
                 </tr>
               ))}
             </tbody>

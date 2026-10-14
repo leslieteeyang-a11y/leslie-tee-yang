@@ -40,7 +40,8 @@ button.podo-full { margin-top: 4px; padding: 3px 10px; }
 .podo-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 2px; }
 .podo-tags .tag { margin-left: 0; }
 input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
-.podo-actions { position: sticky; bottom: 0; background: var(--bg); padding: 4px 0; z-index: 5; }
+.podo-actions { position: sticky; bottom: 0; background: var(--card); padding: 4px 12px; border-radius: 12px 12px 0 0;
+  box-shadow: 0 -1px 0 var(--line), 0 -8px 16px var(--shadow); z-index: 5; }
 .podo-actions .actions.left { margin: 6px 0; }
 .podo-msgs { max-height: 32vh; overflow-y: auto; }
 .podo-msgs .error, .podo-msgs .ok { margin: 4px 0; }
