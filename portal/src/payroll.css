@@ -1,8 +1,8 @@
 /* 薪资模块 */
-.pay-totbar { background: var(--nav); color: #fff; border: 1px solid var(--nav-line); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pay-totbar { background: var(--tint); color: var(--text); border: 1px solid var(--line-strong); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
 .pay-totbar > div { display: flex; justify-content: space-between; gap: 12px; }
 .pay-totbar b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
-.pay-totbar .muted { color: var(--nav-text); }
+.pay-totbar .muted { color: var(--muted); }
 .pay-row { padding: 14px 16px; }
 .pay-row.saved { border-left: 4px solid var(--green); }
 .pay-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
@@ -25,7 +25,7 @@ tr.total td { font-weight: 600; }
 .ps .co { font-weight: 700; }
 .ps .ti { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
 .ps .pd { text-align: right; font-size: 12px; }
-.ps .who { font-weight: 700; font-size: 14px; margin: 6px 0 10px; }
+.ps .who { font-weight: 700; font-size: 14px; margin: 6px 0 10px; padding: 0; border-top: 0; display: block; }  /* 跟侧栏的 .who 同名，要盖掉它的框线与内距 */
 .ps table { width: 100%; border-collapse: collapse; margin-bottom: 10px; box-shadow: none; }
 .ps th { text-align: left; background: #f3f4f6; padding: 5px 8px; font-size: 12px; color: #111; }
 .ps td { padding: 4px 8px; border-bottom: 1px solid #f1f1f1; }

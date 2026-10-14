@@ -29,8 +29,9 @@
   --shadow: rgba(0, 0, 0, .35);
   --card-shadow: 0 0 0 1px rgba(219, 232, 250, .08), 0 2px 8px rgba(0, 0, 0, .28);
   --backdrop: rgba(5, 8, 15, .66);
-  /* 状态颜色：字用亮一阶的红（#EF4444 在卡片上对比只有 3.8），实心底用 BI 的 #EF4444；绿 / 黄与 BI 目标页灯号相同 */
-  --red: #f87171;
+  /* 状态颜色：字用亮一阶的红 #fa7f7f（#EF4444 在卡片上对比只有 3.8；这个在卡片、滑过的列、淡底上都 ≥ 4.5），
+     实心底用 BI 的 #EF4444；绿 / 黄与 BI 目标页灯号相同 */
+  --red: #fa7f7f;
   --red-fill: #ef4444;
   --red-soft: #392c3f;
   --green: #22c55e;
@@ -53,6 +54,12 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: var(--primary); text-decoration: none; }
+/* 内文里的文字连结：点缀色 #dbe8fa 跟白字只差 1.2:1，要有底线才认得出（侧栏选单、卡片、kpi 这些有 class 的连结不受影响） */
+a:not([class]), a.small, a.danger {
+  text-decoration: underline; text-decoration-color: var(--line-strong);
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px;
+}
+a:not([class]):hover, a.small:hover, a.danger:hover { text-decoration-color: currentColor; }
 h1 { font-size: 32px; font-weight: 650; letter-spacing: .01em; line-height: 1.2; margin: 0 0 16px; }  /* BI 标题 32 */
 h2 { font-size: 1.15rem; margin: 0 0 12px; }
 h3 { font-size: 1rem; margin: 18px 0 8px; }
@@ -246,4 +253,7 @@ pre.copy { background: var(--bg); padding: 12px; border-radius: 8px; user-select
   .side, .topbar, .scrim { display: none !important; }
   main { padding: 0 !important; max-width: none; }
   .modal { box-shadow: none; border: 1px solid var(--line); }
+  /* 浏览器预设不印底色：选中的分页 / 实心按键会只剩浅灰字，所以照印；选中的分页改成粗字加底线比较省墨 */
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .tabs button.on { background: none; color: #000; font-weight: 700; box-shadow: inset 0 -2px 0 #000; border-radius: 0; }
 }
