@@ -57,7 +57,7 @@ a { color: var(--primary); text-decoration: none; }
 /* 内文里的文字连结：点缀色 #dbe8fa 跟白字只差 1.2:1，要有底线才认得出（侧栏选单、卡片、kpi 这些有 class 的连结不受影响） */
 a:not([class]), a.small, a.danger {
   text-decoration: underline; text-decoration-color: var(--line-strong);
-  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: .2em;
 }
 a:not([class]):hover, a.small:hover, a.danger:hover { text-decoration-color: currentColor; }
 h1 { font-size: 32px; font-weight: 650; letter-spacing: .01em; line-height: 1.2; margin: 0 0 16px; }  /* BI 标题 32 */

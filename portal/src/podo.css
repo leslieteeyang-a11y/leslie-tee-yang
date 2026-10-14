@@ -71,6 +71,7 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 .podo-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .podo-acts .error { flex-basis: 100%; }
 .podo-issues tr.inactive-soft td { color: var(--muted); }
+.podo-issues td.pi-do { line-height: 1.55; }  /* DO 号连结有底线，下面紧接 PO 号，行高拉开免得底线压在 PO 号上 */
 .podo-do-row td { background: var(--tint); }
 .podo-do-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 
