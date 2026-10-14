@@ -16,5 +16,9 @@ const cscode: Record<string, string> = {
   '就算把门槛切到 10 也不会有商品出现。': 'Even at threshold 10 nothing would show.',
   '厂号清单读取失败(下拉暂时只列已载入商品的厂号):': 'Could not load the CS code list (the dropdown shows only codes of loaded items for now): ',
   '符合条件的商品超过 3000 行,只载入了最急的前 3000 行,还能卖比较久的商品没显示。请把走量门槛调高,或先选一个厂号。': 'More than 3,000 items match; only the 3,000 most urgent were loaded and the rest are hidden. Raise the volume threshold, or pick a CS code first.',
+  '+ 没货的一律列出': '+ out-of-stock always listed',
+  '没货的商品不管近 90 天卖多少,一律列出;要单独看就勾右边「只看没货」': 'Out-of-stock items are always listed no matter how few sold in 90 days; tick "Only out of stock" on the right to see just those',
+  '现存 ≤ 0 的商品不受走量门槛限制,一律列出;勾选后只显示这些': 'Items with on-hand ≤ 0 bypass the volume threshold and are always listed; tick to show only those',
+  '只看没货(现存 ≤ 0)({n})': 'Only out of stock (on hand ≤ 0) ({n})',
 };
 export default cscode;

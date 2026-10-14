@@ -79,6 +79,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
   const [csAll, setCsAll] = useState<CsCode[]>([]); // 全部厂号(PO 里出现过的)与各门槛下的件数
   const [csErr, setCsErr] = useState<string | null>(null);
   const [owedOnly, setOwedOnly] = useState(false); // 只看分行预定但我们未有货的
+  const [oosOnly, setOosOnly] = useState(false); // 只看没货(现存 ≤ 0)的——这些不受走量门槛限制,一律载入(老板 2026-10-14)
   const keyOf = (r: Suggest) => groupBy === 'brand' ? (r.item_type ?? '(无品牌)') : (r.supplier_code ?? '(none)');
   const nameOf = (r: Suggest) => groupBy === 'brand' ? (r.item_type ?? t('(无品牌)')) : (r.supplier_name ?? t('未知供应商(无采购记录)'));
 
@@ -133,12 +134,13 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
     const k = q.trim().toLowerCase();
     return rows.filter((r) =>
       (!owedOnly || Number(r.owed_branch) > 0) &&
+      (!oosOnly || Number(r.on_hand) <= 0) &&
       (scope === 'all' || r.urgency !== 'ok') &&
       (showHandled || !r.action_status) &&
       (!supFilter || (r.supplier_code ?? '(none)') === supFilter) &&
       (!csFilter || r.cs_code === csFilter) &&
       (!k || r.item_code.toLowerCase().includes(k) || r.description.toLowerCase().includes(k)));
-  }, [rows, q, supFilter, showHandled, scope, csFilter, owedOnly]);
+  }, [rows, q, supFilter, showHandled, scope, csFilter, owedOnly, oosOnly]);
 
   // 下拉列全部厂号(PO 里出现过的),不再只列目前载入的走量品;件数 = 目前门槛下会载入的行数(2026-10-14,修法 A)
   const csList = useMemo(() => {
@@ -275,6 +277,8 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
           <option value={30}>{t('90 天 ≥{n} 件', { n: 30 })}</option>
           <option value={100}>{t('90 天 ≥{n} 件', { n: 100 })}</option>
         </select>
+        {/* 老板看不到藏在查询里的规则(2026-10-14「这个没看到」),所以直接写在门槛旁边 */}
+        <span className="muted" style={{ fontSize: 12 }} title={t('没货的商品不管近 90 天卖多少,一律列出;要单独看就勾右边「只看没货」')}>{t('+ 没货的一律列出')}</span>
         <select value={supFilter} onChange={(e) => setSupFilter(e.target.value)}>
           <option value="">{t('全部供应商')}</option>
           {suppliers.map(([k, v]) => <option key={k} value={k}>{v.name} ({v.n})</option>)}
@@ -286,6 +290,11 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontSize: 13 }}>
           <input type="checkbox" checked={owedOnly} onChange={(e) => setOwedOnly(e.target.checked)} />
           {t('只看欠分行未有货({n})', { n: (rows ?? []).filter((r) => Number(r.owed_branch) > 0).length })}
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b', fontSize: 13 }}
+               title={t('现存 ≤ 0 的商品不受走量门槛限制,一律列出;勾选后只显示这些')}>
+          <input type="checkbox" checked={oosOnly} onChange={(e) => setOosOnly(e.target.checked)} />
+          {t('只看没货(现存 ≤ 0)({n})', { n: (rows ?? []).filter((r) => Number(r.on_hand) <= 0).length })}
         </label>
         <span className="muted">{t('待处理')} <strong className="neg">{totalNeed}</strong> {t('项 · 当前显示 {m} 项 · 建议采购额约 {amt}', { m: shown.length, amt: fmtRM(totalAmt) })}</span>
       </div>
