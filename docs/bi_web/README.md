@@ -147,9 +147,9 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   以后**大档一律这样部署**：(1) 先不带 `target` 部署到 preview（不动 production）；(2) `list_deployment_files` 核对 uid = 本地 sha1；(3) 相符后再建一个 production 部署，
   **全部档案用 `{file, sha}` 参照、不再内嵌**（档案已在 Vercel 内容库，这个呼叫只有 7KB，且用 production 环境变数重新建置；不用 `request_promote`，
   promote 不重建、会把 preview 环境变数的产物推上线）；不符就重做 (1)。本次 preview `dpl_CsUjFgni2fqjAH3K2nnjzkWjyvpT`。
-- **待老板决定（数据审查发现）**：`bi_purchase_suggest` 的候选集要求近 90 天有卖或欠分行，所以「近一年有卖、断货超过 90 天、不欠分行」的商品整个不在订货页——
-  HOMEWORKSSB 有 **487 项**（q365 ≥10：174、≥30：116、≥100：62；214 项最后一次销售在 180 天内；22 项已有在途 PO）。例：ST000272 SUPER FUILD 角阀 SF-1020 一年卖 3,600 件、
-  最后销售 2026-07-10、现存 0，页面上看不到。注意 `mv_purchase_sold` 里近 90 天没卖的 q90 是 **NULL 不是 0**，查数要用 `coalesce(q90,0)`（我第一次用 `q90 = 0` 只查到 1 项）。
-  若要纳入：另开 migration 用 `create or replace view` 把 base 的 WHERE 加 `or (coalesce(s.q365,0) > 0 and coalesce(st.on_hand,0) <= 0)`（栏位清单不变，不放 drop），
-  前端 `.or` 规则与 bi_cs_code 的 loaded 自动跟着变；建议加门槛（q365 ≥ 门槛）以免 313 项一年卖不到 10 件的旧品把清单顶满；这些行 days_left 为 null 会排最前。
+- **487 项「断货超过 90 天」商品的结论（老板 2026-10-14：「这些可能是工程订单，顾客只是订了为了工程用，平时不会卖的」）**：数据证实——
+  487 项里 432 项只有一个客户、426 项一年内 ≤2 张发票或一张占八成以上（SHING SOON HENG HARDWARE 的 3,600 个角阀分 5 张、MUAR HARDWARE 的 1,560 个分 4 张）。
+  跨 ≥3 个客户的只有 23 项，其中一年卖 ≥30 件的只有 3 项（ST001637 抽拉龙头 124 件/9 客户/91 张、ST000760 手持 bidet 92/4/72、ST000618 缓降马桶盖 26/4/16）。
+  **候选集口径不改**（近 90 天有卖或欠分行）；那 3 项直接告诉老板补货。若以后要自动抓，用窄规则「没货且一年内发票 ≥10 张、客户 ≥3 个」即可。
+  查数注意：`mv_purchase_sold` 里近 90 天没卖的 q90 是 **NULL 不是 0**，要用 `coalesce(q90,0)`（第一次用 `q90 = 0` 只查到 1 项）。
 
