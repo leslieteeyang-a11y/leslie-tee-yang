@@ -111,4 +111,12 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   `tsc --noEmit --strict --noUnusedLocals`（本地副本缺的 margin / targets / loyalty 字典用空字典顶替，`import.meta.env` 用一个 d.ts 顶替）通过。
 - 部署批 `cscode`（mkpayload.py）：Purchasing.tsx + i18n/cscode.ts + i18n/index.ts 内嵌，其余以 SHA 参照（manifest 已先 `--sync` 到
   dpl_CJE3AbnkcyRJ1QP7z7zgdczxFUyv 的档案树，含别人加的 Targets / Margin）。
+- 部署：`dpl_HZ29H2uDpX86zYJvZr4juJj8ZCxs`（2026-10-14 10:32 UTC，production，homeworks-bi.vercel.app），三个内嵌档 SHA 已核对、manifest 已 `--commit`。
+- 审查工作流（4 路审查 + 必修项独立反驳）后补的修正：rows 的 effect 加 `alive` 过期回应保护（连按方向键换厂号时先发后到会显示错厂号的数据）；
+  厂号清单与「该下单」供应商拆成只随 `tick` 重抓的 effect；视图读不到时降级用 rows 实算件数、提示框只在伺服器真回 0 行时出现；换厂号时清掉供应商筛选；
+  门槛按钮改切到「最接近且有货」的门槛（100→30→10）；视图 v2 `items` 排除 exclude、尾端加 `excluded` 栏（`create or replace view` 不能在中间插栏）。
+- 内嵌部署的坑：`Purchasing.tsx` 的 CSV 匯出有一个肉眼看不见的 U+FEFF（BOM）字元写在字串里；我改成 `'\uFEFF'` 跳脱再内嵌，
+  结果 MCP 传输把 JSON 里的 `\uFEFF` 解回原字元，Vercel 上的 SHA 等于改之前的版本（功能相同）。副本已改回原字元与生产一致；以后遇到这类不可见字元，直接保留原样内嵌即可。
+- 待办（审查提的、这次没做）：`bi_purchase_suggest` 的 cs_code 第二支退路（代理账号最近一张 PO 的名称）会把 29 个商品贴上与自己无关的厂号
+  （CS017 +9、CS032 +12…），且随代理下一张 PO 漂移；要改成「该代理只出现过一个厂号时才用」或直接拿掉退路，另开 migration。
 
