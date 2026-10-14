@@ -96,3 +96,19 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
 - 不只 `drop …` / `cron.unschedule`：SQL 里出现 `truncate`、`on commit drop` 这类字眼（连注释都算）也会被当破坏性语句等使用者确认；
   在无人值守的会话里不会回 `cancelled`，而是**卡到 60 秒 timeout，什么都没套用**（同一份 SQL 卡了两次才查出来）。
   所以 `refresh_healthcheck()` 不用临时表，改成各区块 `select to_jsonb(r) into j` 再 `||` 合并。写 migration 前 `grep -i 'drop\|truncate\|delete'`。
+
+## 2026-10-14：订货页「CS 厂号」下拉改列全部厂号并标件数（修法 A，老板「做 A」）
+- 起因：老板问为何 CS007…CS075 共 18 个厂号没出现在下拉（诊断 `cs_dropdown_2026-10-14.md`：下拉只列目前载入的走量品身上的厂号，
+  厂号来自商品最近一张 PO 的供应商名称；14 个不走量、2 个零销售、CS014 / CS029 从没开过 PO）。
+- Supabase：视图 `public.bi_cs_code`（migration `cs_code_view`，SQL 在 `docs/bi_sql/cs_code_view.sql`）：PO 供应商名称里出现过的每个 CS 码一行，
+  `items_last_po`（最近一张 PO 挂此码的商品数，含无销售）、`items`（候选名单内）、`loaded10/30/100`（前端三个门槛下会载入的行数，直接从
+  `public.bi_purchase_suggest` 汇总，口径永远与前端一致）。security_invoker + `bi_is_allowed()` + `bi_company()`，sales 角色 0 行。老板视角 0.7 秒。
+  核对：55 个码，三个门槛的件数与前端查询逐码相等，0 个不符。
+- 前端 `Purchasing.tsx`（SuggestTab）：下拉改读 `bi_cs_code`，选项显示「CS007(0 项 · 4 项未达门槛)」/「CS052(0 项 · 8 项无销售)」/「CS065(93 项)」；
+  选到门槛内 0 项的厂号时显示提示（原因 + 最近 PO 日期）并给「把门槛切到 10」按钮；**选了厂号后 rows 的查询加 `.eq('cs_code', …)` 在伺服器端过滤**
+  （limit 1000 不再切掉排后面的厂号；门槛 10 时已载入 972 行，离上限很近）；rows 满 1000 行且没选厂号时显示警告。
+  新字典 `src/i18n/cscode.ts`，`index.ts` 合并。型别检查：在暂存区装 typescript 5.6 + react/supabase 型别，对 Purchasing.tsx / Health.tsx 跑
+  `tsc --noEmit --strict --noUnusedLocals`（本地副本缺的 margin / targets / loyalty 字典用空字典顶替，`import.meta.env` 用一个 d.ts 顶替）通过。
+- 部署批 `cscode`（mkpayload.py）：Purchasing.tsx + i18n/cscode.ts + i18n/index.ts 内嵌，其余以 SHA 参照（manifest 已先 `--sync` 到
+  dpl_CJE3AbnkcyRJ1QP7z7zgdczxFUyv 的档案树，含别人加的 Targets / Margin）。
+

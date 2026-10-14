@@ -22,6 +22,11 @@ type Suggest = {
   item_type: string | null; cs_code: string | null;
   jb_reserved: number; owed_branch: number; branch_short: boolean;
 };
+// public.bi_cs_code(2026-10-14):PO 里出现过的每个 CS 厂号,附各门槛下会载入几行(口径同 bi_purchase_suggest)
+type CsCode = {
+  cs_code: string; n_po: number; first_po_date: string | null; last_po_date: string | null; creditor_codes: string | null;
+  items_last_po: number; items: number; loaded10: number; loaded30: number; loaded100: number;
+};
 type DueSup = { creditor_code: string; name: string; days_since_po: number | null; order_cycle_days: number | null };
 type PoOpen = {
   po_no: string; po_date: string; creditor_code: string; supplier_name: string; is_china: boolean | null;
@@ -71,6 +76,7 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
   const [fillOpen, setFillOpen] = useState<Set<string>>(new Set());
   const [groupBy, setGroupBy] = useState<'sup' | 'brand'>('brand'); // 品牌=中国厂,是真正的供应商;户口只是开单公司
   const [csFilter, setCsFilter] = useState('');
+  const [csAll, setCsAll] = useState<CsCode[]>([]); // 全部厂号(PO 里出现过的)与各门槛下的件数
   const [owedOnly, setOwedOnly] = useState(false); // 只看分行预定但我们未有货的
   const keyOf = (r: Suggest) => groupBy === 'brand' ? (r.item_type ?? '(无品牌)') : (r.supplier_code ?? '(none)');
   const nameOf = (r: Suggest) => groupBy === 'brand' ? (r.item_type ?? t('(无品牌)')) : (r.supplier_name ?? t('未知供应商(无采购记录)'));
@@ -80,17 +86,21 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
     (async () => {
       setRows(null);
       // 全量取(含"正常"状态)——凑柜清单需要不紧急但快要补的商品
-      const [a, b] = await Promise.all([
-        supabase.from('bi_purchase_suggest').select('*').eq('company', COMPANY).eq('exclude', false)
-          .or(`q90.gte.${minQ},owed_branch.gt.0`)
-          .order('days_left', { nullsFirst: true }).limit(1000),
+      // 选了厂号就在伺服器端过滤:不然 1000 行上限会把排在后面的厂号整个切掉(2026-10-14)
+      let qy = supabase.from('bi_purchase_suggest').select('*').eq('company', COMPANY).eq('exclude', false)
+        .or(`q90.gte.${minQ},owed_branch.gt.0`);
+      if (csFilter) qy = qy.eq('cs_code', csFilter);
+      const [a, b, c] = await Promise.all([
+        qy.order('days_left', { nullsFirst: true }).limit(1000),
         supabase.from('bi_supplier').select('creditor_code,name,days_since_po,order_cycle_days').eq('company', COMPANY).eq('order_due', true),
+        supabase.from('bi_cs_code').select('*').eq('company', COMPANY),
       ]);
-      setErr(a.error ? a.error.message : null);
+      setErr(a.error ? a.error.message : c.error ? c.error.message : null);
       setRows((a.data ?? []) as Suggest[]);
       setDueSups((b.data ?? []) as DueSup[]);
+      setCsAll((c.data ?? []) as CsCode[]);
     })();
-  }, [minQ, tick]);
+  }, [minQ, tick, csFilter]);
 
   const shown = useMemo(() => {
     if (!rows) return [];
@@ -104,11 +114,18 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       (!k || r.item_code.toLowerCase().includes(k) || r.description.toLowerCase().includes(k)));
   }, [rows, q, supFilter, showHandled, scope, csFilter, owedOnly]);
 
+  // 下拉列全部厂号(PO 里出现过的),不再只列目前载入的走量品;件数 = 目前门槛下会载入的行数(2026-10-14,修法 A)
   const csList = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of rows ?? []) if (r.cs_code) s.add(r.cs_code);
-    return [...s].sort((a, b) => Number(a.replace('CS', '')) - Number(b.replace('CS', '')));
-  }, [rows]);
+    const m = new Map<string, CsCode>();
+    for (const c of csAll) m.set(c.cs_code, c);
+    for (const r of rows ?? []) if (r.cs_code && !m.has(r.cs_code)) m.set(r.cs_code, {
+      cs_code: r.cs_code, n_po: 0, first_po_date: null, last_po_date: null, creditor_codes: null,
+      items_last_po: 0, items: 0, loaded10: 0, loaded30: 0, loaded100: 0,
+    });
+    return [...m.values()].sort((a, b) => Number(a.cs_code.replace('CS', '')) - Number(b.cs_code.replace('CS', '')));
+  }, [csAll, rows]);
+  const loadedAt = (c: CsCode) => Number(minQ <= 10 ? c.loaded10 : minQ <= 30 ? c.loaded30 : c.loaded100);
+  const csSel = csFilter ? (csList.find((c) => c.cs_code === csFilter) ?? null) : null;
 
   // 凑柜候选:同组、不紧急但 30 天内也要补的商品(仅"需要处理"视角下展示)
   const fillMap = useMemo(() => {
@@ -212,7 +229,14 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
         {csList.length > 0 && (
           <select value={csFilter} onChange={(e) => setCsFilter(e.target.value)}>
             <option value="">{t('全部 CS 厂号')}</option>
-            {csList.map((c) => <option key={c} value={c}>{c}</option>)}
+            {csList.map((c) => {
+              const n = loadedAt(c);
+              const tail = n > 0 ? t('{n} 项', { n })
+                : Number(c.items) > 0 ? t('0 项 · {n} 项未达门槛', { n: c.items })
+                : Number(c.items_last_po) > 0 ? t('0 项 · {n} 项无销售', { n: c.items_last_po })
+                : t('0 项');
+              return <option key={c.cs_code} value={c.cs_code}>{c.cs_code}({tail})</option>;
+            })}
           </select>
         )}
         <label className="muted">{t('走量门槛')}</label>
@@ -237,6 +261,26 @@ function SuggestTab({ canWrite }: { canWrite: boolean }) {
       </div>
 
       {err && <div className="notice">{t('查询失败:')}{err}</div>}
+      {csSel && loadedAt(csSel) === 0 && (
+        <div className="notice" style={{ borderColor: '#f59e0b' }}>
+          {t('厂号 {c}:', { c: csSel.cs_code })}
+          {Number(csSel.items) > 0
+            ? t('有 {n} 个商品在候选名单,但近 90 天销量都低于门槛 {q} 件。', { n: csSel.items, q: minQ })
+            : Number(csSel.items_last_po) > 0
+              ? t('最近一张 PO 挂这个厂号的 {n} 个商品,近 90 天都没有销售,也不欠分行。', { n: csSel.items_last_po })
+              : t('没有任何商品的最近一张 PO 挂这个厂号。')}
+          {csSel.last_po_date ? ' ' + t('最近 PO {d}。', { d: fmtDate(csSel.last_po_date) }) : ''}
+          {minQ > 10 && Number(csSel.loaded10) > 0 && (
+            <> <button className="btn" onClick={() => setMinQ(10)}>{t('把门槛切到 10(会出现 {n} 项)', { n: csSel.loaded10 })}</button></>
+          )}
+          {minQ > 10 && Number(csSel.loaded10) === 0 && Number(csSel.items) > 0 ? ' ' + t('门槛切到 10 也不够。') : ''}
+        </div>
+      )}
+      {rows && rows.length >= 1000 && !csFilter && (
+        <div className="notice" style={{ borderColor: '#f59e0b' }}>
+          {t('已达 1000 行载入上限,排在后面的商品没载入:请提高走量门槛,或先选一个厂号(选厂号时在伺服器端过滤,不受上限影响)。')}
+        </div>
+      )}
       {dueSups.length > 0 && (
         <div className="notice" style={{ borderColor: '#f59e0b' }}>
           {t('🔔 按订货周期,这几家该下单了:')}{dueSups.map((s) => t('{name}(距上次 {d} 天/周期 {c} 天)', { name: s.name, d: s.days_since_po ?? '?', c: s.order_cycle_days ?? '?' })).join(' · ')}

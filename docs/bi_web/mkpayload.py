@@ -16,6 +16,7 @@ BATCH = {
   "kl": ["src/lib/supabase.ts", "src/App.tsx", "src/pages/EcomReport.tsx", "src/i18n/core.ts"],
   "purchasing": ["src/pages/Purchasing.tsx", "src/pages/OpenOrders.tsx", "src/pages/SyncLog.tsx", "src/i18n/purchasing.ts"],
   "health": ["src/pages/Health.tsx", "src/i18n/health.ts", "src/i18n/index.ts", "src/App.tsx"],
+  "cscode": ["src/pages/Purchasing.tsx", "src/i18n/cscode.ts", "src/i18n/index.ts"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
 M = Path("deploy_manifest.json")
