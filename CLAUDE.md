@@ -129,6 +129,9 @@ API 是 AutoCount 2.0 选购模组，使用者要先看授权画面 + 建测试�
 OWNER_ONLY，只在总部视角显示，三列 总行（对外）/ 分行 JB / 集团。**Supabase 里另有别人建的 `bi.health_snapshot` / `bi.refresh_health()` / cron `bi_health_refresh` /
 `bi_health_*` 视图（2026-10-08，不在本仓库），别动；Vercel 也被另一条工作流改过（delivery / driver / join / loyalty 入口），部署前一定先 `list_deployment_files` →
 `mkpayload.py --sync` 重建 manifest**（细节见 `docs/bi_web/README.md`）。
+**订货页「CS 厂号」下拉（2026-10-14 诊断，`docs/bi_web/cs_dropdown_2026-10-14.md`）**：下拉只列「目前载入的走量品」身上的 cs_code（rows = bi_purchase_suggest，exclude=false，q90≥门槛(预设 30) 或欠分行，limit 1000），
+cs_code 是商品**最近一张 PO** 供应商名称里的 CS 码（正则 `[Cc][Ss] ?[0-9]+`）；CS 码不是 AutoCount 供应商代号，是开 PO 时写在四个进口代理账号名称后的后缀。老板问的 18 个厂号：14 个商品都不走量、
+2 个近 90 天零销售、CS014 / CS029 从没出现在任何 PO；不是 1000 行截断（门槛 30 载入 651 行、门槛 10 为 972 行——已接近上限，以后要注意）。修法建议 A（下拉改列全部厂号并标件数）尚未做，等老板决定。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
 无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。
