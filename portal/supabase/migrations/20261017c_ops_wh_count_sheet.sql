@@ -575,7 +575,8 @@ begin
                      'location', y.j->'location', 'due_date', y.j->'due_date', 'overdue', y.j->'overdue', 'total', y.j->'total',
                      'left', (y.j->>'todo')::int + (y.j->>'recount')::int) order by s.due_date nulls last, s.created_at)
                    from ops.wh_count_sheet s, lateral (select ops.wh_sheet_json(s, me) j offset 0) y
-                   where s.status = 'open' and coalesce(me.id = any(s.assignees), false) and ops.sees_company(me, s.company)),
+                   where s.status = 'open' and coalesce(me.id = any(s.assignees), false) and ops.sees_company(me, s.company)
+                     and (y.j->>'todo')::int + (y.j->>'recount')::int > 0),   -- 都盘完（等主管结单）就不再提醒
                   '[]'::jsonb);
 end $$;
 
