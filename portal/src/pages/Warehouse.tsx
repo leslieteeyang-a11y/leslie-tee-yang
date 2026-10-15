@@ -20,7 +20,8 @@ import { wh, WhMeta } from "../wh-api";
 type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
-export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
+// arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
+export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string; arg?: string }) {
   const [meta, setMeta] = useState<WhMeta | null>(null);
   const [error, setError] = useState("");
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });

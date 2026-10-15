@@ -101,7 +101,7 @@ export default function App() {
       page = can(me, "leave", "view") ? <Leave me={me} /> : <NoAccess />;
       break;
     case "warehouse":
-      page = can(me, "warehouse", "view") ? <><SyncNote /><Warehouse me={me} sub={arg} /></> : <NoAccess />;
+      page = can(me, "warehouse", "view") ? <><SyncNote /><Warehouse me={me} sub={arg} arg={arg2} /></> : <NoAccess />;
       break;
     case "delivery":
       page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
