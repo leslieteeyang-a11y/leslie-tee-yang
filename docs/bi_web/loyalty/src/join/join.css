@@ -26,3 +26,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 syst
 .jn-done { text-align: center; padding: 28px 8px; }
 .jn-done .big { font-size: 44px; }
 .jn a.jn-link { display: block; text-align: center; text-decoration: none; margin-top: 8px; padding: 12px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; }
+/* 2026-10-15 登记送延长保修 */
+.jn-offer { border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 14px; }
+.jn-offer b { display: block; font-size: 15px; margin-bottom: 2px; }
+.jn-offer div { color: var(--muted); }
+.jn-done p.jn-offer-done { color: var(--text); font-weight: 600; }

@@ -8,6 +8,8 @@ import './join.css';
 // 这页不回传任何顾客资讯;三种语言写在这里,不进主看板的字典。
 // 2026-10-06 使用者要求「住哪一区」改成送货地址(员工送货用),再加电邮;RPC 用 9 个参数的新版(p_address、p_email)。
 // 送出成功后自动带到品牌网站 www.hemos.com.my(几秒后跳转,也可以直接按按钮)。
+// 2026-10-15 登记送延长保修:月数由管理员在营运系统「顾客资料 → 设定」填(bi_customer_signup_offer,anon 可读);0 = 不送,这页就不提保修。
+// 送出即生效时资料库(bi.customer_signup_apply)就记下保修登记。
 
 const SITE = 'https://www.hemos.com.my';
 const REDIRECT_SECONDS = 4;
@@ -56,6 +58,21 @@ const TXT: Record<string, Record<L, string>> = {
   needName: { zh: '请填名字', en: 'Please enter your name', ms: 'Sila masukkan nama' },
   needBoth: { zh: '生日要月、日都选', en: 'Choose both month and day', ms: 'Pilih bulan dan hari' },
   fail: { zh: '送出失败：', en: 'Could not submit: ', ms: 'Gagal dihantar: ' },
+  offer: {
+    zh: '🛡️ 登记即享 Hemos 产品保修延长 {m} 个月',
+    en: '🛡️ Register to extend your Hemos product warranty by {m} months',
+    ms: '🛡️ Daftar untuk lanjutan waranti produk Hemos selama {m} bulan',
+  },
+  offerSub: {
+    zh: '登记前 {d} 天内与之后在 HomeWorks 买的都适用。',
+    en: 'Covers purchases at HomeWorks from {d} days before you register, and after.',
+    ms: 'Meliputi pembelian di HomeWorks dari {d} hari sebelum anda mendaftar, dan selepasnya.',
+  },
+  offerDone: {
+    zh: '已为你登记延长保修 {m} 个月。',
+    en: 'Your warranty extension of {m} months is registered.',
+    ms: 'Lanjutan waranti {m} bulan anda telah didaftarkan.',
+  },
 };
 
 function initialLang(): L {
@@ -72,6 +89,12 @@ function Join() {
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [left, setLeft] = useState(REDIRECT_SECONDS);
+  const [offer, setOffer] = useState<{ warranty_months: number; warranty_back_days: number } | null>(null);
+  // 登记送延长保修(拿不到就当没送,登记照常)
+  useEffect(() => {
+    supabase.rpc('bi_customer_signup_offer').then((r) => { if (!r.error && r.data) setOffer(r.data as { warranty_months: number; warranty_back_days: number }); });
+  }, []);
+  const months = Number(offer?.warranty_months ?? 0);
 
   // 登记成功后倒数,时间到就带到品牌网站
   useEffect(() => {
@@ -115,12 +138,19 @@ function Join() {
             <div className="big">✓</div>
             <h2>{t('done')}</h2>
             <p>{t('doneSub')}</p>
+            {months > 0 && <p className="jn-offer-done">{t('offerDone').replace('{m}', String(months))}</p>}
             <a className="jn-go jn-link" href={SITE}>{t('goSite')}</a>
             <p className="jn-small">{t('goingSite').replace('{s}', String(left))}</p>
           </div>
         ) : (
           <>
             <h2 style={{ marginTop: 0 }}>{t('title')}</h2>
+            {months > 0 && (
+              <div className="jn-offer">
+                <b>{t('offer').replace('{m}', String(months))}</b>
+                {Number(offer?.warranty_back_days) > 0 && <div>{t('offerSub').replace('{d}', String(offer?.warranty_back_days))}</div>}
+              </div>
+            )}
             <p>{t('intro')}</p>
             <label htmlFor="jn-phone">{t('phone')}</label>
             <input id="jn-phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="012-345 6789"

@@ -234,7 +234,8 @@ LIVE_V4 = {
     "tsconfig.json": "14e9d5e9e0c89c7bfd84bf5068ef8d3b06612bac",
     "vite.config.ts": "ed0e7a144cf351d9c44e6d518855ced2708d843b",
 }
-CHANGED = ["delivery.html", "driver.html", "src/i18n/loyalty.ts", "src/loyalty/main.tsx", "src/pages/Loyalty.tsx"]
+CHANGED = ["delivery.html", "driver.html", "src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
+           "src/pages/Loyalty.tsx"]
 NEW_FILES: list[str] = []
 
 
@@ -245,8 +246,8 @@ def test_repo_overlay_replaces_only_the_changed_customer_files():
     assert plan["added"] == NEW_FILES
     assert sorted(plan["replaced"]) == CHANGED
     assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/delivery/main.tsx", "src/driver/driver.css",
-                                    "src/driver/main.tsx", "src/i18n/index.ts", "src/join/join.css", "src/join/main.tsx",
-                                    "src/loyalty/loyalty.css", "src/pages/Delivery.tsx", "vite.config.ts"]
+                                    "src/driver/main.tsx", "src/i18n/index.ts", "src/loyalty/loyalty.css", "src/pages/Delivery.tsx",
+                                    "vite.config.ts"]
     sent = {f["file"]: f for f in plan["files"]}
     assert set(sent) == set(LIVE_V4) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
     for path, sha in LIVE_V4.items():
