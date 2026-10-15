@@ -96,3 +96,6 @@ Vercel 自己 `npm install` + `vite build`。
   老板在 BI 看到的数字与之前一样（2,590 行对 2,590 行）。
 - Migration 已分六段套到 Supabase（`ops_bi_pages_1_views` ～ `ops_bi_pages_6_grants`），档案 `20261016_ops_bi_pages.sql` 可重跑。
   测试 `supabase/tests/rpl_test.sql`（stub 补了 `bi.mv_purchase_sold`、`bi.buyer_*` 等表）。
+- 合并后审查修正 `20261016c_ops_bi_pages_fix.sql`（正式环境 `ops_bi_pages_7_fix`，已套；要在 `20261016_ops_bi_pages.sql` 之后）：
+  补货建议的留言 / 商品备注 / 记录人只给看得到厂家的人（常写厂家名与 PO 号）；库存总表每行多回 `item_total`（商品全部仓位合计，
+  不受分页与「只看负库存」影响）。
