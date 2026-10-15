@@ -16,9 +16,10 @@ import { GrnTab } from "../wh/Grn";
 import { StockTab } from "../wh/Stock";
 import { SlowTab } from "../wh/Slow";
 import { BinsTab } from "../wh/Bins";
+import { MapLazy } from "../wh/MapLazy";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "bins" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
+type Tab = "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
@@ -35,6 +36,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   const tabs: [Tab, string][] = [["lookup", "查货"]];
   tabs.push(["stock", "库存总表"]);   // 从 BI 搬进来（2026-10-16）
   tabs.push(["bins", "货架"]);       // 货架帐（2026-10-17）
+  tabs.push(["map", "地图"]);         // 货架地图（#/warehouse/map/<仓位>）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
   // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
@@ -67,6 +69,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
       {tab === "stock" && <StockTab key={co} company={co} />}
       {tab === "slow" && <SlowTab key={co} company={co} />}
       {tab === "bins" && <BinsTab key={co} company={co} level={meta.level} arg={arg} locs={locs.map((l) => l.code)} />}
+      {tab === "map" && <MapLazy key={co} company={co} loc={arg} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
     </>
   );
