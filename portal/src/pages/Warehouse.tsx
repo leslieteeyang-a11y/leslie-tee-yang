@@ -15,13 +15,14 @@ import { AgedTab } from "../wh/Aged";
 import { GrnTab } from "../wh/Grn";
 import { StockTab } from "../wh/Stock";
 import { SlowTab } from "../wh/Slow";
+import { PickTab } from "../wh/Pick";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
+type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
-export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string; arg?: string }) {
+export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
   const [meta, setMeta] = useState<WhMeta | null>(null);
   const [error, setError] = useState("");
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
@@ -35,6 +36,7 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
   tabs.push(["stock", "库存总表"]);   // 从 BI 搬进来（2026-10-16）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
+  tabs.push(["pick", "拣货"]);       // 照 DO 拣货 + 扫码核对（2026-10-15）
   // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
   if (canGrn(me)) tabs.push(["grn", "待开进货单"]);
   if (canApprove) tabs.push(["review", "差异审核"]);
@@ -65,6 +67,7 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
       {tab === "stock" && <StockTab key={co} company={co} />}
       {tab === "slow" && <SlowTab key={co} company={co} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
+      {tab === "pick" && <PickTab company={co} canEdit={canEdit} doc={arg} />}
     </>
   );
 }
