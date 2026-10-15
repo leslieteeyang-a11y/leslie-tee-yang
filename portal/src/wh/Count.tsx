@@ -1,16 +1,48 @@
-// 仓库 · 每日小盘点（盲盘）：不符先请再数一次，第二次才记为差异。
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Empty, ErrorBox, Modal } from "../ui";
+// 仓库 · 盘点：每日小盘点（盲盘）、盘点单、盘点统计（可审批）。路由 #/warehouse/count/<daily|sheets|stats|盘点单编号>
+// 盲盘：不符先请再数一次，第二次才记为差异。商品在这个仓位有货架帐时，按货架一格一格数（CountBins）。
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { go } from "../router";
+import { Empty, ErrorBox, Tabs } from "../ui";
 import { ScanBox } from "./Scanner";
+import { CountBins, CountItem } from "./CountBins";
 import { COUNT_STATUS_LABEL, CountList, FoundItem, countClass, qtyLabel, whenLabel, wh } from "../wh-api";
+import { CountSaveResult, SheetHome, sheets } from "../wh-sheet-api";
+import "../wh-sheet.css";
 
-export function CountTab({ company, locs }: { company: string; locs: string[] }) {
+const SheetsTab = lazy(() => import("./Sheets"));
+const SheetDetail = lazy(() => import("./SheetDetail"));
+const CountStats = lazy(() => import("./CountStats"));
+
+type View = "daily" | "sheets" | "stats";
+
+export function CountTab({ company, locs, allLocs, arg, canApprove }: {
+  company: string; locs: string[]; allLocs?: string[]; arg?: string; canApprove?: boolean;
+}) {
+  const sheetId = arg && /^\d+$/.test(arg) ? Number(arg) : null;
+  const views: [View, string][] = [["daily", "每日盘点"], ["sheets", "盘点单"]];
+  if (canApprove) views.push(["stats", "盘点统计"]);
+  const view: View = sheetId ? "sheets" : views.some(([k]) => k === arg) ? (arg as View) : "daily";
+  return (
+    <>
+      <div className="filters"><Tabs value={view} options={views} onChange={(k) => go(`/warehouse/count/${k}`)} /></div>
+      <Suspense fallback={<p className="muted">载入中…</p>}>
+        {sheetId ? <SheetDetail key={sheetId} id={sheetId} company={company} />
+          : view === "sheets" ? <SheetsTab company={company} locs={allLocs?.length ? allLocs : locs} canApprove={!!canApprove} />
+          : view === "stats" ? <CountStats company={company} locs={allLocs?.length ? allLocs : locs} />
+          : <Daily company={company} locs={locs} />}
+      </Suspense>
+    </>
+  );
+}
+
+function Daily({ company, locs }: { company: string; locs: string[] }) {
   const [loc, setLoc] = useState(() => { try { return localStorage.getItem("hw-wh-loc") || ""; } catch { return ""; } });
   const [data, setData] = useState<CountList | null>(null);
   const [error, setError] = useState("");
-  const [counting, setCounting] = useState<{ code: string; desc: string; uom: string; recount?: boolean } | null>(null);
+  const [counting, setCounting] = useState<CountItem | null>(null);
   const [notice, setNotice] = useState<[string, string] | null>(null);
   const [found, setFound] = useState<FoundItem[] | null>(null);
+  const [mine, setMine] = useState<SheetHome[]>([]);
   const location = locs.includes(loc) ? loc : locs[0] || "";
 
   const load = useCallback(() => {
@@ -19,6 +51,8 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
     wh.countList(company, location).then(setData).catch((e: Error) => setError(e.message));
   }, [company, location]);
   useEffect(() => { setData(null); load(); }, [load]);
+  // 指派给我、还开着的盘点单（失败就不显示，不影响每日盘点）
+  useEffect(() => { sheets.home().then((h) => setMine(h.filter((s) => s.company === company && s.left > 0))).catch(() => setMine([])); }, [company]);
 
   async function scan(code: string) {
     setNotice(null); setError("");
@@ -37,12 +71,36 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
     } catch (e) { setError((e as Error).message); }
   }
 
+  function saved(r: CountSaveResult) {
+    const c = counting?.code || r.item_code;
+    if (r.result === "recount") {
+      setNotice(["error", `${c} 跟系统不一样，请再仔细数一次（包括别的货架、坏货、展示品有没有放错）。`]);
+    } else {
+      setCounting(null);
+      setNotice(r.result === "match" ? ["ok", `✓ ${c} 相符。`] : ["error", `${c} 第二次还是不一样，已记录为差异，交给主管审核。`]);
+    }
+    load();
+  }
+
   if (!locs.length) return <Empty>没有要盘点的仓位。</Empty>;
   const p = data?.progress;
   return (
     <>
+      {mine.length > 0 && (
+        <section className="card ws-mine">
+          <b>指派给你的盘点单</b>
+          <ul className="list">
+            {mine.map((s) => (
+              <li key={s.id} className="click" onClick={() => go(`/warehouse/count/${s.id}`)}>
+                <span><b>{s.title}</b>{" "}<span className="muted small">{s.location}</span></span>
+                <span className={s.overdue ? "late small nowrap" : "go nowrap"}>{`还有 ${s.left} 项 →`}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="filters">
-        <label className="inline">仓位
+        <label className="inline ws-fixed">仓位
           <select value={location} onChange={(e) => { setLoc(e.target.value); try { localStorage.setItem("hw-wh-loc", e.target.value); } catch { /* 忽略 */ } }}>
             {locs.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
@@ -98,56 +156,7 @@ export function CountTab({ company, locs }: { company: string; locs: string[] })
           )}
         </>
       )}
-      {counting && (
-        <CountForm company={company} location={location} item={counting} onClose={() => setCounting(null)}
-                   onSaved={(r) => {
-                     if (r === "recount") {
-                       setCounting({ ...counting, recount: true });
-                       setNotice(["error", `${counting.code} 跟系统不一样，请再仔细数一次（包括别的货架、坏货、展示品有没有放错）。`]);
-                     } else {
-                       setCounting(null);
-                       setNotice(r === "match" ? ["ok", `✓ ${counting.code} 相符。`] : ["error", `${counting.code} 第二次还是不一样，已记录为差异，交给主管审核。`]);
-                     }
-                     load();
-                   }} />
-      )}
+      {counting && <CountBins company={company} location={location} item={counting} onClose={() => setCounting(null)} onSaved={saved} />}
     </>
   );
 }
-
-function CountForm({ company, location, item, onClose, onSaved }: {
-  company: string; location: string; item: { code: string; desc: string; uom: string; recount?: boolean };
-  onClose: () => void; onSaved: (r: "match" | "recount" | "variance") => void;
-}) {
-  const [qty, setQty] = useState("");
-  const [note, setNote] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { setQty(""); setNote(""); setBusy(false); }, [item.recount]);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true); setError("");
-    try {
-      const r = await wh.saveCount({ company, location, item_code: item.code, qty, note });
-      onSaved(r.result);
-    } catch (err) { setError((err as Error).message); setBusy(false); }
-  }
-  return (
-    <Modal title={item.recount ? `再数一次 · ${location}` : `盘点 · ${location}`} onClose={onClose}>
-      <form className="form" onSubmit={submit}>
-        <p><b>{item.code}</b><br /><span className="muted">{item.desc}</span></p>
-        {item.recount && <p className="late small">第一次数的跟系统不一样，请再仔细数一次。</p>}
-        <label>{`实际数到几${item.uom ? `（${item.uom}）` : ""}`}
-          <input className="big-num" type="number" inputMode="decimal" min="0" step="any" value={qty} autoFocus
-                 onChange={(e) => setQty(e.target.value)} required /></label>
-        <label>备注（选填）<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="例：2 箱压坏、1 件在展示区" /></label>
-        <ErrorBox error={error} />
-        <div className="actions">
-          <button type="button" className="ghost" onClick={onClose}>取消</button>
-          <button disabled={busy || qty === ""}>{busy ? "储存中…" : "确认"}</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-

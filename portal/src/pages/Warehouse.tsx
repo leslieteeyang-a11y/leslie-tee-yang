@@ -57,7 +57,8 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
       </div>
       <div className="filters"><Tabs value={tab} options={tabs} onChange={(k) => go(`/warehouse/${k}`)} /></div>
       {tab === "lookup" && <Lookup me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} />}
-      {tab === "count" && <CountTab company={co} locs={locs.filter((l) => l.counting).map((l) => l.code)} />}
+      {tab === "count" && <CountTab company={co} locs={locs.filter((l) => l.counting).map((l) => l.code)}
+                                    allLocs={locs.map((l) => l.code)} arg={_arg} canApprove={canApprove} />}
       {tab === "moves" && <MovesTab me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} canApprove={canApprove} />}
       {tab === "grn" && <GrnTab company={co} multi={meta.companies.length > 1} canCancel={canCancelReceive(me)} />}
       {tab === "review" && <ReviewTab company={co} meta={meta} onMeta={setMeta} />}
