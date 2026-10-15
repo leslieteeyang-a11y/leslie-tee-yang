@@ -6,12 +6,9 @@ import Dashboard from './pages/Dashboard';
 import ProfitLoss from './pages/ProfitLoss';
 import SalesLines from './pages/SalesLines';
 import OpenOrders from './pages/OpenOrders';
-import StockPage from './pages/StockPage';
 import ItemRanking from './pages/ItemRanking';
-import SlowMovers from './pages/SlowMovers';
 import Receivables from './pages/Receivables';
 import Alerts from './pages/Alerts';
-import Purchasing from './pages/Purchasing';
 import Manager from './pages/Manager';
 import Payables from './pages/Payables';
 import PriceEffect from './pages/PriceEffect';
@@ -21,8 +18,11 @@ import BranchActual from './pages/BranchActual';
 import StockAnomaly from './pages/StockAnomaly';
 import SyncLog from './pages/SyncLog';
 import Health from './pages/Health';
+import Margin from './pages/Margin';
+import Targets from './pages/Targets';
 import { useT, LangToggle } from './lib/i18n';
 
+// 2026-10-14 老板决定：订货 / 库存 / 滞销品三页搬到员工多部门营运系统（homeworks-ops 的订货与仓库模块），BI 不再放这三页
 const TABS = [
   { key: 'report', label: '月报' },
   { key: 'ecom', label: '电商月报' },
@@ -30,29 +30,28 @@ const TABS = [
   { key: 'dash', label: '总览' },
   { key: 'alerts', label: '今日异常' },
   { key: 'mgr', label: '门店' },
+  { key: 'target', label: '目标' },
   { key: 'branch', label: '实际销售' },
-  { key: 'buy', label: '订货' },
   { key: 'pl', label: '损益' },
+  { key: 'margin', label: '毛利分析' },
   { key: 'ar', label: '应收账款' },
   { key: 'pay', label: '应付账款' },
   { key: 'price', label: '调价跟踪' },
   { key: 'sales', label: '销售明细' },
   { key: 'rank', label: '商品排行' },
-  { key: 'stock', label: '库存' },
   { key: 'stockx', label: '库存异常' },
-  { key: 'slow', label: '滞销品' },
   { key: 'oo', label: '未交订单' },
   { key: 'log', label: '同步状态' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 type Role = 'owner' | 'buyer' | 'viewer' | 'manager' | 'sales';
 // 订货员只看采购相关页面;店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
-const BUYER_TABS: TabKey[] = ['buy', 'pay', 'stock', 'stockx', 'slow', 'oo', 'log'];
-const MANAGER_TABS: TabKey[] = ['mgr', 'branch', 'dash', 'alerts', 'buy', 'ar', 'pay', 'sales', 'rank', 'stock', 'stockx', 'slow', 'oo', 'log'];
+const BUYER_TABS: TabKey[] = ['pay', 'stockx', 'oo', 'log'];
+const MANAGER_TABS: TabKey[] = ['mgr', 'target', 'branch', 'dash', 'alerts', 'ar', 'pay', 'sales', 'rank', 'stockx', 'oo', 'log'];
 // 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
-const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'stock', 'slow', 'oo'];
-// 月报/电商月报/健康体检/调价跟踪仅老板可见(含利润与现金)
-const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'health', 'price'];
+const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'oo'];
+// 月报/电商月报/健康体检/毛利分析/调价跟踪仅老板可见(含利润与现金)
+const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'health', 'margin', 'price'];
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -115,7 +114,7 @@ export default function App() {
       const r = (me?.role ?? 'viewer') as Role;
       setRole(r);
       resetCompanyIfNotAllowed(r === 'owner', me?.company ?? null);
-      if (r === 'buyer') setTab('buy');
+      if (r === 'buyer') setTab('pay');   // 订货页已搬到营运系统，订货员进来先看应付账款
       if (r === 'manager') setTab('mgr');
     });
   }, [session?.user.id]);
@@ -132,7 +131,6 @@ export default function App() {
     : TABS.filter((t) => !OWNER_ONLY.includes(t.key));
   // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行账套有资料(JB Southern、KL…):老板切到分行、或分行店长登入时才显示
   const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || !isHQ);
-  const canWrite = role === 'owner' || role === 'buyer';
   const showProfit = role !== 'manager' && role !== 'sales';
 
   return (
@@ -174,10 +172,11 @@ export default function App() {
       )}
 
       {tab === 'alerts' && <Alerts goTo={(t) => setTab(t as TabKey)} />}
-      {tab === 'buy' && <Purchasing canWrite={canWrite} />}
       {tab === 'mgr' && <Manager />}
       {tab === 'dash' && <Dashboard onEmpty={setEmpty} showProfit={showProfit} />}
       {tab === 'pl' && <ProfitLoss />}
+      {tab === 'margin' && <Margin />}
+      {tab === 'target' && <Targets canEdit={role === 'owner'} />}
       {tab === 'report' && <OnePager />}
       {tab === 'ecom' && <EcomReport canEdit={role === 'owner'} />}
       {tab === 'health' && <Health />}
@@ -187,9 +186,7 @@ export default function App() {
       {tab === 'ar' && <Receivables />}
       {tab === 'sales' && <SalesLines showProfit={showProfit} />}
       {tab === 'rank' && <ItemRanking showProfit={showProfit} />}
-      {tab === 'stock' && <StockPage showCost={showProfit} />}
       {tab === 'stockx' && <StockAnomaly />}
-      {tab === 'slow' && <SlowMovers showCost={showProfit} />}
       {tab === 'oo' && <OpenOrders />}
       {tab === 'log' && <SyncLog />}
     </div>

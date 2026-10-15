@@ -133,6 +133,18 @@ OWNER_ONLY，只在总部视角显示，三列 总行（对外）/ 分行 JB / �
 cs_code 是商品**最近一张 PO** 供应商名称里的 CS 码（正则 `[Cc][Ss] ?[0-9]+`）；CS 码不是 AutoCount 供应商代号，是开 PO 时写在四个进口代理账号名称后的后缀。老板问的 18 个厂号：14 个商品都不走量、
 2 个近 90 天零销售、CS014 / CS029 从没出现在任何 PO；不是 1000 行截断（门槛 30 载入 651 行、门槛 10 为 972 行——已接近上限，以后要注意）。**修法 A 已做（2026-10-14，老板「做 A」）**：视图 `public.bi_cs_code`（migration `cs_code_view`，件数直接从 bi_purchase_suggest 汇总）；
 下拉改读它并标件数、选了厂号改伺服器端过滤（`.eq('cs_code')`）、门槛内 0 项时提示 + 一键切 10、满 1000 行警告；字典 `src/i18n/cscode.ts`；部署批 `cscode`。**同晚老板「虽然卖的少，但没货了还是要给我知道啊」**→ 载入规则加 `on_hand.lte.0`（视图 v3 `cs_code_view_v3_out_of_stock` 同步），rows 改 `.range()` 翻页最多 3 页（门槛 10 已 1,127 行），部署 `dpl_6ttGuYm5Z3wbn82wyhdLaaoiakbx`。CSV 的 BOM 改用 `String.fromCharCode(0xfeff)`，别在内嵌档里放 `\uFEFF` 跳脱（MCP 会解回原字元）。**老板再回「现在再加一条「现存 ≤ 0」这个没看到」**（规则只在查询里、画面没变）→ 下拉选项文字改「90 天 ≥N 件 + 没货的」+ 琥珀色勾选框「只看没货(现存 ≤ 0)(n)」，部署 `dpl_7TSztDz3UXC1owtoGsebyrqKa1gu`（审查与反驳结论见 README）。**大档内嵌部署会抄错字（SHA 对不上但建置照过）→ 以后先部署 preview 核对 uid，再用全 SHA 参照建 production，见 README。**近一年有卖但断货 >90 天的 487 项不在订货页——老板说是工程订单，数据证实（432 项单一客户、只有 3 项是跨客户的常态品），**候选集口径不改**（`mv_purchase_sold` 的 q90 是 NULL 不是 0，查数要 coalesce）。
+**订货 / 库存 / 滞销品搬到营运系统（2026-10-14，老板「把订货，滞销品，库存这三个移到员工多部门功能那边，然后BI这边就去掉这个项目」）**：
+营运系统 = Vercel 专案 `homeworks-ops`、Supabase schema `ops`、原始码在分支 `claude/gifted-faraday-b16op8` 的 `portal/`（由另一个 session「员工多部门功能开发」维护，
+本 session 不推那条分支）。做法：订货模块多「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`），仓库模块多「库存总表」（`#/warehouse/stock`）与
+「滞销品」（`/slow`）；资料仍是 BI 同步的 `bi.*` 表，算法沿用 BI 视图——`public.bi_purchase_suggest` 拆成 `bi.v_purchase_suggest`（只算）+ 原视图（读它 + BI 名单检查，栏位不变，
+老板看到的仍是 2,590 行）；RPC `ops_rpl_meta / ops_rpl_rows / ops_rpl_action / ops_rpl_action_undo / ops_rpl_item_setting_save / ops_rpl_suppliers / ops_rpl_supplier_save /
+ops_rpl_brand_supplier_save / ops_wh_stock / ops_wh_slow`，权限用 ops 的部门等级（看不到厂家 / 进货单价的人在资料层拿不到那些栏位；成本只给仓库可审批）。
+已下单 / 暂不订 / 商品设定仍写 `bi.buyer_*`（与 BI 共用，created_by = 员工 email）。**撤销是软撤销**（`bi.buyer_item_action.undone_at / undone_by`，视图滤掉）——因为
+apply_migration 看到 `delete from` 会等确认、无人确认回 `cancelled`（2026-10-14 实测，`revoke` / `alter table add column` 不会）；品牌取消分配同理改 `update … set supplier_code = null`。
+Migration 档 `portal/supabase/migrations/20261016_ops_bi_pages.sql`，**已分六段套到正式库**（`ops_bi_pages_1_views` ～ `ops_bi_pages_6_grants`；整档一次套会 60 秒 timeout）。
+交接：完整改动做成一个 commit 的 patch 放在本分支 `docs/ops_handoff/0001-bi-pages-to-ops.patch`（基底 3e0352b，`git am -3` 可套），老板要贴给那个 session 的话在
+`docs/ops_handoff/README.md`。BI 端：App.tsx 去掉 `buy` / `stock` / `slow` 与三个页面档、`i18n/purchasing.ts`、`i18n/cscode.ts`，Alerts 的「查看库存 →」按钮拿掉，
+订货员登入预设改应付账款；`mkpayload.py` 新增批 `opsmove`（`DROP:` 前缀 = 从部署里拿掉的档案）。**BI 的 production 部署要等营运系统四页上线后才做**（见 `docs/bi_web/README.md`）。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
 无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。

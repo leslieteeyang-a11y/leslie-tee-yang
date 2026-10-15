@@ -142,7 +142,6 @@ const d: Record<string, string> = {
   '还能卖(天)': 'Days of cover',
   '近90天售出': 'Sold last 90 days',
   '已断货': 'Out of stock',
-  '查看库存 →': 'View stock →',
 
   // 登入 Login
   '邮箱或密码不正确': 'Incorrect email or password',

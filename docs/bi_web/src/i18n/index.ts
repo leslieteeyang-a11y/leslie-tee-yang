@@ -1,5 +1,4 @@
 import core from './core';
-import purchasing from './purchasing';
 import manager from './manager';
 import finance from './finance';
 import ecom from './ecom';
@@ -9,7 +8,6 @@ import loyalty from './loyalty';
 import health from './health';
 import margin from './margin';
 import targets from './targets';
-import cscode from './cscode';
 
 // 各分页各自一个字典档,避免多人同时改同一档冲突;这里合并
-export const DICT: Record<string, string> = { ...loyalty, ...core, ...purchasing, ...manager, ...finance, ...ecom, ...pages1, ...pages2, ...health, ...margin, ...targets, ...cscode };
+export const DICT: Record<string, string> = { ...loyalty, ...core, ...manager, ...finance, ...ecom, ...pages1, ...pages2, ...health, ...margin, ...targets };

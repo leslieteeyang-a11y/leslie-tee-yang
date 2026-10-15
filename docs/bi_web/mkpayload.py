@@ -17,6 +17,10 @@ BATCH = {
   "purchasing": ["src/pages/Purchasing.tsx", "src/pages/OpenOrders.tsx", "src/pages/SyncLog.tsx", "src/i18n/purchasing.ts"],
   "health": ["src/pages/Health.tsx", "src/i18n/health.ts", "src/i18n/index.ts", "src/App.tsx"],
   "cscode": ["src/pages/Purchasing.tsx", "src/i18n/cscode.ts", "src/i18n/index.ts"],
+  # 2026-10-14 订货 / 库存 / 滞销品搬到营运系统：DROP: 的档案不内嵌也不参照（从部署里拿掉），--commit 时从 manifest 删除
+  "opsmove": ["src/App.tsx", "src/i18n/index.ts", "src/pages/Alerts.tsx", "src/i18n/finance.ts",
+              "DROP:src/pages/Purchasing.tsx", "DROP:src/pages/StockPage.tsx", "DROP:src/pages/SlowMovers.tsx",
+              "DROP:src/i18n/purchasing.ts", "DROP:src/i18n/cscode.ts"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
 M = Path("deploy_manifest.json")
@@ -29,15 +33,19 @@ if sys.argv[1] == "--sync":   # 从 Vercel 现行部署的档案树重建 manife
 
 if sys.argv[1] == "--commit":
     for f in BATCH[sys.argv[2]]:
+        if f.startswith("DROP:"):
+            manifest.pop(f.removeprefix("DROP:"), None); continue
         stub = f.startswith("STUB:"); f = f.removeprefix("STUB:")
         manifest[f] = sha(STUB.encode() if stub else Path(f).read_bytes())
     M.write_text(json.dumps(manifest, indent=1)); print("manifest updated:", len(manifest)); sys.exit()
 
 batch = BATCH[sys.argv[1]] + [a[1:] for a in sys.argv[2:] if a.startswith("+")]   # +path 额外内嵌
 inline = {}
+drop = {f.removeprefix("DROP:") for f in batch if f.startswith("DROP:")}
 for f in batch:
+    if f.startswith("DROP:"): continue
     stub = f.startswith("STUB:"); f = f.removeprefix("STUB:")
     inline[f] = STUB if stub else Path(f).read_text(encoding="utf-8")
-files = [{"file": f, "sha": s} for f, s in manifest.items() if f not in inline]
+files = [{"file": f, "sha": s} for f, s in manifest.items() if f not in inline and f not in drop]
 files += [{"file": f, "data": d, "encoding": "utf-8"} for f, d in inline.items()]
 print(json.dumps(files, ensure_ascii=False))

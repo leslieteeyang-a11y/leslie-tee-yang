@@ -153,3 +153,23 @@ BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 
   **候选集口径不改**（近 90 天有卖或欠分行）；那 3 项直接告诉老板补货。若以后要自动抓，用窄规则「没货且一年内发票 ≥10 张、客户 ≥3 个」即可。
   查数注意：`mv_purchase_sold` 里近 90 天没卖的 q90 是 **NULL 不是 0**，要用 `coalesce(q90,0)`（第一次用 `q90 = 0` 只查到 1 项）。
 
+## 订货 / 库存 / 滞销品搬到营运系统（2026-10-14）
+
+老板：「我想要把订货，滞销品，库存这三个移到员工多部门功能那边，然后BI这边就去掉这个项目」。
+营运系统那边的改动（四页、RPC、migration、测试）做成 patch 放在 `docs/ops_handoff/`，由「员工多部门功能开发」session 合并部署；
+Supabase 端的 migration 本 session 已套用（`ops_bi_pages_1_views` ～ `6_grants`；`public.bi_purchase_suggest` 改读 `bi.v_purchase_suggest`，
+栏位不变，老板看到的仍是 2,590 行；`bi.buyer_item_action` 多了 `undone_at / undone_by` 两栏）。
+
+BI 端：
+- `App.tsx`：TABS 去掉 `buy` / `stock` / `slow`，三个角色名单同步拿掉；订货员登入预设从订货改成应付账款；`canWrite` 不再需要。
+- 删掉 `pages/Purchasing.tsx`、`pages/StockPage.tsx`、`pages/SlowMovers.tsx`、`i18n/purchasing.ts`、`i18n/cscode.ts`；`i18n/index.ts` 不再合并这两本字典
+  （`pages1.ts` / `pages2.ts` 里 StockPage / SlowMovers 的键留着没用，无害）。
+- `pages/Alerts.tsx`：「库存告急」区块底下的「查看库存 →」按钮拿掉（BI 没有库存页了），`i18n/finance.ts` 对应键删除。
+- `mkpayload.py` 新增批 `opsmove`：内嵌 App.tsx / i18n/index.ts / pages/Alerts.tsx / i18n/finance.ts，
+  **`DROP:` 前缀 = 从部署里拿掉的档案**（不内嵌、不参照；`--commit` 时从 manifest 删除）。`--sync` 会把 production 现有档案全部抄回 manifest，
+  所以拿掉档案一定要走 `DROP:`，不能只删 manifest。
+- 本地 `tsc --noEmit --strict --noUnusedLocals` 通过（scratchpad 的 tscheck 专案，tsconfig 的 files 清单同步拿掉五个档）。
+- **Preview 部署 `dpl_6qCnjTtFPCtXG8iFQxWyTaytcgqE`**（2026-10-14 晚，无 target，READY）：`list_deployment_files` 核对四个内嵌档 uid = 本地 sha1
+  （App 7731bcfd…、i18n/index d95dbdbf…、Alerts 47f5753d…、finance 5bf623ee…），五个 DROP 的档案已不在档案树。
+- **Production 还没部署**：要等营运系统四页上线、老板确认后，再用同一份 `python3 mkpayload.py opsmove` 的输出（或把四个内嵌档改成 preview 的 SHA 参照）
+  建 `target: production` 部署，然后 `python3 mkpayload.py --commit opsmove`。

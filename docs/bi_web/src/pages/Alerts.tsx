@@ -171,7 +171,6 @@ export default function Alerts({ goTo }: { goTo: (tab: string) => void }) {
             </tbody>
           </table>
         </div>
-        <button className="btn" style={{ marginTop: 10 }} onClick={() => goTo('stock')}>{t('查看库存 →')}</button>
       </Section>
     </>
   );
