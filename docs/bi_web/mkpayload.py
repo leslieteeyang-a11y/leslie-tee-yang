@@ -21,6 +21,8 @@ BATCH = {
   "opsmove": ["src/App.tsx", "src/i18n/index.ts", "src/pages/Alerts.tsx", "src/i18n/finance.ts",
               "DROP:src/pages/Purchasing.tsx", "DROP:src/pages/StockPage.tsx", "DROP:src/pages/SlowMovers.tsx",
               "DROP:src/i18n/purchasing.ts", "DROP:src/i18n/cscode.ts"],
+  # 2026-10-15 BI 只开放给老板与店长：App.tsx 的 Blocked 提示页 + core.ts 三个英文键
+  "biguard": ["src/App.tsx", "src/i18n/core.ts"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
 M = Path("deploy_manifest.json")

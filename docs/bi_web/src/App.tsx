@@ -44,14 +44,12 @@ const TABS = [
   { key: 'log', label: '同步状态' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
-type Role = 'owner' | 'buyer' | 'viewer' | 'manager' | 'sales';
-// 订货员只看采购相关页面;店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
-const BUYER_TABS: TabKey[] = ['pay', 'stockx', 'oo', 'log'];
+// 2026-10-15 老板决定：BI 只开放给老板与店长，其他员工都不能进（订货员 / 销售改用营运系统）。
+// 资料层 bi_me() 只回 owner / manager，其他人一律当 viewer → 登入后只看到 Blocked 提示页。
+type Role = 'owner' | 'manager' | 'viewer';
+// 店长除损益外全开放,但毛利/成本列一律隐藏(数据层裁列)
 const MANAGER_TABS: TabKey[] = ['mgr', 'target', 'branch', 'dash', 'alerts', 'ar', 'pay', 'sales', 'rank', 'stockx', 'oo', 'log'];
-// 销售员:只看销售相关页面,毛利/成本一律隐藏(数据层同店长裁列)
-const SALES_TABS: TabKey[] = ['dash', 'sales', 'rank', 'oo'];
-// 月报/电商月报/健康体检/毛利分析/调价跟踪仅老板可见(含利润与现金)
-const OWNER_ONLY: TabKey[] = ['report', 'ecom', 'health', 'margin', 'price'];
+// 月报/电商月报/健康体检/毛利分析/调价跟踪仅老板可见(含利润与现金)：MANAGER_TABS 没有它们即可
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -89,6 +87,26 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
   );
 }
 
+function Blocked({ email }: { email: string }) {
+  const t = useT();
+  return (
+    <div className="login-wrap">
+      <div className="card login-card">
+        <h1>{t('Homeworks BI 看板')}</h1>
+        <div className="notice" style={{ marginTop: 12 }}>
+          <strong>{t('BI 只开放给老板与店长。')}</strong>{' '}
+          {t('{email} 不在 BI 名单里，或这个角色已不再开放。', { email })}
+        </div>
+        <p className="muted">
+          {t('订货、仓库、打卡、顾客资料等日常工作请用营运系统：')}{' '}
+          <a href="https://homeworks-ops.vercel.app">homeworks-ops.vercel.app</a>
+        </p>
+        <button className="btn" onClick={() => supabase.auth.signOut()}>{t('退出')}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const t = useT();
   const [session, setSession] = useState<Session | null>(null);
@@ -114,7 +132,6 @@ export default function App() {
       const r = (me?.role ?? 'viewer') as Role;
       setRole(r);
       resetCompanyIfNotAllowed(r === 'owner', me?.company ?? null);
-      if (r === 'buyer') setTab('pay');   // 订货页已搬到营运系统，订货员进来先看应付账款
       if (r === 'manager') setTab('mgr');
     });
   }, [session?.user.id]);
@@ -122,16 +139,14 @@ export default function App() {
   if (!ready) return <div className="loading">{t('载入中…')}</div>;
   if (!session) return <Login />;
   if (role === null) return <div className="loading">{t('载入中…')}</div>;
+  if (role !== 'owner' && role !== 'manager') return <Blocked email={session.user.email ?? ''} />;
 
   const isHQ = COMPANY === 'HOMEWORKSSB';
-  const tabs = role === 'buyer' ? TABS.filter((t) => BUYER_TABS.includes(t.key))
-    : role === 'manager' ? TABS.filter((t) => MANAGER_TABS.includes(t.key))
-    : role === 'sales' ? TABS.filter((t) => SALES_TABS.includes(t.key))
-    : role === 'owner' ? TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom' && t.key !== 'health')) // 月报/电商月报/健康体检只在总部视角(体检页本身已并列总行/分行/集团)
-    : TABS.filter((t) => !OWNER_ONLY.includes(t.key));
+  const tabs = role === 'manager' ? TABS.filter((t) => MANAGER_TABS.includes(t.key))
+    : TABS.filter((t) => isHQ || (t.key !== 'report' && t.key !== 'ecom' && t.key !== 'health')); // 老板:月报/电商月报/健康体检只在总部视角(体检页本身已并列总行/分行/集团)
   // 实际销售(分行账套 SO + 非SO发票 − 贷项)只有分行账套有资料(JB Southern、KL…):老板切到分行、或分行店长登入时才显示
   const tabsForCompany = tabs.filter((t) => t.key !== 'branch' || !isHQ);
-  const showProfit = role !== 'manager' && role !== 'sales';
+  const showProfit = role !== 'manager';
 
   return (
     <div className="shell">

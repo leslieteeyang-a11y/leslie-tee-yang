@@ -146,6 +146,10 @@ Migration 档 `portal/supabase/migrations/20261016_ops_bi_pages.sql`，**已分�
 `docs/ops_handoff/README.md`。BI 端：App.tsx 去掉 `buy` / `stock` / `slow` 与三个页面档、`i18n/purchasing.ts`、`i18n/cscode.ts`，Alerts 的「查看库存 →」按钮拿掉，
 订货员登入预设改应付账款；`mkpayload.py` 新增批 `opsmove`（`DROP:` 前缀 = 从部署里拿掉的档案）。营运系统四页 2026-10-15 上线（那边另套了 `ops_bi_pages_7_fix`，只改 `ops_rpl_rows` / `ops_wh_stock`，没动 BI 视图），
 BI production 随即换成 `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C`（全 SHA 参照、manifest 已 commit，剩 62 个档案）：BI 不再有订货 / 库存 / 滞销品。
+**BI 只开放给老板与店长（2026-10-15，老板「我的 BI 之后换成只有店长能进去」「其他员工都不能进去」）**：migration `bi_owner_manager_only` 把
+`bi_is_allowed / bi_role / bi_company / bi_me` 改成只认 `allowed_users.role in ('owner','manager')`、`bi_can_write` 只剩 owner；前端 App.tsx 非 owner / manager
+一律看到 `Blocked` 提示页（导去 homeworks-ops.vercel.app）。订货员 / 销售三行名单没删成（MCP 挡 delete），只加了 note；营运系统顾客页走 `bi.crm_require`
+的 ops 权限后备，不受影响（登入账号与营运系统共用同一套 Supabase Auth，只能在 BI 这层挡）。部署批 `biguard`，production `dpl_9yWDzWupZUkuTBGBkHr3LjP1bgcx`（2026-10-15），细节见 `docs/bi_web/README.md`。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
 无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。

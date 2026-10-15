@@ -177,3 +177,21 @@ BI 端：
   BI 上订货 / 库存 / 滞销品三个分页从此消失；订货员登入先看应付账款。
 - 营运系统那边合并后另做了 `ops_bi_pages_7_fix`（只 `create or replace` 两个函数：`ops_rpl_rows` 的留言 / 商品备注 / 记录人只给看得到厂家的人；
   `ops_wh_stock` 每行多回 `item_total` 商品全仓合计），**没动 `bi.v_purchase_suggest` / `public.bi_purchase_suggest`**，BI 的其他页不受影响。
+
+## BI 只开放给老板与店长（2026-10-15）
+
+老板：「我的 BI 之后换成只有店长能进去」「其他员工都不能进去」。做法分两层：
+
+- **资料层（migration `bi_owner_manager_only`）**：`bi_is_allowed()` / `bi_role()` / `bi_company()` / `bi_me()` 一律只认
+  `bi.allowed_users.role in ('owner','manager')`，`bi_can_write()` 只剩 owner。订货员 / 销售 / 不在名单的人在资料层就跟没登入一样
+  （所有 `public.bi_*` 视图靠 `bi_is_allowed()`）。验证：总部订货员 `bi_me` 0 行、视图 0 行；JB 店长照旧（manager / HOMEWORKSSOUTHERN，实际销售 187 行）。
+- **名单**：三位（总部订货员、JB 订货员、JB 销售）的行**没删成**（MCP 的 `delete` 要人确认、无人确认就 60 秒 timeout），改在 `note` 加注记；
+  他们反正被函数挡下。要删的话在 Supabase SQL editor 跑 `delete from bi.allowed_users where role in ('buyer','sales')`，
+  营运系统「员工 → 在 BI 名单」的旗标才会正确。
+- **营运系统不受影响**：它的顾客资料页 `bi.crm_require` 先看 BI 名单、不在就看营运系统自己的模块权限；验证 JB 销售 `bi_is_allowed()=false`
+  但 `crm_ops_role()='sales'`，顾客页照常。登入账号是同一套 Supabase Auth，所以不能从 Auth 停用他们，只能在 BI 这层挡。
+- **前端**：`App.tsx` 的 `Role` 只剩 owner / manager / viewer（viewer = 不在名单或角色已不开放），不是 owner / manager 的人登入后看到
+  `Blocked` 提示页（「BI 只开放给老板与店长」+ 营运系统连结 + 退出），`BUYER_TABS` / `SALES_TABS` / `OWNER_ONLY` 拿掉；
+  `i18n/core.ts` 加三个英文键。`mkpayload.py` 批 `biguard`（App.tsx + core.ts 内嵌）。
+- Preview `dpl_GHL5T9WbEm6s9XLXxGpFKTTQwkWP`：App 88d82618…、core 50549662… 与本地 sha1 一致。
+- **Production `dpl_9yWDzWupZUkuTBGBkHr3LjP1bgcx`**（2026-10-15，READY，homeworks-bi.vercel.app）：全 SHA 参照，档案树核对无误，manifest 已 `--commit biguard`。

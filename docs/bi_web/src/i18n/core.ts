@@ -68,5 +68,9 @@ const d: Record<string, string> = {
   '手续费、运费、Voucher、安装这类不是货,却设了库存控制,每开一单就扣一件,把库存报表弄花。处理:AutoCount → Stock → Stock Item → 打开该商品 → 取消勾选 Stock Control(先把库存数调成 0)。': 'Fees, shipping, vouchers and installation are not goods, but they have Stock Control on, so every document deducts one unit and pollutes the stock report. Fix: AutoCount → Stock → Stock Item → open the item → untick Stock Control (set its stock to 0 first).',
   '合计': 'Total',
   '没有': 'None',
+  // 2026-10-15 BI 只开放给老板与店长:其他人登入后的提示页
+  'BI 只开放给老板与店长。': 'BI is only open to the owner and store managers.',
+  '{email} 不在 BI 名单里，或这个角色已不再开放。': '{email} is not on the BI list, or this role is no longer allowed.',
+  '订货、仓库、打卡、顾客资料等日常工作请用营运系统：': 'For purchasing, warehouse, attendance and customer work, use the Ops portal: ',
 };
 export default d;
