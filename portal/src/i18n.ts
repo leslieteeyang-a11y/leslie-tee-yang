@@ -23,6 +23,7 @@ import { DICT_PODO } from "./i18n-dict-podo";
 import { DICT_RECV } from "./i18n-dict-recv";
 import { DICT_SOP, PATTERNS_SOP } from "./i18n-dict-sop";
 import { DICT_RPL, PATTERNS_RPL } from "./i18n-dict-rpl";
+import { DICT_WHMAP, PATTERNS_WHMAP } from "./i18n-dict-whmap";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -40,8 +41,8 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL };
-const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH, ...PATTERNS_SOP, ...PATTERNS_RPL];
+const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL, ...DICT_WHMAP };
+const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH, ...PATTERNS_SOP, ...PATTERNS_RPL, ...PATTERNS_WHMAP];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */

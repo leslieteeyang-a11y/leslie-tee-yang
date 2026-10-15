@@ -1,0 +1,88 @@
+/* 仓库地图（wh/Map.tsx、wh/MapCanvas.tsx）。区的 8 种颜色在这里（深色底上看得清楚的亮色）；其他一律用 style.css 的变数。
+   --z = 区色（框线、徽章底）、--zb = 区的底（很淡）、--zf = 有货方块的底、--zt = 区里的字 */
+.wm-z0 { --z: #60a5fa; --zb: rgba(96, 165, 250, .07); --zf: rgba(96, 165, 250, .22); --zt: #bfdbfe; }
+.wm-z1 { --z: #2dd4bf; --zb: rgba(45, 212, 191, .07); --zf: rgba(45, 212, 191, .2); --zt: #99f6e4; }
+.wm-z2 { --z: #a78bfa; --zb: rgba(167, 139, 250, .08); --zf: rgba(167, 139, 250, .24); --zt: #ddd6fe; }
+.wm-z3 { --z: #f472b6; --zb: rgba(244, 114, 182, .07); --zf: rgba(244, 114, 182, .2); --zt: #fbcfe8; }
+.wm-z4 { --z: #4ade80; --zb: rgba(74, 222, 128, .06); --zf: rgba(74, 222, 128, .18); --zt: #bbf7d0; }
+.wm-z5 { --z: #fb923c; --zb: rgba(251, 146, 60, .07); --zf: rgba(251, 146, 60, .2); --zt: #fed7aa; }
+.wm-z6 { --z: #22d3ee; --zb: rgba(34, 211, 238, .06); --zf: rgba(34, 211, 238, .18); --zt: #a5f3fc; }
+.wm-z7 { --z: #a3e635; --zb: rgba(163, 230, 53, .06); --zf: rgba(163, 230, 53, .18); --zt: #d9f99d; }
+
+.wm-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.wm-search { display: flex; gap: 8px; flex: 1 1 380px; min-width: 0; }
+.wm-search input { flex: 1; min-width: 0; }
+.wm-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wm-tools button.small { min-width: 38px; }
+label.wm-edit { flex: 0 0 auto; color: var(--text); font-size: .9rem; margin-left: 6px; }
+.wm-saved { color: var(--green); }
+.wm-err { color: var(--red); }
+.wm-recent { display: flex; gap: 6px; align-items: center; overflow-x: auto; margin-bottom: 8px; scrollbar-width: none; }
+.wm-recent > * { flex: 0 0 auto; }
+.wm-msg { background: var(--amber-soft); color: var(--amber); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; }
+.wm-found { background: var(--amber-soft); color: var(--text); border-left: 3px solid var(--amber); padding: 8px 12px; border-radius: 8px;
+            margin-bottom: 8px; font-weight: 600; overflow-wrap: anywhere; }
+.wm-choices { background: var(--card); box-shadow: var(--card-shadow); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+              display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.wm-choices button { flex: 0 0 auto; }
+.wm-choices p { margin: 0 0 2px; }
+.wm-choices button { text-align: left; white-space: normal; }
+.wm-choices button small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+.wm-body { display: flex; border-radius: 12px; overflow: hidden; background: var(--input); box-shadow: var(--card-shadow); }
+.wm-body > .empty { flex: 1; border-radius: 0; }
+.wm-canvas { position: relative; flex: 1; min-width: 0; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.wm-canvas:active { cursor: grabbing; }
+.wm-canvas.editing { cursor: default; }
+.wm-canvas svg { display: block; }
+.wm-hint, .wm-zoom { position: absolute; bottom: 10px; font-size: .75rem; color: var(--muted); background: var(--card); border: 1px solid var(--line);
+                     pointer-events: none; white-space: nowrap; }
+.wm-hint { left: 10px; max-width: calc(100% - 84px); overflow: hidden; text-overflow: ellipsis; border-radius: 99px; padding: 3px 12px; }
+.wm-zoom { right: 10px; border-radius: 6px; padding: 3px 8px; }
+
+.wm-zone rect { fill: var(--zb); stroke: var(--z); stroke-width: 1.5; stroke-dasharray: 6 3; }
+.wm-zone text { fill: var(--zt); font-weight: 600; }
+.wm-block { cursor: pointer; outline: none; }
+.wm-canvas.editing .wm-block { cursor: move; }
+.wm-block .body { fill: var(--soft); stroke: var(--line-strong); stroke-width: 1.5; }
+.wm-block .name { fill: var(--muted); font-weight: 800; }
+.wm-block .lv { fill: var(--muted); }
+.wm-block.has .body { fill: var(--zf); stroke: var(--z); }
+.wm-block.has .name, .wm-block.has .lv { fill: var(--zt); }
+.wm-block .badge rect { fill: var(--z); }
+.wm-block .badge text { fill: var(--on-fill); font-weight: 700; }
+.wm-block.sel .body { stroke: var(--primary); stroke-width: 3; }
+.wm-block.hit .body { stroke: var(--amber); stroke-width: 3.5; }
+.wm-block.blink .body { fill: var(--amber); }
+.wm-block.blink .name, .wm-block.blink .lv { fill: var(--on-fill); }
+.wm-block:focus-visible .body { stroke: var(--primary); stroke-dasharray: 5 3; }
+.wm-handle { cursor: nwse-resize; }
+.wm-handle rect { fill: var(--primary); }
+.wm-handle path { stroke: var(--on-fill); stroke-width: 1.6; fill: none; }
+
+.wm-panel { flex: 0 0 288px; width: 288px; border-left: 1px solid var(--line); overflow-y: auto; background: var(--card); }
+.wm-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 12px 8px 10px 14px;
+                 border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); z-index: 1; }
+.wm-panel-head b { display: block; font-size: 1.1rem; }
+.wm-panel-head small { display: block; margin-top: 2px; }
+.wm-pad { padding: 10px 14px; margin: 0; }
+.wm-level-head { display: flex; gap: 8px; align-items: baseline; padding: 6px 14px; background: var(--tint); font-size: .86rem; font-weight: 600; }
+.wm-level-head small { font-weight: 400; }
+.wm-level.hit .wm-level-head { background: var(--amber-soft); color: var(--amber); }
+.wm-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.wm-item > div { min-width: 0; }
+.wm-item b { font-size: .9rem; }
+.wm-item small { display: block; font-size: .8rem; overflow-wrap: anywhere; }
+.wm-item.hit b { color: var(--amber); }
+.wm-qty { font-weight: 700; white-space: nowrap; }
+.wm-qty small { display: inline; margin-left: 4px; font-weight: 400; }
+.wm-drawer { position: fixed; left: 0; right: 0; bottom: 0; max-height: 320px; overflow-y: auto; background: var(--card); z-index: 25;
+             border-radius: 16px 16px 0 0; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px var(--shadow);
+             padding-bottom: env(safe-area-inset-bottom); }
+.wm-drawer .wm-panel-head { border-radius: 16px 16px 0 0; }
+.wm-drawer-space { height: 320px; }   /* 抽屉打开时页面卷得动，地图才能卷到抽屉上面 */
+
+@media (max-width: 767px) {
+  .wm-search { flex-basis: 100%; }
+  .wm-search button { padding: 8px 12px; }
+}
