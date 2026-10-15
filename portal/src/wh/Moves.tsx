@@ -7,12 +7,16 @@ import { shrinkImage, uploadPhoto } from "../att-api";
 import { ScanBox } from "./Scanner";
 import { Move, MOVE_KIND_LABEL, MOVE_STATUS_LABEL, MoveKind, moveText, qtyLabel, whenLabel, wh } from "../wh-api";
 import { AskModal } from "../podo/common";
+import { MoveBatchForm } from "./MoveBatch";
+import { exportMovesXlsx, limitNote, MoveFilterBar } from "./MoveFilters";
+import { EMPTY_FILTER, filterParams, MoveFilter } from "../wh-extra-api";
 
 
 const DEFAULT_TO: Partial<Record<MoveKind, string>> = { defect: "DEFECTS", display: "DISPLAY" };
 
-export function MoveForm({ me, company, locs, itemCode, onClose, onSaved }: {
+export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMulti }: {
   me: Me; company: string; locs: string[]; itemCode?: string; onClose: () => void; onSaved: (m: Move) => void;
+  /** 有给 = 显示「一次登记多个商品」（换成多行表单） */ onMulti?: () => void;
 }) {
   const [code, setCode] = useState(itemCode || "");
   const [desc, setDesc] = useState("");
@@ -60,7 +64,9 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved }: {
       <form className="form" onSubmit={submit}>
         {itemCode ? <p><b>{desc || itemCode}</b></p> : (
           <>
-            <ScanBox onCode={setCode} placeholder="扫商品条码或打代号" />
+            {onMulti && <div><button type="button" className="ghost small" onClick={onMulti}>一次登记多个商品 →</button></div>}
+            {/* 扫码框自己有 form：按 Enter 不要冒泡成整张登记表单送出 */}
+            <div onSubmit={(e) => e.stopPropagation()}><ScanBox onCode={setCode} placeholder="扫商品条码或打代号" /></div>
             {code && <p className="small">{desc}</p>}
           </>
         )}
@@ -116,6 +122,10 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
   const grn = canGrn(me);
   const cancelRecv = canCancelReceive(me);
   const [askCancel, setAskCancel] = useState<Move | null>(null);
+  const [filter, setFilter] = useState<MoveFilter>(EMPTY_FILTER);
+  const [multi, setMulti] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [exporting, setExporting] = useState(false);
   // 进货一批（一张厂家到货）一组，收合：一柜货上百笔不会把搬动挤到下面
   const recvGroups = (() => {
     const m = new Map<string, { key: string; do_id: number | null; do_no: string | null; supplier_name: string | null; rows: Move[]; qty: number; pending: number }>();
@@ -132,9 +142,10 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
 
   const load = useCallback(() => {
     setRows(null); setError(""); setPicked(new Set());
-    wh.moves({ company, status, kind: "move" }).then(setRows).catch((e: Error) => setError(e.message));
-    wh.moves({ company, status, kind: "receive" }).then(setRecv).catch(() => setRecv([]));
-  }, [company, status]);
+    const f = filterParams(filter);
+    wh.moves({ company, status, kind: "move", ...f }).then(setRows).catch((e: Error) => setError(e.message));
+    wh.moves({ company, status, kind: "receive", ...f }).then(setRecv).catch(() => setRecv([]));
+  }, [company, status, filter]);
   useEffect(load, [load]);
 
   async function mark(action: "done" | "cancelled", ids: number[]) {
@@ -142,6 +153,12 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
     try { await wh.markMoves(ids, action, doc); setDoc(""); load(); } catch (e) { setError((e as Error).message); }
     setBusy(false);
   }
+  async function doExport() {
+    setExporting(true); setError("");
+    try { await exportMovesXlsx([...(rows || []), ...recv], company, filter); } catch (e) { setError((e as Error).message); }
+    setExporting(false);
+  }
+  const moreNote = rows ? limitNote(filter, Math.max(rows.length, recv.length)) : "";
   const toggle = (id: number) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   return (
@@ -149,8 +166,13 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
       <div className="filters">
         <Tabs value={status} onChange={setStatus} options={[["pending", "待输入 AutoCount"], ["done", "已输入"], ["all", "全部"]]} />
         {canEdit && <button onClick={() => setAdding(true)}>＋ 登记搬动</button>}
+        {canEdit && <button className="ghost" onClick={() => setMulti(true)}>＋ 多个商品</button>}
       </div>
+      <MoveFilterBar company={company} value={filter} onChange={setFilter} onExport={doExport} exporting={exporting}
+                     canExport={!!rows && rows.length + recv.length > 0} />
+      {notice && <div className="ok">{notice}</div>}
       <ErrorBox error={error} />
+      {moreNote && <p className="small amber">{moreNote}</p>}
       {recv.length > 0 && (
         <section className="wh-recv">
           <h3>{`进货待入 AutoCount（${recv.length} 笔 · ${recvGroups.length} 批厂家货）`}</h3>
@@ -201,7 +223,7 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
         </section>
       )}
       {!rows ? (!error && <p className="muted">载入中…</p>) : rows.length === 0 ? (
-        <Empty>{status === "pending" ? "没有待输入的搬动。" : "没有纪录。"}</Empty>
+        <Empty>{Object.values(filter).some((v) => v.trim()) ? "没有符合筛选的搬动。" : status === "pending" ? "没有待输入的搬动。" : "没有纪录。"}</Empty>
       ) : (
         <div className="table-wrap">
           <table>
@@ -234,7 +256,11 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
           <button className="ghost danger" disabled={busy || !picked.size} onClick={() => mark("cancelled", [...picked])}>取消（登记错）</button>
         </div>
       )}
-      {adding && <MoveForm me={me} company={company} locs={locs} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />}
+      {adding && <MoveForm me={me} company={company} locs={locs} onClose={() => setAdding(false)}
+                           onSaved={() => { setAdding(false); setNotice(""); load(); }}
+                           onMulti={() => { setAdding(false); setMulti(true); }} />}
+      {multi && <MoveBatchForm me={me} company={company} locs={locs} onClose={() => setMulti(false)}
+                               onSaved={(n) => { setMulti(false); setNotice(`已登记 ${n} 笔搬动，等负责人输入 AutoCount。`); load(); }} />}
       {askCancel && (
         <AskModal title="取消进货" message="取消后这笔不算进库存，也不会出现在待开进货单（点货纪录不变）。只有点货记错才取消。"
                   label="原因（必填，例：其实是样品、点货数错）" required okText="取消进货" danger

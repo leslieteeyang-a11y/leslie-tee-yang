@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { supabase } from "../supabase";
 import LangSwitch from "../LangSwitch";
+import { noteLogin } from "../wh-extra-api";
 import "../extra.css";
 
 export default function Login() {
@@ -16,6 +17,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setBusy(false);
     if (error) setError(error.message.includes("Invalid") ? "email 或密码不对。" : `登入失败：${error.message}`);
+    else noteLogin();   // 登入纪录：App 载入到「我是谁」后记一笔 login
   }
 
   return (

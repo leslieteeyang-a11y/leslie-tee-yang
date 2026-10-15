@@ -4,18 +4,20 @@ import { att } from "../att-api";
 import { ErrorBox, Modal, Tabs } from "../ui";
 import { BulkStaff } from "./BulkStaff";
 import JoinAdmin from "./JoinAdmin";
+import LoginLog from "./LoginLog";
 
 export default function Admin({ me, onChanged, sub }: { me: Me; onChanged: () => void; sub?: string }) {
-  const [tab, setTab] = useState<"staff" | "join" | "matrix">(sub === "join" ? "join" : "staff");
+  const [tab, setTab] = useState<"staff" | "join" | "matrix" | "logins">(sub === "join" ? "join" : sub === "logins" ? "logins" : "staff");
   return (
     <>
       <h1>员工与权限</h1>
       <div className="filters">
-        <Tabs value={tab} onChange={setTab} options={[["staff", "员工名单"], ["join", "加入申请"], ["matrix", "部门权限"]]} />
+        <Tabs value={tab} onChange={setTab} options={[["staff", "员工名单"], ["join", "加入申请"], ["matrix", "部门权限"], ["logins", "登入纪录"]]} />
       </div>
       {tab === "staff" && <StaffTab me={me} onChanged={onChanged} />}
       {tab === "join" && <JoinAdmin me={me} onChanged={onChanged} />}
       {tab === "matrix" && <MatrixTab me={me} onChanged={onChanged} />}
+      {tab === "logins" && <LoginLog />}
     </>
   );
 }
