@@ -5,6 +5,7 @@ import { ErrorBox } from "../ui";
 import { ScanBox } from "./Scanner";
 import { addLabels } from "./Labels";
 import { MoveForm } from "./Moves";
+import { ItemBins } from "./ItemBins";
 import { COUNT_STATUS_LABEL, countClass, FoundItem, ItemDetail, MOVE_STATUS_LABEL, moveText, qtyLabel, whenLabel, wh } from "../wh-api";
 
 export function Lookup({ me, company, locs, canEdit }: { me: Me; company: string; locs: string[]; canEdit: boolean }) {
@@ -129,6 +130,7 @@ function ItemCard({ d, canEdit, onMove, onLabel }: { d: ItemDetail; canEdit: boo
         </table>
       </div>
       {d.stock.some((s) => Number(s.qty) < 0) && <p className="small late">库存是负数：货从系统认为没有货的仓位出去了，请盘点这个仓位，并检查调仓有没有输入。</p>}
+      <ItemBins company={d.company} item_code={d.item_code} canEdit={canEdit} />
       {d.open_orders.length > 0 && (
         <>
           <h3>{`未出货订单（${d.open_orders.length}）`}</h3>

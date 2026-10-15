@@ -1,0 +1,142 @@
+/* 仓库 · 货架（2026-10-17）。颜色一律用 style.css :root 的变数 */
+
+/* 子分页：比主分页小一号 */
+.bin-subtabs .tabs button { padding: 5px 12px; font-size: .9rem; }
+
+/* 分段按键（上架 / 拿下 / 移货架 / 改数；对不上清单的筛选） */
+.bin-modes { display: inline-flex; background: var(--track); box-shadow: inset 0 0 0 1px var(--line); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.bin-modes button { background: transparent; color: var(--muted); padding: 7px 14px; font-weight: 600; }
+.bin-modes button.on { background: var(--primary); color: var(--on-fill); }
+.bins .filters label.inline, .bins .filters label.check { flex: 0 0 auto; }
+.bin-ops .filters { align-items: center; }
+
+/* 上架画面 */
+.bin-card { padding: 16px; }
+.bin-card h2 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
+.bin-card h3 { margin: 14px 0 8px; font-size: .95rem; color: var(--muted); font-weight: 600; }
+.bin-card > p { margin: 4px 0; }
+.bin-card-head { display: flex; align-items: center; gap: 10px; }
+.bin-card-head h2 { flex: 1; min-width: 0; }
+.bin-card-head > span { white-space: nowrap; }
+.bin-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.bin-stats > div { background: var(--tint); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; }
+.bin-stats span { color: var(--muted); font-size: .8rem; }
+.bin-stats b { font-size: 1.5rem; line-height: 1.2; }
+.bin-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button.bin-btn { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 96px; padding: 8px 12px;
+  background: var(--input); color: var(--text); border: 1px solid var(--line-strong); border-radius: 10px; text-align: left; }
+button.bin-btn b { font-size: 1.05rem; }
+button.bin-btn span { color: var(--muted); font-size: .85rem; }
+button.bin-btn.zero { border-style: dashed; }
+button.bin-btn.on { background: var(--primary); color: var(--on-fill); border-color: var(--primary); }
+button.bin-btn.on span { color: var(--on-fill); }
+button.bin-btn:disabled { opacity: .45; cursor: not-allowed; }
+label.bin-other { margin-top: 10px; max-width: 260px; }
+.bin-target { margin: 12px 0 0; font-size: 1.05rem; }
+.bin-slots { display: flex; align-items: stretch; gap: 8px; margin: 10px 0 4px; }
+button.bin-slot { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px;
+  background: var(--input); color: var(--text); border: 2px solid var(--line); border-radius: 10px; }
+button.bin-slot span { color: var(--muted); font-size: .8rem; }
+button.bin-slot b { font-size: 1.15rem; overflow-wrap: anywhere; }
+button.bin-slot.on { border-color: var(--primary); }
+.bin-arrow { align-self: center; color: var(--muted); font-size: 1.3rem; }
+.bin-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 12px 0 8px; }
+.bin-form label { flex: 0 1 180px; }
+.bin-form input.big-num { padding: 6px 10px; }
+.bin-card > label { margin-top: 4px; }
+button.bin-submit { padding: 12px 22px; font-size: 1.05rem; font-weight: 700; }
+.list.bin-recent { padding: 4px 14px; }
+.bin-recent li { align-items: center; }
+.bin-recent li.undone > span:first-child, .bin-log li.undone > span:first-child { text-decoration: line-through; color: var(--muted); }
+.bins button.small { padding: 4px 10px; font-size: .85rem; }
+
+/* 货架清单 */
+.bin-toolbar { align-items: center; }
+.bin-toolbar input.bin-search { flex: 1 1 160px; width: auto; min-width: 0; max-width: 260px; }
+.bin-toolbar-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.bin-printbar { flex-wrap: wrap; }
+.bin-printbar select { width: auto; max-width: 100%; }
+.bin-label-preview { flex-basis: 100%; margin: 6px 0 0; flex-wrap: wrap; }
+.bin-group h2 { margin: 0; }
+.bin-group-head { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 6px; }
+a.bin-flag { font-size: .85rem; font-weight: 600; text-decoration: none; }
+.bin-zone h3 { margin: 12px 0 6px; font-size: .95rem; color: var(--muted); }
+.bin-shelf { display: flex; gap: 10px; align-items: stretch; padding: 6px 0; border-top: 1px solid var(--line); }
+.bin-shelf-name { width: 56px; flex-shrink: 0; font-weight: 700; padding-top: 8px; overflow-wrap: anywhere; }
+.bin-cells { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
+button.bin-cell { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 132px; padding: 8px 10px;
+  background: var(--primary-soft); color: var(--text); border: 1px solid var(--line); border-radius: 10px; text-align: left; white-space: normal; }
+button.bin-cell b { font-size: 1rem; overflow-wrap: anywhere; }
+button.bin-cell span { font-size: .82rem; color: var(--text); }
+button.bin-cell small { font-size: .74rem; color: var(--muted); }
+button.bin-cell.empty { background: var(--input); }
+button.bin-cell.empty span { color: var(--muted); }
+button.bin-cell.off { opacity: .55; border-style: dashed; }
+button.bin-cell.on { border: 2px solid var(--primary); }
+button.bin-cell input[type="checkbox"] { position: absolute; top: 8px; right: 8px; width: auto; pointer-events: none; }
+button.bin-cell:hover { border-color: var(--line-strong); }
+.bin-plus { color: var(--green); }
+.list.bin-log li { font-size: .92rem; }
+.bin-edit { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bin-preview { margin: 0; padding: 8px 10px; background: var(--tint); border-radius: 8px; font-weight: 600; overflow-wrap: anywhere; }
+
+/* 货架标签（白纸，印出来的样子） */
+.label.bin-label { justify-content: space-between; padding: 2mm 3mm; }
+.bin-label .bl-top { display: flex; justify-content: space-between; gap: 2mm; font-size: 7pt; line-height: 1.1; }
+.bin-label .bl-code { font-weight: 800; text-align: center; line-height: 1.05; overflow-wrap: anywhere; }
+.bin-label .bl-bar { height: 38%; }
+.bin-label .bl-bar svg { width: 100%; height: 100%; display: block; }
+
+/* 对不上 / 未上架 */
+.bin-q { display: flex; gap: 8px; flex: 1 1 220px; max-width: 420px; }
+.bin-q input { flex: 1; min-width: 0; }
+.kpis.bin-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
+.bin-kpis .kpi b { font-size: 1.6rem; }
+.bin-seg-row { align-items: center; }
+table.bin-recon td { vertical-align: middle; }
+.bins th.num { text-align: right; }
+table.bin-recon td .late { white-space: normal; }
+table.bin-recon td:first-child { min-width: 150px; }
+
+/* Excel 带入 */
+.bin-howto { margin: 6px 0 10px; padding-left: 18px; }
+.bin-howto li { margin: 2px 0; }
+label.bin-file { flex: 0 0 auto; display: inline-flex; flex-direction: row; align-items: center; cursor: pointer; padding: 8px 16px;
+  border-radius: 8px; background: var(--primary); color: var(--on-fill); font-weight: 600; }
+.bin-map { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.bin-map label.inline { justify-content: flex-start; }
+.bin-map-wh { display: inline-block; min-width: 80px; color: var(--text); font-weight: 600; }
+.bin-import label.check { margin: 10px 0; }
+table.bin-imp tr.bad td { background: var(--red-row); }
+table.bin-imp td b { white-space: nowrap; }
+table.bin-imp td:last-child { min-width: 180px; }
+.bin-import .table-wrap { max-height: 520px; overflow: auto; }
+
+/* 查货卡片里的货架 */
+.item-bins { margin-top: 12px; }
+.item-bins h3 { margin: 14px 0 6px; }
+.ib-loc { padding: 8px 0; border-top: 1px solid var(--line); }
+.ib-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+a.ib-go { margin-left: auto; font-weight: 600; white-space: nowrap; }
+.ib-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bin-chip { font-size: .85rem; padding: 2px 8px; border-radius: 99px; background: var(--primary-soft); color: var(--primary); white-space: nowrap; }
+.bin-chip.zero { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+
+@media (max-width: 640px) {
+  .bin-modes { display: flex; width: 100%; }
+  .bin-modes button { flex: 1; padding: 9px 6px; }
+  .bin-toolbar-btns { margin-left: 0; width: 100%; }
+  .bin-toolbar input.bin-search { max-width: none; }
+  .bin-q { max-width: none; }
+  .bin-stats b { font-size: 1.25rem; }
+  button.bin-cell { width: calc(50% - 4px); }
+  .bin-shelf { flex-direction: column; gap: 4px; }
+  .bin-shelf-name { width: auto; padding-top: 0; }
+  .kpis.bin-kpis { gap: 8px; }
+  .bin-recon-seg { display: none; }  /* 手机：上面三格数字就是筛选 */
+  .bin-kpis .kpi { padding: 10px; }
+  .bin-kpis .kpi b { font-size: 1.3rem; }
+  .bin-kpis .kpi small { display: none; }
+  button.bin-submit { width: 100%; }
+  .bin-form label { flex: 1 1 140px; }
+}
