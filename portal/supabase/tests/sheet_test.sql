@@ -180,7 +180,7 @@ do $$ declare r jsonb; s jsonb; begin
   assert (s->'assignees'->0->>'n')::int = 3 and s->'helpers'->0->>'name' = '盘点小华' and (s->'helpers'->0->>'n')::int = 1, 'people: ' || s::text;
   assert not (s->>'mine')::boolean, 'not mine';
   assert (select count(*) from jsonb_array_elements(public.ops_wh_sheets('{"mine":true}'))) = 2, 'counter2 has 2 sheets';
-  assert (select (x->>'left')::int from jsonb_array_elements(public.ops_wh_sheet_home()) x where (x->>'id')::bigint = pg_temp.sid('items')) = 0, 'home left 0';
+  assert not exists (select 1 from jsonb_array_elements(public.ops_wh_sheet_home()) x where (x->>'id')::bigint = pg_temp.sid('items')), 'fully counted sheet not on home';
 end $$;
 -- 盘点单里盘过的不会再出现在每日清单
 do $$ begin
