@@ -15,13 +15,14 @@ import { AgedTab } from "../wh/Aged";
 import { GrnTab } from "../wh/Grn";
 import { StockTab } from "../wh/Stock";
 import { SlowTab } from "../wh/Slow";
+import { BinsTab } from "../wh/Bins";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
+type Tab = "lookup" | "stock" | "bins" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
-export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string; arg?: string }) {
+export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
   const [meta, setMeta] = useState<WhMeta | null>(null);
   const [error, setError] = useState("");
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
@@ -33,6 +34,7 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
   const canApprove = meta.level === "approve";
   const tabs: [Tab, string][] = [["lookup", "查货"]];
   tabs.push(["stock", "库存总表"]);   // 从 BI 搬进来（2026-10-16）
+  tabs.push(["bins", "货架"]);       // 货架帐（2026-10-17）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
   // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
@@ -64,6 +66,7 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
       {tab === "aged" && <AgedTab company={co} />}
       {tab === "stock" && <StockTab key={co} company={co} />}
       {tab === "slow" && <SlowTab key={co} company={co} />}
+      {tab === "bins" && <BinsTab key={co} company={co} level={meta.level} arg={arg} locs={locs.map((l) => l.code)} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
     </>
   );
