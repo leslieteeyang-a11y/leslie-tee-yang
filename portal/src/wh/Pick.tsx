@@ -1,6 +1,7 @@
-// 仓库 · 拣货清单（照 DO 拣货 + 扫码核对，2026-10-15）。#/warehouse/pick = 清单；#/warehouse/pick/<DO 号> = 拣货画面（PickDo）。
+// 仓库 · 拣货清单（照 DO 拣货 + 扫码核对，2026-10-15）。#/warehouse/pick = 清单；#/warehouse/pick/<DO 号> = 拣货画面（PickDo）；
+// #/warehouse/pick/today = 清单，固定从「今天要送 · 待拣」开始（首页 / 总览的「今天要拣的 DO」用，不改记住的筛选）。
 // DO 每 15 分钟从 AutoCount 同步；今天的排单（送货 → 排单）里的 DO 排最前面。只看的人看进度，可编辑的人拣货。
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Empty, ErrorBox, Tabs } from "../ui";
 import { qtyLabel, whenLabel } from "../wh-api";
 import { openPick, pick, PICK_STATUS_LABEL, PickFilter, PickList, PickRow, PickWhen, runLabel } from "../wh-pick-api";
@@ -16,29 +17,37 @@ function keep(key: string, v: string) {
   try { localStorage.setItem(key, v); } catch { /* 无痕模式存不了就算了 */ }
 }
 
-/** doc = 网址第三段（DO 号）：有就开拣货画面 */
-export function PickTab({ company, canEdit, doc }: { company: string; canEdit: boolean; doc?: string }) {
-  if (doc) {
-    let no = doc;
-    try { no = decodeURIComponent(doc); } catch { /* 不是编码过的就照原样 */ }
+/** doc / arg = 网址第三段：「today」= 清单从今天要送 · 待拣开始；其他 = DO 号，开拣货画面 */
+export function PickTab({ company, canEdit, doc, arg }: { company: string; canEdit: boolean; doc?: string; arg?: string }) {
+  const a = arg ?? doc;
+  if (a && a !== "today") {
+    let no = a;
+    try { no = decodeURIComponent(a); } catch { /* 不是编码过的就照原样 */ }
     return <PickDo key={company + "|" + no} company={company} docNo={no} />;
   }
-  return <PickListView company={company} canEdit={canEdit} />;
+  // key：从清单再点「今天要拣」时重新从今天 · 待拣开始
+  return <PickListView key={a || "list"} company={company} canEdit={canEdit} today={a === "today"} />;
 }
 
-function PickListView({ company, canEdit }: { company: string; canEdit: boolean }) {
-  const [when, setWhen] = useState<PickWhen>(() => saved(WHEN_KEY, ["today", "week", "all"], "today"));
-  const [status, setStatus] = useState<PickFilter>(() => saved(STATUS_KEY, ["todo", "done", "all"], "todo"));
+function PickListView({ company, canEdit, today }: { company: string; canEdit: boolean; today: boolean }) {
+  // today：只是这次的起始筛选，不写进 localStorage（使用者自己按分页才记）
+  const [when, setWhen] = useState<PickWhen>(() => (today ? "today" : saved(WHEN_KEY, ["today", "week", "all"], "today")));
+  const [status, setStatus] = useState<PickFilter>(() => (today ? "todo" : saved(STATUS_KEY, ["todo", "done", "all"], "todo")));
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<PickList | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const seq = useRef(0);
 
+  // 流水号：连按分页时，先发后到的旧回应不盖掉新的清单
   const load = useCallback(() => {
+    const n = ++seq.current;
     setBusy(true); setError("");
     pick.list({ company, when, status, q: query })
-      .then(setData).catch((e: Error) => setError(e.message)).finally(() => setBusy(false));
+      .then((d) => { if (n === seq.current) setData(d); })
+      .catch((e: Error) => { if (n === seq.current) setError(e.message); })
+      .finally(() => { if (n === seq.current) setBusy(false); });
   }, [company, when, status, query]);
   useEffect(() => { load(); }, [load]);
 

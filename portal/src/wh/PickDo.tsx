@@ -1,13 +1,14 @@
 // 仓库 · 照一张 DO 拣货（手机优先）：扫货架条码 = 换「目前货架」；扫商品 = 记拣货（有目前货架就从那个货架扣）。
 // 扫对绿闪 + 高音；扫错 / 扫太多 / 货架不够红闪 + 震动（资料库什么都不存）。对不到商品的行可以扫商品指定、手动确认或略过。
 // 蓝牙扫描枪扫得很快：扫到的码排队一个一个送，不会漏掉；货架条码排在前面的，后面的商品就从那个货架扣。
+// 焦点不在输入框时（刚点了货架小按键、关了小视窗），扫描枪打的字由整页的 keydown 收下（见 useWedge）。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { todayKL } from "../api";
 import { getLang, tr } from "../i18n";
 import { ErrorBox } from "../ui";
 import { bins as binApi, isBinCode } from "../wh-bin-api";
 import { qtyLabel, whenLabel } from "../wh-api";
-import { beep, buzz, MATCH_LABEL, pick, PICK_STATUS_LABEL, PickBin, PickDoc, PickLine, PickScan, runLabel, ScanResult } from "../wh-pick-api";
+import { beep, buzz, MATCH_LABEL, pick, PICK_STATUS_LABEL, PickBin, PickDoc, PickLine, PickScan, pickUomDiff, runLabel, ScanResult } from "../wh-pick-api";
 import { ScanBox } from "./Scanner";
 import { BinShortModal, CancelModal, DoneModal, ManualModal, SkipModal } from "./PickModals";
 import "../wh-pick.css";
@@ -16,6 +17,39 @@ type Bin = { barcode: string; label: string };
 /** bin：这一笔指定的货架（货架不够时改选的）；noBin：这一笔不从货架扣 */
 type Job = { code: string; qty: number; line: number | null; noBin?: boolean; bin?: string };
 const ui = (s: string) => (getLang() === "en" ? tr(s) : s);
+/** 没从货架扣、可是这个商品有放在货架上：提醒（不挡） */
+const NO_BIN_HINT = "这个商品有放在货架上；没选货架就不会从货架扣，货架帐会对不上。";
+const noBinHint = (l: PickLine | undefined, bin: string | null | undefined) =>
+  !bin && l && l.bins.length > 0 && !pickUomDiff(l) ? NO_BIN_HINT : "";
+/** 不挡点按键：点了货架小按键等，焦点留在扫码框（蓝牙扫描枪才打得进去） */
+const keepFocus = (e: { preventDefault: () => void }) => e.preventDefault();
+
+/** 蓝牙扫描枪 = 键盘：焦点不在输入框、也没开小视窗时，收下快速打进来的字（两键相隔 > 100ms 重来），Enter 当成扫到 */
+function useWedge(on: () => boolean, onCode: (code: string) => void) {
+  const cb = useRef({ on, onCode });
+  cb.current = { on, onCode };
+  useEffect(() => {
+    let buf = "";
+    let last = 0;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) { buf = ""; return; }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || document.querySelector(".modal-back") || !cb.current.on()) { buf = ""; return; }
+      const now = Date.now();
+      if (now - last > 100) buf = "";
+      last = now;
+      if (e.key === "Enter") {
+        if (!buf) return;
+        e.preventDefault();   // 不要再「按」到焦点所在的按键
+        const code = buf.trim();
+        buf = "";
+        if (code) cb.current.onCode(code);
+      } else if (e.key.length === 1) buf += e.key;
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
+}
 
 export function PickDo({ company, docNo }: { company: string; docNo: string }) {
   const [d, setD] = useState<PickDoc | null>(null);
@@ -24,14 +58,14 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
   const [bin, setBinState] = useState<Bin | null>(null);
   const [qty, setQty] = useState("1");
   const [assign, setAssign] = useState<PickLine | null>(null);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string; hint?: string } | null>(null);
   const [flash, setFlash] = useState<{ ok: boolean; n: number } | null>(null);
   const [hit, setHit] = useState<number | null>(null);
   const [manual, setManual] = useState<PickLine | null>(null);
   const [skip, setSkip] = useState<PickLine | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [binShort, setBinShort] = useState<(Job & { message: string; bins: PickBin[] }) | null>(null);
+  const [binShort, setBinShort] = useState<(Job & { message: string; bins: PickBin[]; uom: boolean }) | null>(null);
   const flashN = useRef(0);
   const binRef = useRef<Bin | null>(null);
   const pickId = useRef<number | null>(null);
@@ -46,8 +80,8 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
   }, [company, docNo]);
   useEffect(() => { load(); }, [load]);
 
-  function signal(ok: boolean, text: string) {
-    setResult({ ok, text });
+  function signal(ok: boolean, text: string, hint = "") {
+    setResult({ ok, text, hint });
     setFlash({ ok, n: ++flashN.current });
     beep(ok); buzz(ok);
   }
@@ -69,6 +103,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
     setQty("1");
     drain();
   }
+  useWedge(() => !!(pickId.current && d?.can_edit), onCode);
   async function drain() {
     if (running.current) return;
     running.current = true; setBusy(true);
@@ -93,10 +128,13 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         if (j.line != null) setAssign(null);
         const where = r.scan?.bin ? `（${r.scan.bin}）` : "";
         signal(true, r.done_all ? `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where} — 全部拣好了，按「已拣好」完成。`
-                                : `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where}`);
+                                : `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where}`,
+               j.noBin ? "" : noBinHint(r.line, r.scan?.bin));
       } else {
         signal(false, r.message || "扫错了");
-        if (r.code === "bin_short") setBinShort({ ...j, message: r.message || "", bins: r.bins || [] });
+        // 货架不够 / 单位跟货架帐不同：让人改选货架，或「不从货架扣」直接记
+        if (r.code === "bin_short" || r.code === "uom")
+          setBinShort({ ...j, message: r.message || "", bins: r.code === "uom" ? [] : r.bins || [], uom: r.code === "uom" });
       }
     } catch (e) { signal(false, (e as Error).message); }
   }
@@ -170,24 +208,25 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         <section className="card pick-scan">
           <div className="pick-bin">
             <span className="lbl">目前货架</span>
-            {bin ? <><b>{bin.label}</b><button className="ghost small" onClick={() => setBin(null)}>不从货架扣</button></>
+            {bin ? <><b>{bin.label}</b><button className="ghost small" onMouseDown={keepFocus} onClick={() => setBin(null)}>不从货架扣</button></>
               : <span className="muted small">没有选（不从货架扣）：扫货架条码，或点下面的货架</span>}
           </div>
           {assign && (
             <div className="pick-assign">
               <span>{`指定第 ${assign.line_no} 行：扫这一行的商品`}</span>
-              <button className="ghost small" onClick={() => setAssign(null)}>取消指定</button>
+              <button className="ghost small" onMouseDown={keepFocus} onClick={() => setAssign(null)}>取消指定</button>
             </div>
           )}
           <ScanBox onCode={onCode} autoFocus placeholder="扫商品或货架条码" />
           <div className="pick-qty">
             <span className="lbl">每次扫算几件</span>
-            <button className="ghost small" onClick={() => setQty(String(Math.max(1, (Number(qty) || 1) - 1)))} aria-label="减一">−</button>
+            <button className="ghost small" onMouseDown={keepFocus} onClick={() => setQty(String(Math.max(1, (Number(qty) || 1) - 1)))} aria-label="减一">−</button>
             <input type="number" inputMode="decimal" min="1" step="any" value={qty} onChange={(e) => setQty(e.target.value)} aria-label="数量" />
-            <button className="ghost small" onClick={() => setQty(String((Number(qty) || 0) + 1))} aria-label="加一">+</button>
+            <button className="ghost small" onMouseDown={keepFocus} onClick={() => setQty(String((Number(qty) || 0) + 1))} aria-label="加一">+</button>
             {busy && <span className="muted small">储存中…</span>}
           </div>
           {result && <div className={"pick-result " + (result.ok ? "ok" : "err")}>{result.text}</div>}
+          {result?.hint && <div className="pick-hint">{result.hint}</div>}
           <div className="pick-total">
             <span className={"pk-bar" + (p.lines_left === 0 ? " full" : "")}><i style={{ width: `${pct}%` }} /></span>
             <span>{`${qtyLabel(p.picked)} / ${qtyLabel(p.total)}`}</span>
@@ -247,7 +286,8 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
           const r = await pick.lineSet({ pick_id: p.id, line_id: manual.id!, action: "manual", qty: n, reason, bin: b });
           apply(r); setManual(null);
           signal(true, r.done_all ? `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)} — 全部拣好了，按「已拣好」完成。`
-                                  : `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)}`);
+                                  : `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)}`,
+                 noBinHint(r.line ?? manual, b));
         }} />
       )}
       {skip && p && (
@@ -272,7 +312,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         }} />
       )}
       {binShort && (
-        <BinShortModal message={binShort.message} qty={binShort.qty} bins={binShort.bins} onClose={() => setBinShort(null)}
+        <BinShortModal message={binShort.message} qty={binShort.qty} bins={binShort.bins} uom={binShort.uom} onClose={() => setBinShort(null)}
                        onBin={(b) => {
                          const j = binShort; setBinShort(null);
                          setBin({ barcode: b.barcode, label: `${b.location} · ${b.code}` });   // 人多半已经走到那个货架
@@ -297,7 +337,7 @@ function Line({ l, canScan, hit, assign, curBin, onBin, onAssign, onManual, onSk
   const pct = l.qty > 0 ? Math.min(100, (l.picked / l.qty) * 100) : 100;
   const cls = ["pick-line", l.skip ? "skip" : l.done ? "done" : !l.item_code ? "none" : "", hit ? "hit" : "", assign ? "assign" : ""];
   const desc = l.item_desc && l.item_desc.trim().toUpperCase() !== l.description.trim().toUpperCase() ? l.item_desc : "";
-  const uomDiff = !!(l.item_code && l.uom && l.base_uom && l.uom.trim().toUpperCase() !== l.base_uom.trim().toUpperCase());
+  const uomDiff = pickUomDiff(l);
   return (
     <div className={cls.filter(Boolean).join(" ")}>
       <div className="top">
@@ -313,13 +353,13 @@ function Line({ l, canScan, hit, assign, curBin, onBin, onAssign, onManual, onSk
         {l.skip && l.skip_reason && <span>{`原因：${l.skip_reason}`}</span>}
       </div>
       {!l.skip && <span className={"pk-bar" + (l.done ? " full" : "")}><i style={{ width: `${pct}%` }} /></span>}
-      {!l.skip && uomDiff && <div className="pick-note amber">{`DO 的单位是 ${l.uom}，商品基本单位是 ${l.base_uom}：数量照 DO 的单位算，从货架扣也是这个数，请注意换算。`}</div>}
+      {!l.skip && uomDiff && <div className="pick-note amber">{`DO 的单位是 ${l.uom}，商品基本单位是 ${l.base_uom}：这行不能从货架扣，请「不从货架扣」拣，再到「货架」用「拿下」扣实际件数。`}</div>}
       {!l.skip && !l.done && l.bins.length > 0 && (
         <div className="pick-bins">
           <span className="lbl">货架</span>
           {l.bins.map((b) => (
             <button key={b.id} type="button" className={"bin-chip" + (curBin?.barcode === b.barcode ? " on" : "")} disabled={!canScan}
-                    onClick={() => onBin({ barcode: b.barcode, label: `${b.location} · ${b.code}` })}>
+                    onMouseDown={keepFocus} onClick={() => onBin({ barcode: b.barcode, label: `${b.location} · ${b.code}` })}>
               {`${b.location} · ${b.code} × ${qtyLabel(b.qty)}`}
             </button>
           ))}

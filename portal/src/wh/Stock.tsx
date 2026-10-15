@@ -9,10 +9,11 @@ import { ItemTags, TagChips, TagManager, useTagList } from "./ItemTags";
 import "../rpl.css";
 import "../wh-tag.css";
 
-export function StockTab({ company }: { company: string }) {
+/** arg = 网址第三段：neg = 一打开就勾「只看负库存」（总览「库存是负数」连过来） */
+export function StockTab({ company, arg }: { company: string; arg?: string }) {
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
-  const [negOnly, setNegOnly] = useState(false);
+  const [negOnly, setNegOnly] = useState(arg === "neg");
   const [tag, setTag] = useState("");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<StockTagPage | null>(null);
@@ -22,9 +23,13 @@ export function StockTab({ company }: { company: string }) {
   const [manage, setManage] = useState(false);
   const [editItem, setEditItem] = useState<StockTagRow | null>(null);
   const [rev, setRev] = useState(0);
+  // 已经在库存总表、再从总览点「库存是负数」进来（同一个画面）：也勾上
+  useEffect(() => { if (arg === "neg") { setNegOnly(true); setPage(0); } }, [arg]);
+  // 换条件才清空表格；只有 rev 变（改完标签在背景重抓）保留旧的列，新的回来才换，卷动位置不跳
+  useEffect(() => { setData(null); }, [company, q, negOnly, tag, page]);
   useEffect(() => {
     let alive = true;
-    setData(null); setError("");
+    setError("");
     whTag.stock({ company, q, neg_only: negOnly, tag, page }).then((d) => alive && setData(d)).catch((e: Error) => alive && setError(e.message));
     return () => { alive = false; };
   }, [company, q, negOnly, tag, page, rev]);

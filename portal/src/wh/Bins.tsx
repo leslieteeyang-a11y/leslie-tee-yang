@@ -1,13 +1,13 @@
 // 仓库 · 货架（2026-10-15，使用者看了员工的 WMS 后选「每个货架都记数量」）。路由 #/warehouse/bins/<子画面>[?item=…&loc=…]
-//   ops    = 上架 / 拿下 / 移货架（可编辑；手机优先）；可审批多「改数」
+//   ops    = 上架 / 拿下 / 移货架（可编辑；手机优先）；可审批多「改数」。?item= &loc= &mode=putaway|take|move|adjust
 //   list   = 货架清单（按仓位 → 区 → 货架）、货架明细、建货架、印货架标签
-//   recon  = 对不上（货架比系统多）/ 未上架
+//   recon  = 对不上（货架比系统多）/ 未上架。?loc= &f=over|unshelved|all
 //   import = Excel 带入货架数量（可审批，初次设定）
 // 货架帐是营运系统自己记的，AutoCount 只知道仓位的总数（对 AutoCount 仍是只读）。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { go } from "../router";
 import { ErrorBox, Tabs } from "../ui";
-import { BinList as BinListData, bins } from "../wh-bin-api";
+import { BinList as BinListData, bins, ReconFilter } from "../wh-bin-api";
 import { BinOps } from "./BinOps";
 import { BinListView } from "./BinList";
 import { BinRecon } from "./BinRecon";
@@ -15,6 +15,7 @@ import { BinImport } from "./BinImport";
 import "../wh-bin.css";
 
 type View = "ops" | "list" | "recon" | "import";
+const FILTERS: ReconFilter[] = ["over", "unshelved", "all"];
 
 /** 「ops?item=ST003&loc=HQ」→ ["ops", URLSearchParams] */
 function splitArg(arg?: string): [string, URLSearchParams] {
@@ -52,6 +53,12 @@ export function BinsTab({ company, level, arg, locs }: {
 
   // 有货架的仓位（照 AutoCount 仓位的顺序）
   const binLocs = data ? data.summary.map((s) => s.location) : [];
+  // 网址带进来的（总览、货架清单的连结）：不认得的值不用
+  const pItem = params.get("item") || "";
+  const pLoc = params.get("loc") || "";
+  const pMode = params.get("mode") || "";
+  const f = params.get("f") || "";
+  const pFilter: ReconFilter | undefined = (FILTERS as string[]).includes(f) ? (f as ReconFilter) : undefined;
 
   return (
     <div className="bins">
@@ -62,15 +69,18 @@ export function BinsTab({ company, level, arg, locs }: {
       {!data ? (!error && <p className="muted">载入中…</p>) : (
         <>
           {v === "ops" && (
-            <BinOps key={company + "|" + (params.get("item") || "") + "|" + (params.get("loc") || "")} company={company}
+            <BinOps key={[company, pItem, pLoc, pMode].join("|")} company={company}
                     canApprove={canApprove} binLocs={binLocs} all={data.bins}
-                    item={params.get("item") || ""} loc={params.get("loc") || ""} onChanged={() => { stale.current = true; }} />
+                    item={pItem} loc={pLoc} mode={pMode} onChanged={() => { stale.current = true; }} />
           )}
           {v === "list" && (
             <BinListView company={company} data={data} locs={locs} canEdit={canEdit} canApprove={canApprove}
                          inactive={inactive} setInactive={setInactive} onChanged={reload} />
           )}
-          {v === "recon" && <BinRecon key={company} company={company} binLocs={binLocs} canEdit={canEdit} />}
+          {v === "recon" && (
+            <BinRecon key={[company, pLoc, pFilter].join("|")} company={company} binLocs={binLocs} canEdit={canEdit}
+                      initLoc={binLocs.includes(pLoc) ? pLoc : undefined} initFilter={pFilter} />
+          )}
           {v === "import" && <BinImport key={company} company={company} locs={locs} onSaved={reload} />}
         </>
       )}

@@ -49,7 +49,8 @@ export interface PickDoc {
   /** 开始拣货之后 AutoCount 改了这张 DO 的明细 */ do_changed: boolean;
   cancelled_picks: number; can_edit: boolean; can_cancel: boolean;
 }
-export type ScanCode = "unknown" | "wrong" | "over" | "skipped" | "bin" | "bin_short" | "is_bin";
+/** uom = DO 的单位跟商品基本单位不同（货架帐照基本单位记），不能照 DO 的数量从货架扣 */
+export type ScanCode = "unknown" | "wrong" | "over" | "skipped" | "bin" | "bin_short" | "is_bin" | "uom";
 export interface ScanResult {
   ok: boolean;
   /** ok = false：为什么 */ code?: ScanCode; message?: string;
@@ -85,6 +86,12 @@ export const pick = {
   cancel: (p: { pick_id: number; reason: string }) => rpc<{ ok: boolean; doc_no: string; reversed: number }>("ops_wh_pick_cancel", { p }),
   reopen: (pickId: number) => rpc<PickDoc>("ops_wh_pick_reopen", { p: { pick_id: pickId } }),
 };
+
+/** DO 的单位跟商品基本单位不同？（同资料库 ops.wh_pick_uom_diff：大小写、结尾的 S 不算，SET / SETS 一样） */
+export function pickUomDiff(l: { item_code: string | null; uom: string | null; base_uom: string | null }): boolean {
+  const n = (s: string | null) => (s || "").trim().toUpperCase().replace(/S$/, "");
+  return !!(l.item_code && l.uom?.trim() && l.base_uom?.trim() && n(l.uom) !== n(l.base_uom));
+}
 
 export const PICK_STATUS_LABEL: Record<PickStatus, string> = { picking: "拣货中", done: "已拣好", cancelled: "已取消" };
 export const MATCH_LABEL: Record<PickMatch, string> = {

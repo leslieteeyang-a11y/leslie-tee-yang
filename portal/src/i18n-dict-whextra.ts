@@ -29,10 +29,10 @@ export const DICT_WHEXTRA: Record<string, string> = {
   "在 Excel 选两栏（商品代号、数量）复制，贴在这里。例：\nHM-UB001\t5\nST003\t2":
     "In Excel select two columns (item code, qty), copy and paste here. e.g.\nHM-UB001\t5\nST003\t2",
   "没有读到资料：请从 Excel 复制两栏（商品代号、数量）再贴上。": "Nothing read: copy two columns (item code, qty) from Excel and paste again.",
-  "找不到这个商品": "Item not found", "（不从货架）": "(not from a shelf)", "（不放货架）": "(not onto a shelf)",
-  "从货架": "From shelf", "到货架": "To shelf", "数量": "Qty", "#": "#",
+  "找不到这个商品": "Item not found", "（不从货架）": "(not from a bin)", "（不放货架）": "(not into a bin)",
+  "从货架": "From bin", "到货架": "To bin", "数量": "Qty", "#": "#",
   "选了货架，货架上的数量会跟著变；这笔搬动取消时会自动还原。不选 = 只登记搬动。":
-    "If you pick a shelf, its quantity changes too; cancelling the move restores it. No shelf = record the move only.",
+    "If you pick a bin, its quantity changes too; cancelling the move restores it. No bin = record the move only.",
   "找不到这个商品，请拿掉或另外扫正确的商品。": "Item not found. Remove it, or scan the correct item.",
   "每个商品各记一笔搬动，出现在「待输入 AutoCount」清单；有一行不对就整批都不存。":
     "Each item becomes one move in the \"To key into AutoCount\" list; if any row is wrong, nothing is saved.",
@@ -49,8 +49,8 @@ export const DICT_WHEXTRA: Record<string, string> = {
   "员工编号不对。": "Invalid staff ID.", "找不到这位员工。": "Staff member not found.",
   "资料格式不对，请重新整理网页再试。": "The data format is wrong; reload the page and try again.",
   "数量要是大于 0 的数字（最多两位小数）。": "Quantity must be a number above 0 (at most 2 decimals).",
-  "这种搬动没有「从哪个仓位」，不能选从哪个货架拿。": "This kind of move has no \"from\" location, so you can't pick a shelf to take from.",
-  "这种搬动没有「到哪个仓位」，不能选放到哪个货架。": "This kind of move has no \"to\" location, so you can't pick a shelf to put on.",
+  "这种搬动没有「从哪个仓位」，不能选从哪个货架拿。": "This kind of move has no \"from\" location, so you can't pick a bin to take from.",
+  "这种搬动没有「到哪个仓位」，不能选放到哪个货架。": "This kind of move has no \"to\" location, so you can't pick a bin to put into.",
   "登记人不对，请重新选。": "Invalid \"recorded by\"; please pick again.", "开始日期不能晚于结束日期。": "The start date can't be after the end date.",
 };
 
@@ -73,17 +73,17 @@ export const PATTERNS_WHEXTRA: [RegExp, (m: RegExpMatchArray, t: T) => string][]
   [/^读到 (\d+) 行；(\d+) 个商品代号找不到（红色），请拿掉或另外扫正确的商品。$/,
     (m) => `Read ${m[1]} rows; ${m[2]} item codes not found (red) — remove them or scan the correct items.`],
   [/^读到 (\d+) 行，都对到商品了。$/, (m) => `Read ${m[1]} rows; all matched to items.`],
-  [/^从货架（(.+)）$/, (m) => `From shelf (${m[1]})`],
-  [/^到货架（(.+)）$/, (m) => `To shelf (${m[1]})`],
+  [/^从货架（(.+)）$/, (m) => `From bin (${m[1]})`],
+  [/^到货架（(.+)）$/, (m) => `To bin (${m[1]})`],
   [/^第 (\d+) 行（(.*)）$/, (m) => `Row ${m[1]}${m[2] ? ` (${m[2]})` : ""}`],
   [/^登记 (\d+) 个商品$/, (m) => `Record ${m[1]} item${m[1] === "1" ? "" : "s"}`],
   [/^已登记 (\d+) 笔搬动，等负责人输入 AutoCount。$/, (m) => `Recorded ${m[1]} move${m[1] === "1" ? "" : "s"}; waiting for AutoCount entry.`],
   // 资料库（货架帐、日期）
   [/^日期「(.*)」不对，格式要是 YYYY-MM-DD。$/, (m) => `Date "${m[1]}" is invalid; use YYYY-MM-DD.`],
   [/^货架 (\S+) 上的 (\S+) 只有 (\S+) 件，不够拿 (\S+) 件。如果实际有货，请先盘点或请主管改数。$/,
-    (m) => `Shelf ${m[1]} only has ${m[3]} of ${m[2]}, not enough to take ${m[4]}. If the stock is really there, count it first or ask a manager to correct the number.`],
-  [/^找不到货架「(.*)」。$/, (m) => `Shelf "${m[1]}" not found.`],
-  [/^货架 (\S+) 在 (.+)，不是 (.+)。$/, (m) => `Shelf ${m[1]} is in ${m[2]}, not ${m[3]}.`],
-  [/^货架 (\S+) 已经停用。$/, (m) => `Shelf ${m[1]} is deactivated.`],
-  [/^有好几个仓位都有货架 (\S+)，请先选仓位或扫货架条码。$/, (m) => `Several locations have shelf ${m[1]}; pick the location first or scan the shelf barcode.`],
+    (m) => `Bin ${m[1]} only has ${m[3]} of ${m[2]}, not enough to take ${m[4]}. If the stock is really there, count it first or ask a manager to correct the number.`],
+  [/^找不到货架「(.*)」。$/, (m) => `Bin "${m[1]}" not found.`],
+  [/^货架 (\S+) 在 (.+)，不是 (.+)。$/, (m) => `Bin ${m[1]} is in ${m[2]}, not ${m[3]}.`],
+  [/^货架 (\S+) 已经停用。$/, (m) => `Bin ${m[1]} is deactivated.`],
+  [/^有好几个仓位都有货架 (\S+)，请先选仓位或扫货架条码。$/, (m) => `Several locations have bin ${m[1]}; pick the location first or scan the bin barcode.`],
 ];

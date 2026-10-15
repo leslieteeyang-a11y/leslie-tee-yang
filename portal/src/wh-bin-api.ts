@@ -26,6 +26,7 @@ export interface ItemBinLoc {
   location: string;
   /** AutoCount 库存 */ ac_qty: number;
   /** 还没输入 AutoCount 的搬动（进 + / 出 −） */ pending: number;
+  /** 已开 DO、还没拣的（AutoCount 开 DO 就扣，货还在货架上；只算在主要仓位），已经算进 expected */ do_unpicked: number;
   expected: number; shelved: number; unshelved: number;
   /** 这个仓位有没有建货架 */ has_bins: boolean;
   /** qty = 0 的 = 平常放这里（上架时建议） */ bins: (Bin & { qty: number; updated_at: string })[];
@@ -43,6 +44,7 @@ export interface BinOp {
 export interface BinOpResult {
   ok: boolean; item_code?: string; location?: string; expected: number; shelved: number; over?: boolean;
   /** 上架 / 改数后货架合计会比应有多：没存，问使用者确定后带 confirm: true 再送一次 */ need_confirm?: boolean;
+  /** 这个动作的编号（撤销用 bins.undo） */ ref_id?: number;
 }
 export interface BinBatchResult {
   ok: boolean; rows?: number; need_confirm?: boolean;
@@ -55,7 +57,8 @@ export interface BinImportResult {
 }
 export type ReconFilter = "over" | "unshelved" | "all";
 export interface ReconRow {
-  item_code: string; description: string; uom: string | null; ac_qty: number; pending: number; expected: number;
+  item_code: string; description: string; uom: string | null; ac_qty: number; pending: number;
+  /** 已开 DO 还没拣（已经算进 expected） */ do_unpicked: number; expected: number;
   shelved: number; n_bins: number;
 }
 export interface ReconPage {
@@ -98,6 +101,9 @@ export const bins = {
     rpc<BinDetail>("ops_wh_bin_get", { p: { company, bin, location: location ?? null } }),
   item: (company: string, item: string) => rpc<ItemBins>("ops_wh_item_bins", { p: { company, item } }),
   op: (company: string, op: BinOp, confirm = false) => rpc<BinOpResult>("ops_wh_bin_op", { p: { company, ...op, confirm } }),
+  /** 撤销自己做的一个货架动作（照纪录反向冲回，不会盖掉别人后来的变动；改数的撤销要可审批）。refId = op 回传的 ref_id */
+  undo: (company: string, refId: number) =>
+    rpc<{ ok: boolean; reversed: number }>("ops_wh_bin_undo", { p_company: company, p_ref_id: refId }),
   batch: (company: string, ops: BinOp[], confirm = false) => rpc<BinBatchResult>("ops_wh_bin_batch", { p: { company, ops, confirm } }),
   /** Excel 带入（可审批）：把货架数量「改成」表上的数；dry_run = 只检查 */
   import: (company: string, location: string, rows: BinImportRow[], createBins: boolean, dryRun: boolean) =>

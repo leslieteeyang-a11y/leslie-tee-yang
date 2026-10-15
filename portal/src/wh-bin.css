@@ -22,6 +22,8 @@
 .bin-stats > div { background: var(--tint); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; min-width: 0; }
 .bin-stats span { color: var(--muted); font-size: .8rem; }
 .bin-stats b { font-size: 1.5rem; line-height: 1.2; }
+.bin-stats.four { grid-template-columns: repeat(4, 1fr); }  /* 多一格「DO 待拣」 */
+.bin-mode-note { margin: 0 0 8px; }
 .bin-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 button.bin-btn { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 96px; padding: 8px 12px;
   background: var(--input); color: var(--text); border: 1px solid var(--line-strong); border-radius: 10px; text-align: left; }
@@ -129,6 +131,8 @@ a.ib-go { margin-left: auto; font-weight: 600; white-space: nowrap; }
   .bin-toolbar input.bin-search { max-width: none; }
   .bin-q { max-width: none; }
   .bin-stats b { font-size: 1.25rem; }
+  .bin-stats.four { gap: 6px; }
+  .bin-stats.four > div { padding: 6px 8px; }
   button.bin-cell { width: calc(50% - 4px); }
   .bin-shelf { flex-direction: column; gap: 4px; }
   .bin-shelf-name { width: auto; padding-top: 0; }

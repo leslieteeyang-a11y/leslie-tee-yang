@@ -33,6 +33,7 @@ async function qrSvgs(lots: Lot[]): Promise<Record<string, string>> {
     const qr = qrcode(0, "M");
     qr.addData(lotUrl(l.lot_no));
     qr.make();
+    // margin 0：白边由箱贴的 padding 与 wh-tag.css 的间距留（再加 margin 会把 QR 本体缩小，小箱更难扫）
     out[l.lot_no] = qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true });
   }
   return out;

@@ -173,7 +173,7 @@ export const PATTERNS_WH: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^实际数到几（(.+)）$/, (m) => `Quantity counted (${m[1]})`],
   [/^实际数到几$/, () => "Quantity counted"],
   [/^(\S+) 跟系统不一样，请再仔细数一次（包括别的货架、坏货、展示品有没有放错）。$/,
-    (m) => `${m[1]} doesn't match the system — please count again carefully (check other shelves, defects and display stock).`],
+    (m) => `${m[1]} doesn't match the system — please count again carefully (check other bins, defects and display stock).`],
   [/^✓ (\S+) 相符。$/, (m) => `✓ ${m[1]} matches.`],
   [/^(\S+) 第二次还是不一样，已记录为差异，交给主管审核。$/, (m) => `${m[1]} still doesn't match on the second count — recorded as a variance for review.`],
   [/^✓ 已输入 AutoCount（(\d+)）$/, (m) => `✓ Keyed into AutoCount (${m[1]})`],

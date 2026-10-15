@@ -48,7 +48,8 @@ export const DICT_WHTAG: Record<string, string> = {
   "已加入「商品条码」清单。": "Added to the item barcode list.", "去印 →": "Go print →",
   "搜商品 / 品名 / 批次号 / 货架 / 印的人…": "Search item / description / lot no. / bin / printed by…",
   "全部种类": "All types", "没有打印纪录。": "No print records.", "时间": "Time", "内容": "Content", "印的人": "Printed by",
-  "补印": "Reprint", "到货架": "Go to bins",
+  "补印": "Reprint", "去货架清单": "Go to bin list",   // 不要用「到货架」当键：那是上架 / 移货架画面的「目的货架」（To bin）
+  "这笔进货已取消": "This goods-in was cancelled",
   // 点货完成画面
   "🏷 印箱贴": "🏷 Print box labels",
   "批次号、给哪间分店、建议货架、QR（扫了开批次页）": "Lot no., branch, suggested bin, QR (scan to open the lot page)",
@@ -81,7 +82,7 @@ export const PATTERNS_WHTAG: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^这张厂家到货是「(.+)」的。$/, (m, t) => `This supplier delivery belongs to ${t(m[1])}.`],
   // 批次画面
   [/^货架（(.*)）$/, (m) => `Bins (${m[1]})`],
-  [/^应有 (\S+) · 货架上 (\S+)(?: · 未上架 (\S+))?$/, (m) => `Expected ${m[1]} · on bins ${m[2]}${m[3] ? ` · not shelved ${m[3]}` : ""}`],
+  [/^应有 (\S+) · 货架上 (\S+)(?: · 未上架 (\S+))?$/, (m) => `Expected ${m[1]} · on bins ${m[2]}${m[3] ? ` · not on bins ${m[3]}` : ""}`],
   [/^(\S+)（平常放这里）$/, (m) => `${m[1]} (usual spot)`],
   [/^打印纪录（已印 (\d+) 张）$/, (m) => `Print log (${m[1]} printed)`],
   [/^(\d+) 张 · (.+)$/, (m, t) => `${m[1]} ${m[1] === "1" ? "label" : "labels"} · ${t(m[2])}`],
@@ -90,7 +91,6 @@ export const PATTERNS_WHTAG: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^([\d.,]+) 件 · (\d+) 箱(?: · (.+))?$/, (m) => `${m[1]} pcs · ${m[2]} ${m[2] === "1" ? "box" : "boxes"}${m[3] ? ` · ${m[3]}` : ""}`],
   [/^(箱贴|商品条码|货架标签) × (\d+)$/, (m, t) => `${t(m[1])} × ${m[2]}`],
   [/^(\d+) 笔$/, (m) => `${m[1]} records`],
-  [/^(.+)（(\d+)）$/, (m, t) => `${t(m[1])} (${m[2]})`],
   // 下载 Excel 超过上限
   [/^只下载了前 (\d+) 行（共 (\d+) 行），请加筛选条件再下载。$/, (m) => `Only the first ${m[1]} rows were downloaded (of ${m[2]}) — add filters and download again.`],
   // 照片
@@ -104,4 +104,10 @@ export const PATTERNS_WHTAG: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^找不到批次「(.*)」。$/, (m) => `Lot "${m[1]}" not found.`],
   [/^未知的标签种类：(.*)$/, (m) => `Unknown label type: ${m[1]}`],
   [/^第 (\d+) 行：(.+)$/, (m, t) => `Row ${m[1]}: ${t(m[2])}`],
+];
+
+/** 万用的「名称（数字）」：会抢走别的字典更专门的 pattern（例：AutoCount 最近卖出（3）），
+ *  所以单独拿出来，i18n.ts 要把它放在 ALL_PATTERNS 的最后 */
+export const PATTERNS_WHTAG_LAST: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
+  [/^(.+)（(\d+)）$/, (m, t) => `${t(m[1])} (${m[2]})`],
 ];

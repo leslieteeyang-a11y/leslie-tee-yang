@@ -1,5 +1,6 @@
 // 介面用语：仓库 · 货架（上架 / 拿下、货架清单、对不上 / 未上架、Excel 带入、查货卡片的货架；含资料库错误讯息）。2026-10-17
 // 键 = 画面上整段中文（去头尾空白）。带数字 / 代号的句子在 PATTERNS_WHBIN。
+// 英文用词：货架 = bin（一格，有条码）；建货架时「区 / 货架 / 层」的「货架」（R1 那一排）= rack。不用 shelf。
 type T = (s: string) => string;
 
 export const DICT_WHBIN: Record<string, string> = {
@@ -11,6 +12,8 @@ export const DICT_WHBIN: Record<string, string> = {
   "Excel 带入": "Excel import",
   // 上架画面
   "上架": "Put away", "拿下": "Take", "移货架": "Move bin", "改数": "Set qty",
+  "移货架：同一个仓位里，从一个货架搬到另一个货架。搬到别的仓位请用「搬动」。":
+    "Move bin: from one bin to another inside the same location. To move goods to another location, use \"Moves\".",
   "确认上架": "Confirm put-away", "确认拿下": "Confirm take", "确认移货架": "Confirm move", "确认改数": "Confirm new qty",
   "扫商品或货架条码，或打代号 / 品名": "Scan an item or bin barcode, or type a code / name",
   "扫商品条码（或打代号），再点要放的货架；也可以先扫货架条码再扫商品。货架条码在「货架清单」印。":
@@ -24,6 +27,15 @@ export const DICT_WHBIN: Record<string, string> = {
   "货架合计": "On bins",
   "未上架": "Not on bins",
   "货架合计比系统应有多：请去盘点这个商品。": "More on bins than the system expects — please count this item.",
+  // DO 待拣（已开 DO、还没拣：AutoCount 已经扣了，货还在货架上，已经算进应有）
+  "DO 待拣": "DO to pick",
+  "已开 DO、还没拣的（AutoCount 已经扣了，货还在货架上），已经算进应有":
+    "On DOs already issued but not picked yet (AutoCount has deducted them, the goods are still on the bins) — included in Expected",
+  "货架合计比系统应有多，但有 DO 还没拣：拣完还多再去盘点。":
+    "More on bins than the system expects, but a DO isn't picked yet — count this item only if it is still over after picking.",
+  "有 DO 还没拣：拣完还多再去盘点": "DO not picked yet — count only if still over after picking",
+  "DO 待拣 = 近 7 天已开、还没拣的 DO：AutoCount 开 DO 就扣库存，可是货还在货架上，所以加回应有。":
+    "DO to pick = DOs issued in the last 7 days and not picked yet: AutoCount deducts stock as soon as a DO is saved, but the goods are still on the bins, so they are added back to Expected.",
   "从货架": "From bin", "到货架": "To bin", "改数的货架": "Bin to set",
   "有这个商品的货架": "Bins with this item",
   "这个仓位还没有货架放这个商品": "No bin in this location holds this item yet",
@@ -44,6 +56,7 @@ export const DICT_WHBIN: Record<string, string> = {
   "照样存": "Save anyway",
   "还没有货架。请主管在「货架清单」建货架，或用「Excel 带入」。": "No bins yet. Ask a manager to create bins in \"Bin list\", or use \"Excel import\".",
   "撤销上架": "Undo put-away", "撤销拿下": "Undo take", "撤销移货架": "Undo bin move", "撤销改数": "Undo qty change",
+  "撤销": "Undo",
   // 纪录种类（wh-bin-api BIN_LOG_LABEL）与资料库写的备注
   "从货架拿下": "Taken from bin", "主管改数": "Qty set by manager", "拣货": "Picking", "冲回": "Reversed", "已冲回": "Reversed",
   "搬动取消": "Move cancelled",
@@ -80,12 +93,13 @@ export const DICT_WHBIN: Record<string, string> = {
   "仓位（AutoCount）": "Location (AutoCount)",
   "区（可空）": "Zone (optional)",
   "层（可空）": "Level (optional)",
-  "货架（范围或清单）": "Shelf (range or list)",
+  "货架（必填）": "Rack (required)",
+  "货架（范围或清单）": "Rack (range or list)",
   "层（可空，范围或清单）": "Level (optional, range or list)",
   "例：A": "e.g. A", "例：R1": "e.g. R1", "例：2": "e.g. 2", "例：1-4": "e.g. 1-4",
   "例：R1-R10 或 R1, R2, R5": "e.g. R1-R10 or R1, R2, R5",
   "区、货架、层用短的字，不要有空格或减号（例：A、R3、2）。货架代号 = 区-货架-层。":
-    "Use short words for zone, shelf and level, without spaces or dashes (e.g. A, R3, 2). Bin code = zone-shelf-level.",
+    "Use short words for zone, rack and level, without spaces or dashes (e.g. A, R3, 2). Bin code = zone-rack-level.",
   "一次最多建 500 个货架。": "At most 500 bins at a time.",
   // 标签
   "版面": "Layout",
@@ -102,8 +116,8 @@ export const DICT_WHBIN: Record<string, string> = {
   "差": "Diff",
   "货架数": "Bins",
   "请去盘点这个商品": "Please count this item",
-  "应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动 / 进货；货架合计 = 这个仓位所有货架加起来；差 = 货架合计 − 应有。":
-    "Expected = AutoCount stock + moves / receipts not yet keyed into AutoCount; On bins = all bins in this location added up; Diff = On bins − Expected.",
+  "应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动 / 进货 + DO 待拣；货架合计 = 这个仓位所有货架加起来；差 = 货架合计 − 应有。":
+    "Expected = AutoCount stock + moves / receipts not yet keyed into AutoCount + DO to pick; On bins = all bins in this location added up; Diff = On bins − Expected.",
   "货架比系统多：多半是卖出去或拿货时没有从货架扣，请盘点这个商品（盘点会把货架改成实际数）。":
     "More on bins than the system: usually goods were sold or taken without being taken off the bin. Count this item (counting sets the bins to the actual quantity).",
   "这个仓位没有货架放这个商品。": "No bin in this location holds this item.",
@@ -116,7 +130,7 @@ export const DICT_WHBIN: Record<string, string> = {
   "员工 WMS 的「库存导出」可以直接用：每个「仓」对到一个 AutoCount 仓位；区、层的名称会自动整理（「A区」→ A、「第1层」→ 1）；0 或空白的格子略过。":
     "The staff WMS \"inventory export\" works as is: map each WMS warehouse to an AutoCount location; zone and level names are tidied (\"A区\" → A, \"第1层\" → 1); 0 or blank cells are skipped.",
   "或用范本：商品代号 | 区 | 货架 | 层 | 数量（也可以用「货架代号」一栏代替区 / 货架 / 层）。":
-    "Or use the template: item code | zone | shelf | level | qty (a \"bin code\" column can replace zone / shelf / level).",
+    "Or use the template: item code | zone | rack | level | qty (a \"bin code\" column can replace zone / rack / level).",
   "选 Excel / CSV 档案": "Choose an Excel / CSV file",
   "换一个档案": "Choose another file",
   "下载范本": "Download template",
@@ -138,13 +152,13 @@ export const DICT_WHBIN: Record<string, string> = {
   "找不到表头：第一列（或前几列）要有「SKU」或「商品代号」。可以先下载范本照着填。":
     "Header not found: the first row (or one of the first rows) needs \"SKU\" or \"商品代号\" (item code). Download the template and follow it.",
   "认不出这个表：要有「商品代号」「数量」，加上「区 / 货架 / 层」或「货架代号」这几栏；或是员工 WMS 的「库存导出」。可以先下载范本照着填。":
-    "Can't read this sheet: it needs item code and qty columns plus zone / shelf / level or a bin code column — or be the staff WMS inventory export. Download the template and follow it.",
+    "Can't read this sheet: it needs item code and qty columns plus zone / rack / level or a bin code column — or be the staff WMS inventory export. Download the template and follow it.",
   "数量不对": "Bad quantity",
   "没有货架": "No bin",
   // 查货卡片
   "还没放在货架上。": "Not on any bin yet.",
   // 资料库错误讯息（20261017_ops_wh_bins.sql）
-  "请填区。": "Please fill in the zone.", "请填货架。": "Please fill in the shelf.", "请填层。": "Please fill in the level.",
+  "请填区。": "Please fill in the zone.", "请填货架。": "Please fill in the rack.", "请填层。": "Please fill in the level.",
   "请扫或打货架代号。": "Scan or type a bin code.",
   "找不到货架。": "Bin not found.",
   "数量不能小于 0。": "Quantity can't be below 0.",
@@ -157,9 +171,14 @@ export const DICT_WHBIN: Record<string, string> = {
   "一次最多 300 行。": "At most 300 rows at a time.",
   "表上没有资料。": "The sheet has no data.",
   "一次最多 5,000 行，请分开带入。": "At most 5,000 rows at a time — split the file.",
+  // 撤销（ops_wh_bin_undo）
+  "找不到这个动作（只能撤销自己做的）。": "Action not found (you can only undo your own).",
+  "改数的撤销要仓库「可审批」。": "Undoing a quantity change needs Warehouse \"approve\".",
+  "这个动作已经撤销过了。": "This action has already been undone.",
+  "这个动作没有改到数量，不用撤销。": "This action didn't change any quantity — nothing to undo.",
 };
 
-const PART: Record<string, string> = { "区": "Zone", "货架": "Shelf", "层": "Level" };
+const PART: Record<string, string> = { "区": "Zone", "货架": "Rack", "层": "Level" };
 
 export const PATTERNS_WHBIN: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   // 刚刚做的
@@ -194,7 +213,7 @@ export const PATTERNS_WHBIN: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   // 货架清单
   [/^货架 ([^\s，。：、]+)$/, (m) => `Bin ${m[1]}`],
   [/^([^\s·]+) 区$/, (m) => `Zone ${m[1]}`],
-  [/^([^\s·]+) 层$/, (m) => `Level ${m[1]}`],
+  [/^第 (\S+) 层$/, (m) => `Level ${m[1]}`],
   [/^(\d+) 种$/, (m) => `${m[1]} ${m[1] === "1" ? "item" : "items"}`],
   [/^(-?[\d.]+) 件$/, (m) => `${m[1]} pcs`],
   [/^(\d+) 个货架$/, (m) => `${m[1]} ${m[1] === "1" ? "bin" : "bins"}`],
@@ -214,6 +233,7 @@ export const PATTERNS_WHBIN: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^应有 (-?[\d.]+)$/, (m) => `Expected ${m[1]}`],
   [/^货架合计 (-?[\d.]+)$/, (m) => `On bins ${m[1]}`],
   [/^未上架 (-?[\d.]+)$/, (m) => `Not on bins ${m[1]}`],
+  [/^DO 待拣 (-?[\d.]+)$/, (m) => `DO to pick ${m[1]}`],
   // Excel 带入
   [/^共 (\d+) 行要带入，(\d+) 个仓位；略过 (\d+) 格（0、空白或没选仓位）。$/,
     (m) => `${m[1]} rows to import into ${m[2]} location(s); ${m[3]} cells skipped (0, blank or no location chosen).`],
@@ -225,5 +245,7 @@ export const PATTERNS_WHBIN: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^检查完：有 (\d+) 行有错（标红），请改好 Excel 再选一次档案；全部没错才能带入。$/,
     (m) => `Check done: ${m[1]} rows have errors (in red). Fix the Excel file and choose it again; everything must pass before importing.`],
   [/^读不了这个档案：(.+)$/, (m) => `Can't read this file: ${m[1]}`],
+  [/^(.+) 没有带入：有 (\d+) 行有错（标红），请改好 Excel 再选一次档案。(?:（已经带入：(.+)）)?$/, (m) =>
+    `${m[1].replace(/、/g, ", ")} not imported: ${m[2]} ${m[2] === "1" ? "row has" : "rows have"} errors (in red). Fix the Excel file and choose it again.${m[3] ? ` (already imported: ${m[3].replace(/、/g, ", ")})` : ""}`],
   [/^(.+)（已经带入：(.+)）$/, (m, t) => `${t(m[1])} (already imported: ${m[2].replace(/、/g, ", ")})`],
 ];

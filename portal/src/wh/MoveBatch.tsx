@@ -141,7 +141,11 @@ export function MoveBatchForm({ me, company, locs, onClose, onSaved }: {
     setBusy(false);
   }
 
-  const setLine = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const setLine = (key: number, patch: Partial<Line>) => {
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    // 改了标红的那一行：红字的说明不一定还对，先拿掉（行号拿掉一行后也会不对，所以 × 一律清掉）
+    setBad((b) => (b && lines[b.row - 1]?.key === key ? null : b));
+  };
 
   async function submit() {
     setError(""); setMsg(""); setBad(null);
@@ -282,7 +286,8 @@ export function MoveBatchForm({ me, company, locs, onClose, onSaved }: {
                         {l.found && binOptions(l.code, toLoc, toBins, false)}
                       </select></td>
                     )}
-                    <td><button type="button" className="icon" aria-label="拿掉" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</button></td>
+                    <td><button type="button" className="icon" aria-label="拿掉"
+                                onClick={() => { setLines((ls) => ls.filter((x) => x.key !== l.key)); setBad(null); }}>×</button></td>
                   </tr>
                 ))}
               </tbody>

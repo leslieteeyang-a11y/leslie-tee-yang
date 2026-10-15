@@ -11,6 +11,7 @@ import { sizeName } from "./LotView";
 import "../wh-tag.css";
 
 const KIND_LABEL: Record<string, string> = { lot: "箱贴", item: "商品条码", bin: "货架标签" };
+/** 商品条码与货架标签的版面（BinLabels 也用 a4-24 / roll-50x30 这两个代号） */
 const ITEM_LAYOUT: Record<string, string> = { "a4-24": "A4 24 格", "a4-21": "A4 21 格", "roll-50x30": "标签机 50×30mm" };
 
 export default function LabelLog({ company }: { company: string }) {
@@ -38,6 +39,7 @@ export default function LabelLog({ company }: { company: string }) {
     if (r.kind === "lot" && r.lot_no) {
       try {
         const l = await whTag.lot(r.lot_no);
+        if (l.move_status === "cancelled") { setError("这笔进货已取消"); return; }
         await bp.print([l], r.size === "small" || r.size === "big" ? r.size : savedSize());
       } catch (e) { setError((e as Error).message); }
     } else if (r.kind === "item" && r.item_code) {
@@ -79,12 +81,12 @@ export default function LabelLog({ company }: { company: string }) {
                     {r.kind === "lot" && r.lot_qty != null && <div className="muted small">{`${fmtQty(r.lot_qty)} 件 · ${r.lot_boxes} 箱${r.lot_location ? ` · ${r.lot_location}` : ""}`}</div>}
                   </td>
                   <td className="num hide-sm">{r.copies}</td>
-                  <td className="hide-sm small">{r.kind === "item" ? ITEM_LAYOUT[r.size] ?? r.size : sizeName(r.size)}</td>
+                  <td className="hide-sm small">{r.kind === "lot" ? sizeName(r.size) : ITEM_LAYOUT[r.size] ?? r.size}</td>
                   <td className="small hide-sm">{r.by_name}</td>
                   <td className="nowrap">
                     {r.kind === "lot" && data.can_lot && <button className="small ghost" disabled={bp.printing} onClick={() => again(r)}>补印</button>}
                     {r.kind === "item" && <button className="small ghost" onClick={() => again(r)}>补印</button>}
-                    {r.kind === "bin" && <button className="small ghost" onClick={() => go("/warehouse/bins/list")}>到货架</button>}
+                    {r.kind === "bin" && <button className="small ghost" onClick={() => go("/warehouse/bins/list")}>去货架清单</button>}
                   </td>
                 </tr>
               ))}

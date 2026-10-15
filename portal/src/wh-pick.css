@@ -49,6 +49,8 @@
 .pick-result { padding: 12px 14px; border-radius: 10px; font-size: 1.05rem; font-weight: 600; margin-top: 10px; overflow-wrap: anywhere; }
 .pick-result.ok { background: var(--green-soft); color: var(--green); }
 .pick-result.err { background: var(--red-soft); color: var(--red); }
+/* 记了拣货、可是没从货架扣（这个商品有放在货架上）：琥珀色提醒，不挡 */
+.pick-hint { background: var(--amber-soft); color: var(--amber); padding: 8px 12px; border-radius: 8px; margin-top: 6px; font-size: .9rem; overflow-wrap: anywhere; }
 .pick-total { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .pick-total .pk-bar { flex: 1; height: 10px; }
 .pick-total span { white-space: nowrap; font-weight: 600; }

@@ -67,7 +67,9 @@ input.podo-note { margin-top: 4px; padding: 5px 8px; font-size: .85rem; }
 /* 厂家问题 / 在路上 */
 .podo-group { margin-bottom: 18px; }
 .podo-group-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 6px; }
-.podo-group-head h3 { margin: 0; }
+.podo-group-head h3 { margin: 0; min-width: 0; }
+/* 英文的长按键（例：点货纪录的「＋ 记坏货 / 到货少 / 来错货 / 缺零件」）在手机上换行，不撑出横卷 */
+.podo-group-head > button { white-space: normal; max-width: 100%; text-align: left; }
 .podo-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .podo-acts .error { flex-basis: 100%; }
 .podo-issues tr.inactive-soft td { color: var(--muted); }

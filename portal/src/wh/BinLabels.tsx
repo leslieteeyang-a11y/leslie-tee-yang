@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bin } from "../wh-bin-api";
+import { whTag } from "../wh-tag-api";
 import { code128Svg } from "./code128";
 
 type Layout = { key: string; name: string; page: string; cols: number; w: number; h: number; top: number; left: number };
@@ -12,8 +13,19 @@ const LAYOUTS: Layout[] = [
 ];
 const KEY = "hw-bin-label-layout";
 
+/** 记打印纪录（「印条码 → 打印纪录」的货架标签）；资料库一次最多 500 行。纪录失败不挡列印 */
+function logBinPrints(company: string | undefined, bins: Bin[], size: string) {
+  // 没传公司：用仓库页记住的分店（同 Warehouse.tsx 的 hw-wh-company），再没有就让资料库用自己的分店
+  let co = company ?? "";
+  if (!co) { try { co = localStorage.getItem("hw-wh-company") || ""; } catch { /* 忽略 */ } }
+  for (let i = 0; i < bins.length; i += 500) {
+    whTag.logPrints(co, bins.slice(i, i + 500).map((b) => ({ kind: "bin" as const, bin_id: b.id, copies: 1, size })))
+      .catch(() => { /* 纪录失败不挡列印 */ });
+  }
+}
+
 /** 选好的货架 → 版面 + 列印（放在货架清单的勾选列） */
-export function BinLabelBar({ bins }: { bins: Bin[] }) {
+export function BinLabelBar({ bins, company }: { bins: Bin[]; company?: string }) {
   const [layout, setLayout] = useState(() => { try { return localStorage.getItem(KEY) || "a4-24"; } catch { return "a4-24"; } });
   const [printing, setPrinting] = useState(false);
   const L = LAYOUTS.find((x) => x.key === layout) || LAYOUTS[0];
@@ -34,7 +46,7 @@ export function BinLabelBar({ bins }: { bins: Bin[] }) {
               onChange={(e) => { setLayout(e.target.value); try { localStorage.setItem(KEY, e.target.value); } catch { /* 忽略 */ } }}>
         {LAYOUTS.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
       </select>
-      <button disabled={!bins.length} onClick={() => setPrinting(true)}>{`🖨 列印（${bins.length} 张）`}</button>
+      <button disabled={!bins.length} onClick={() => { setPrinting(true); logBinPrints(company, bins, L.key); }}>{`🖨 列印（${bins.length} 张）`}</button>
       {bins.length > 0 && (
         <div className="label-preview bin-label-preview">
           <BinLabel b={bins[0]} L={L} />

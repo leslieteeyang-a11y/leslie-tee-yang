@@ -161,7 +161,7 @@ export default function HomePage({ me }: { me: Me }) {
             <a className="kpi warn" href="#/warehouse/moves"><b>{home.wh_moves_pending}</b><span>搬动待输入 AutoCount</span></a>
           )}
           {!!wh?.picks_left && (
-            <a className="kpi warn" href="#/warehouse/pick"><b>{wh.picks_left}</b><span>今天要拣的 DO</span></a>
+            <a className="kpi warn" href="#/warehouse/pick/today"><b>{wh.picks_left}</b><span>今天要拣的 DO</span></a>
           )}
           {wh?.sheets.map((sh) => (
             <a key={sh.id} className={"kpi" + (sh.overdue ? " warn" : "")} href={`#/warehouse/count/${sh.id}`}>
@@ -169,7 +169,7 @@ export default function HomePage({ me }: { me: Me }) {
             </a>
           ))}
           {!!wh?.bins_over && (
-            <a className="kpi warn" href="#/warehouse/bins/recon"><b>{wh.bins_over}</b><span>货架比系统多</span></a>
+            <a className="kpi warn" href="#/warehouse/bins/recon?f=over"><b>{wh.bins_over}</b><span>货架比系统多</span></a>
           )}
           {home.wh_counted_today != null && (
             <a className="kpi" href="#/warehouse/count"><b>{home.wh_counted_today}</b><span>我今天盘了几件</span></a>

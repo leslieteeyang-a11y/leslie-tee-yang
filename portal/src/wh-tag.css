@@ -66,22 +66,24 @@ label.wht-boxes { flex: 0 0 auto; }
 .box-label { box-sizing: border-box; background: #fff; color: #000; font-family: Arial, 'Microsoft YaHei', sans-serif; overflow: hidden;
   display: flex; flex-direction: column; padding: 3mm 3.5mm; gap: 1.2mm; }
 .wht-preview .box-label { border: 1px dashed #9ca3af; border-radius: 4px; }
-.box-label .bl-top { display: flex; gap: 2mm; align-items: flex-start; min-height: 0; }
+/* QR 四周要留白（约 4 个模组）：上、右靠标签的 padding；左边（字）用 .bl-top 的 gap；下面（Code 128 黑条）= 外层 gap + .bl-bar 的 margin-top。
+   大箱 22mm QR 每模组约 .67mm → 至少 2.7mm；小箱 11.5mm 每模组约 .35mm → 至少 1.4mm */
+.box-label .bl-top { display: flex; gap: 2.7mm; align-items: flex-start; min-height: 0; }
 .box-label .bl-main { flex: 1; min-width: 0; }
 .box-label .bl-code { font-weight: 700; font-size: 20pt; line-height: 1.05; word-break: break-all; }
 .box-label .bl-desc { font-size: 8.5pt; line-height: 1.2; max-height: 2.4em; overflow: hidden; margin-top: 1mm; }
 .box-label .bl-qr { width: 22mm; height: 22mm; flex: 0 0 auto; }
 .box-label .bl-qr svg { width: 100%; height: 100%; display: block; }
-.box-label .bl-bar { height: 10mm; flex: 0 0 auto; }
+.box-label .bl-bar { height: 10mm; flex: 0 0 auto; margin-top: 1.6mm; }   /* 1.2mm gap + 1.6mm = 2.8mm */
 .box-label .bl-bar svg { width: 100%; height: 100%; display: block; }
 .box-label .bl-row { display: flex; justify-content: space-between; gap: 2mm; font-size: 9pt; line-height: 1.2; white-space: nowrap; }
 .box-label .bl-row b { font-size: 11pt; }
 .box-label.small { padding: 1.5mm 2mm; gap: .5mm; }
-.box-label.small .bl-top { gap: 1mm; }
+.box-label.small .bl-top { gap: 1.4mm; }
 .box-label.small .bl-code { font-size: 10.5pt; }
 .box-label.small .bl-desc { font-size: 5.5pt; max-height: 1.2em; margin-top: .3mm; white-space: nowrap; text-overflow: ellipsis; }
 .box-label.small .bl-qr { width: 11.5mm; height: 11.5mm; }
-.box-label.small .bl-bar { height: 4.5mm; }
+.box-label.small .bl-bar { height: 4.5mm; margin-top: 1mm; }   /* .5mm gap + 1mm = 1.5mm */
 .box-label.small .bl-row { font-size: 5.5pt; gap: 1mm; }
 .box-label.small .bl-row b { font-size: 6.5pt; }
 @media print {

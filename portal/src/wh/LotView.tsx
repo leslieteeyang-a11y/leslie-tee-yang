@@ -22,9 +22,13 @@ export default function LotView({ lotNo, canEdit }: { lotNo: string; canEdit: bo
 
   if (!d) return <>{error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>}<p><a href="#/warehouse/labels/log">← 打印纪录</a></p></>;
   const unshelved = Number(d.expected) - Number(d.shelved);
+  const cancelled = d.move_status === "cancelled";
+  // 上架画面：带仓位（不然会用上次记住的仓位）与模式（不然沿用上次的拿下 / 移货架）
+  const putaway = `#/warehouse/bins/ops?item=${encodeURIComponent(d.item_code)}${d.location ? `&loc=${encodeURIComponent(d.location)}` : ""}&mode=putaway`;
   return (
     <>
       <p className="small"><a href="#/warehouse/labels/boxes">← 箱贴</a></p>
+      {cancelled && <div className="error">这笔进货已取消</div>}
       <section className="card wht-lot">
         <div className="page-head">
           <div>
@@ -56,7 +60,7 @@ export default function LotView({ lotNo, canEdit }: { lotNo: string; canEdit: bo
             {d.bins.map((b) => <span key={b.id} className={"wht-bin" + (Number(b.qty) > 0 ? "" : " zero")}>{Number(b.qty) > 0 ? `${b.code} × ${fmtQty(b.qty)}` : `${b.code}（平常放这里）`}</span>)}
           </div>
         )}
-        {canEdit && unshelved > 0 && <p className="small"><a href={`#/warehouse/bins/ops?item=${encodeURIComponent(d.item_code)}`}>上架 →</a></p>}
+        {canEdit && !cancelled && unshelved > 0 && <p className="small"><a href={putaway}>上架 →</a></p>}
       </section>
 
       <section className="card">
@@ -70,7 +74,7 @@ export default function LotView({ lotNo, canEdit }: { lotNo: string; canEdit: bo
             ))}
           </ul>
         )}
-        {d.can_print && (
+        {d.can_print && !cancelled && (
           <div className="filters">
             <SizePick size={size} onChange={setSize} />
             <button disabled={bp.printing} onClick={async () => { await bp.print([d], size); setTimeout(load, 800); }}>{`🖨 补印箱贴（${d.boxes} 张）`}</button>

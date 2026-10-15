@@ -1,5 +1,6 @@
 // 仓库 · 货架 · Excel 带入（可审批，初次设定用）：把货架上的数量「改成」表上的数。
 // 先「检查」（dry_run，每行结果，错的标红）→ 全部没问题才能「确认带入」。读表在浏览器（binImport.ts）。
+// 确认带入时资料库再检查一次：检查后资料变了（例：货架被停用）那个仓位回 saved:false、不存，错的行照样标红。
 import { useState } from "react";
 import { ErrorBox } from "../ui";
 import { qtyLabel } from "../wh-api";
@@ -57,17 +58,24 @@ export function BinImport({ company, locs, onSaved }: { company: string; locs: s
   async function run(dry: boolean) {
     setBusy(true); setError(""); setDone("");
     const out = new Map<ImpRow, Res>();
-    let nb = 0, saved = 0;
+    let nb = 0, saved = 0, bad = 0;
     const doneLocs: string[] = [];
+    const failLocs: string[] = [];
     try {
       for (const [l, rows] of groups) {
         const r = await bins.import(company, l, rows.map(toApi), create, dry);
         rows.forEach((row, i) => { const x = r.rows.find((y) => y.row === i + 1); out.set(row, { ok: !!x?.ok, error: x?.error, item_code: x?.item_code }); });
-        nb += Number(r.new_bins) || 0;
-        if (r.saved) { saved += rows.length; doneLocs.push(l); }
+        if (r.saved) { saved += rows.length; doneLocs.push(l); nb += Number(r.new_bins) || 0; }
+        else if (!dry) { failLocs.push(l); bad += Number(r.errors) || rows.filter((_, i) => !r.rows.find((y) => y.row === i + 1)?.ok).length; }
+        else nb += Number(r.new_bins) || 0;
       }
       setRes(out); setNewBins(nb);
-      if (!dry) {
+      if (!dry && failLocs.length) {
+        // 没存：留着表与每行结果（错的标红），不说「已带入」
+        setError(`${failLocs.join("、")} 没有带入：有 ${bad} 行有错（标红），请改好 Excel 再选一次档案。`
+          + (doneLocs.length ? `（已经带入：${doneLocs.join("、")}）` : ""));
+        if (doneLocs.length) onSaved();
+      } else if (!dry) {
         setDone(`已带入 ${saved} 行（${doneLocs.join("、")}），新建 ${nb} 个货架。`);
         setParsed(null); setFile(""); setRes(null);
         onSaved();

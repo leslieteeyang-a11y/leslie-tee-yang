@@ -89,7 +89,7 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
           <span>{`已选 ${sel.length} 个货架`}</span>
           <button className="ghost small" onClick={() => setSel([...new Set([...sel, ...rows.filter((b) => b.active).map((b) => b.id)])])}>全选（看得到的）</button>
           {sel.length > 0 && <button className="ghost small" onClick={() => setSel([])}>清除</button>}
-          <BinLabelBar bins={selBins} />
+          <BinLabelBar bins={selBins} company={company} />
         </div>
       )}
       {data.bins.length === 0 ? (
@@ -103,8 +103,8 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
               <div className="bin-group-head">
                 <h2>{loc}</h2>
                 <span className="muted small">{`${list.length} 个货架 · ${list.filter((b) => Number(b.qty) > 0).length} 个有货 · ${qtyLabel(list.reduce((a, b) => a + Number(b.qty), 0))} 件`}</span>
-                {s && s.items_over > 0 && <a className="bin-flag late" href="#/warehouse/bins/recon">{`货架比系统多 ${s.items_over} 项`}</a>}
-                {s && s.items_unshelved > 0 && <a className="bin-flag amber" href="#/warehouse/bins/recon">{`未上架 ${s.items_unshelved} 项`}</a>}
+                {s && s.items_over > 0 && <a className="bin-flag late" href={`#/warehouse/bins/recon?loc=${encodeURIComponent(loc)}&f=over`}>{`货架比系统多 ${s.items_over} 项`}</a>}
+                {s && s.items_unshelved > 0 && <a className="bin-flag amber" href={`#/warehouse/bins/recon?loc=${encodeURIComponent(loc)}&f=unshelved`}>{`未上架 ${s.items_unshelved} 项`}</a>}
               </div>
               {[...zones.entries()].map(([zone, shelves]) => (
                 <div key={zone} className="bin-zone">
@@ -175,7 +175,7 @@ function BinDetailModal({ company, id, canEdit, canApprove, onClose, onPrint, on
       {saved && <div className="ok">{saved}</div>}
       {!d ? (!error && <p className="muted">载入中…</p>) : (
         <>
-          <p className="muted">{[d.location, d.zone && `${d.zone} 区`, d.shelf, d.level && `${d.level} 层`, !d.active && "已停用"].filter(Boolean).join(" · ")}</p>
+          <p className="muted">{[d.location, d.zone && `${d.zone} 区`, d.shelf, d.level && `第 ${d.level} 层`, !d.active && "已停用"].filter(Boolean).join(" · ")}</p>
           {d.note && !canApprove && <p className="small">{d.note}</p>}
           <h3>上面的商品</h3>
           {d.items.length === 0 ? <p className="muted">这个货架是空的。</p> : (
@@ -226,7 +226,7 @@ function BinDetailModal({ company, id, canEdit, canApprove, onClose, onPrint, on
             </div>
           )}
           <div className="actions">
-            {canEdit && d.active && <button className="ghost" onClick={() => go("/warehouse/bins/ops")}>去上架 / 拿下</button>}
+            {canEdit && d.active && <button className="ghost" onClick={() => go(`/warehouse/bins/ops?loc=${encodeURIComponent(d.location)}`)}>去上架 / 拿下</button>}
             {d.active && <button className="ghost" onClick={() => onPrint(d.id)}>印这个货架的标签</button>}
             <button className="ghost" onClick={onClose}>关闭</button>
           </div>
@@ -277,7 +277,7 @@ function CreateModal({ company, locs, bulk, defLoc, onClose, onDone }: {
         </label>
         <div className="row">
           <label>区（可空）<input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="例：A" maxLength={12} /></label>
-          <label>{bulk ? "货架（范围或清单）" : "货架"}<input value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={bulk ? "例：R1-R10 或 R1, R2, R5" : "例：R1"} /></label>
+          <label>{bulk ? "货架（范围或清单）" : "货架（必填）"}<input value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={bulk ? "例：R1-R10 或 R1, R2, R5" : "例：R1"} /></label>
           <label>{bulk ? "层（可空，范围或清单）" : "层（可空）"}<input value={level} onChange={(e) => setLevel(e.target.value)} placeholder={bulk ? "例：1-4" : "例：2"} /></label>
         </div>
         {!bulk && <label>备注<input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="例：放大件、靠门口" /></label>}

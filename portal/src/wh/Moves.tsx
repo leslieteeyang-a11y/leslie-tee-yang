@@ -1,6 +1,6 @@
 // 仓库 · 搬动登记：调仓、报坏、展示、样品、退货、报废；负责人在 AutoCount 输入后标「已输入」。
 // 点货产生的「进货待入 AutoCount」（kind = receive）另外一区列出（不是一般搬动：不能跟搬动一起标已输入，要在「待开进货单」填 GRN 号）。
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { canCancelReceive, canGrn, Me } from "../api";
 import { Empty, ErrorBox, Modal, Tabs } from "../ui";
 import { shrinkImage, uploadPhoto } from "../att-api";
@@ -8,8 +8,9 @@ import { ScanBox } from "./Scanner";
 import { Move, MOVE_KIND_LABEL, MOVE_STATUS_LABEL, MoveKind, moveText, qtyLabel, whenLabel, wh } from "../wh-api";
 import { AskModal } from "../podo/common";
 import { MoveBatchForm } from "./MoveBatch";
+import { MoveBins } from "./MoveBins";
 import { exportMovesXlsx, limitNote, MoveFilterBar } from "./MoveFilters";
-import { EMPTY_FILTER, filterParams, MoveFilter } from "../wh-extra-api";
+import { EMPTY_FILTER, filterParams, MoveFilter, whx } from "../wh-extra-api";
 
 
 const DEFAULT_TO: Partial<Record<MoveKind, string>> = { defect: "DEFECTS", display: "DISPLAY" };
@@ -20,6 +21,9 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMult
 }) {
   const [code, setCode] = useState(itemCode || "");
   const [desc, setDesc] = useState("");
+  const [item, setItem] = useState("");   // 对到的商品代号（货架栏用）
+  const [fromBin, setFromBin] = useState("");
+  const [toBin, setToBin] = useState("");
   const [kind, setKind] = useState<MoveKind>("transfer");
   const [qty, setQty] = useState("");
   const [from, setFrom] = useState(locs[0] || "");
@@ -32,9 +36,18 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMult
   const needTo = kind === "transfer" || kind === "return" || kind === "defect" || kind === "display";
 
   useEffect(() => {
+    setItem("");
     if (!code) { setDesc(""); return; }
-    wh.item(company, code).then((d) => setDesc(d.found ? `${d.item_code} · ${d.description}` : "找不到这个商品")).catch(() => setDesc(""));
+    let alive = true;   // 连扫两个码：先发后到的旧回应不盖掉（货架栏照对到的商品列）
+    wh.item(company, code).then((d) => {
+      if (!alive) return;
+      setDesc(d.found ? `${d.item_code} · ${d.description}` : "找不到这个商品"); setItem(d.found ? d.item_code : "");
+    }).catch(() => { if (alive) setDesc(""); });
+    return () => { alive = false; };
   }, [code, company]);
+  // 换商品 / 种类 / 仓位：已选的货架不适用了
+  useEffect(() => { setFromBin(""); }, [item, kind, from]);
+  useEffect(() => { setToBin(""); }, [item, kind, to]);
   useEffect(() => {
     const d = DEFAULT_TO[kind];
     if (d && locs.includes(d)) setTo(d);
@@ -51,8 +64,18 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMult
         const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
         photo = await uploadPhoto(me.staff.id, today, "wh", await shrinkImage(file));
       }
-      onSaved(await wh.saveMove({ company, item_code: code, qty, kind, from_loc: needFrom ? from : null,
-                                  to_loc: needTo ? to : null, note, photo }));
+      const fb = needFrom ? fromBin : "";
+      const tb = needTo ? toBin : "";
+      if (fb || tb) {
+        // 有选货架：走多行搬动的函数（一行），搬动与货架帐一起存；取消搬动时货架自动还原
+        const r = await whx.moveBatch({ company, kind, from_loc: needFrom ? from : null, to_loc: needTo ? to : null, note, photo,
+                                        lines: [{ item_code: code, qty: qty.trim(), from_bin: fb || undefined, to_bin: tb || undefined }] });
+        if (!r.ok || !r.moves?.length) throw new Error(r.message || "网路有问题，请再试一次。");
+        onSaved(r.moves[0]);
+      } else {
+        onSaved(await wh.saveMove({ company, item_code: code, qty, kind, from_loc: needFrom ? from : null,
+                                    to_loc: needTo ? to : null, note, photo }));
+      }
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -93,6 +116,8 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMult
           )}
           <label>数量<input type="number" inputMode="decimal" min="0.01" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></label>
         </div>
+        <MoveBins company={company} item={item} fromLoc={needFrom ? from : ""} toLoc={needTo ? to : ""}
+                  fromBin={fromBin} toBin={toBin} onFrom={setFromBin} onTo={setToBin} />
         <label>{kind === "writeoff" || kind === "other" ? "原因（必填）" : "备注（选填）"}
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500}
                  placeholder={kind === "defect" ? "例：纸箱压坏、马桶裂" : kind === "return" ? "例：客户退货，单号…" : ""} /></label>
@@ -140,11 +165,15 @@ export function MovesTab({ me, company, locs, canEdit, canApprove }: {
     return [...m.values()];
   })();
 
+  const seq = useRef(0);
+  // 流水号：筛选连改几次时，先发后到的旧回应不盖掉新的清单（下载 Excel 也是这份）
   const load = useCallback(() => {
+    const n = ++seq.current;
+    const live = () => n === seq.current;
     setRows(null); setError(""); setPicked(new Set());
     const f = filterParams(filter);
-    wh.moves({ company, status, kind: "move", ...f }).then(setRows).catch((e: Error) => setError(e.message));
-    wh.moves({ company, status, kind: "receive", ...f }).then(setRecv).catch(() => setRecv([]));
+    wh.moves({ company, status, kind: "move", ...f }).then((r) => live() && setRows(r)).catch((e: Error) => live() && setError(e.message));
+    wh.moves({ company, status, kind: "receive", ...f }).then((r) => live() && setRecv(r)).catch(() => live() && setRecv([]));
   }, [company, status, filter]);
   useEffect(load, [load]);
 

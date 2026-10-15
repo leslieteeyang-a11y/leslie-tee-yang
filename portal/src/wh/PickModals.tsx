@@ -1,9 +1,9 @@
-// 拣货画面的小视窗：手动确认、略过、已拣好（缺货备注）、取消拣货、货架不够
+// 拣货画面的小视窗：手动确认、略过、已拣好（缺货备注）、取消拣货、货架不够 / 单位跟货架帐不同
 import { FormEvent, useState } from "react";
 import { getLang, tr } from "../i18n";
 import { ErrorBox, Modal } from "../ui";
 import { qtyLabel } from "../wh-api";
-import { Pick, PickBin, PickLine } from "../wh-pick-api";
+import { Pick, PickBin, PickLine, pickUomDiff } from "../wh-pick-api";
 
 const MANUAL_REASONS = ["没有条码", "条码坏了", "散装 / 零件", "整箱点数"];
 const SKIP_REASONS = ["运费", "安装费", "不用出货", "服务 / 工钱"];
@@ -16,7 +16,7 @@ function Reasons({ list, onPick }: { list: string[]; onPick: (s: string) => void
   );
 }
 
-/** 手动确认：没有条码的行（或条码坏了）直接填拣了几件；有对到商品才可以选从哪个货架扣 */
+/** 手动确认：没有条码的行（或条码坏了）直接填拣了几件；有对到商品、单位跟货架帐相同才可以选从哪个货架扣 */
 export function ManualModal({ line, curBin, onClose, onSave }: {
   line: PickLine; curBin: { barcode: string; label: string } | null; onClose: () => void;
   onSave: (qty: number, reason: string, bin: string | null) => Promise<void>;
@@ -24,11 +24,12 @@ export function ManualModal({ line, curBin, onClose, onSave }: {
   const left = Math.max(0, Number(line.qty) - Number(line.picked));
   const [qty, setQty] = useState(String(left));
   const [reason, setReason] = useState("");
-  const binOpts = line.item_code ? [
+  const uomDiff = pickUomDiff(line);
+  const binOpts = line.item_code && !uomDiff ? [
     ...(curBin && !line.bins.some((b) => b.barcode === curBin.barcode) ? [{ barcode: curBin.barcode, label: curBin.label }] : []),
     ...line.bins.map((b) => ({ barcode: b.barcode, label: `${b.location} · ${b.code} × ${qtyLabel(b.qty)}` })),
   ] : [];
-  const [bin, setBin] = useState(line.item_code && curBin ? curBin.barcode : "");
+  const [bin, setBin] = useState(line.item_code && !uomDiff && curBin ? curBin.barcode : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
@@ -46,6 +47,7 @@ export function ManualModal({ line, curBin, onClose, onSave }: {
         <label>原因
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="例：没有条码" required /></label>
         <Reasons list={MANUAL_REASONS} onPick={setReason} />
+        {uomDiff && <p className="muted small">这行的单位跟货架上的不同，不能从货架扣。</p>}
         {binOpts.length > 0 && (
           <label>从哪个货架拿（选填）
             <select value={bin} onChange={(e) => setBin(e.target.value)}>
@@ -152,14 +154,16 @@ export function CancelModal({ p, onClose, onSave }: { p: Pick; onClose: () => vo
   );
 }
 
-/** 货架上不够：可以改选有货的货架（多半是拿错货架或忘了扫货架），或「不从货架扣」直接记 */
-export function BinShortModal({ message, qty, bins, onClose, onBin, onNoBin }: {
-  message: string; qty: number; bins: PickBin[]; onClose: () => void; onBin: (b: PickBin) => void; onNoBin: () => void;
+/** 货架上不够：可以改选有货的货架（多半是拿错货架或忘了扫货架），或「不从货架扣」直接记。
+ *  uom = DO 的单位跟货架帐（商品基本单位）不同：哪个货架都不能扣，只能「不从货架扣」 */
+export function BinShortModal({ message, qty, bins, uom, onClose, onBin, onNoBin }: {
+  message: string; qty: number; bins: PickBin[]; uom?: boolean; onClose: () => void; onBin: (b: PickBin) => void; onNoBin: () => void;
 }) {
-  const enough = bins.filter((b) => Number(b.qty) >= qty);
+  const enough = uom ? [] : bins.filter((b) => Number(b.qty) >= qty);
   return (
-    <Modal title="货架上不够" onClose={onClose}>
+    <Modal title={uom ? "单位跟货架上的不同" : "货架上不够"} onClose={onClose}>
       <p className="late">{message}</p>
+      {uom && <p className="small">这行的单位跟货架上的不同，不能从货架扣；可以选「不从货架扣」记下拣货。</p>}
       {enough.length > 0 && (
         <>
           <p className="muted small">是从别的货架拿的吗？点那个货架：</p>
@@ -170,7 +174,7 @@ export function BinShortModal({ message, qty, bins, onClose, onBin, onNoBin }: {
           </div>
         </>
       )}
-      <p className="muted small">可能是货架帐不准（上次没登记）。如果货真的拿到了，可以不从货架扣、直接记拣货，之后请主管去盘点这个货架。</p>
+      {!uom && <p className="muted small">可能是货架帐不准（上次没登记）。如果货真的拿到了，可以不从货架扣、直接记拣货，之后请主管去盘点这个货架。</p>}
       <div className="actions">
         <button className="ghost" onClick={onClose}>取消</button>
         <button onClick={onNoBin}>不从货架扣，直接记拣货</button>

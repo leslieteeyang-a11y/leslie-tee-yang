@@ -72,9 +72,9 @@ create table ops.wh_map (
   foreign key (company, location) references ops.wh_location (company, code)
 );
 
-create sequence ops.wh_bin_ref_seq;
+create sequence ops.wh_bin_ref_seq;                      -- 一次货架动作（可能动到两个货架）的 ref_id
 -- 扫码 / 打代号找商品（ops.wh_resolve）比对 upper(item_code)：没有这个索引每次都要扫整间公司 5,000 多个商品（Excel 带入几千行会超过 8 秒）
-create index if not exists dim_item_company_upper_code_idx on bi.dim_item (company, upper(item_code));                      -- 一次货架动作（可能动到两个货架）的 ref_id
+create index if not exists dim_item_company_upper_code_idx on bi.dim_item (company, upper(item_code));
 
 alter table ops.wh_bin enable row level security;
 alter table ops.wh_bin_stock enable row level security;

@@ -1,6 +1,6 @@
 // 仓库 · 搬动纪录的筛选（日期区间、种类、登记人、商品 / 品名 / 单号）与下载 Excel（2026-10-15）。
 // 没有日期区间 = 最近 300 笔；有日期区间最多 2,000 笔（资料库 ops_wh_moves）。Excel 就是画面上这份清单（含进货）。
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { todayKL } from "../api";
 import { getLang, tr } from "../i18n";
 import { Move, MOVE_KIND_SHORT, MOVE_STATUS_LABEL } from "../wh-api";
@@ -12,11 +12,14 @@ export function MoveFilterBar({ company, value, onChange, onExport, exporting, c
 }) {
   const [people, setPeople] = useState<{ id: number; name: string; n: number }[]>([]);
   const [q, setQ] = useState(value.q);
+  // 最新的筛选值：防抖计时器送出时用这个，不会把打字后马上改的种类 / 日期盖回旧值
+  const latest = useRef(value);
+  latest.current = value;
   useEffect(() => { whx.movePeople(company).then(setPeople).catch(() => setPeople([])); }, [company]);
   useEffect(() => { setQ(value.q); }, [value.q]);
   useEffect(() => {
-    if (q.trim() === value.q.trim()) return;
-    const t = setTimeout(() => onChange({ ...value, q }), 450);
+    if (q.trim() === latest.current.q.trim()) return;
+    const t = setTimeout(() => { if (q.trim() !== latest.current.q.trim()) onChange({ ...latest.current, q }); }, 450);
     return () => clearTimeout(t);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k: keyof MoveFilter) => (e: { target: { value: string } }) => onChange({ ...value, [k]: e.target.value });
