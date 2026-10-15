@@ -200,6 +200,12 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   真正的检查在每个函数）。测试 `tests/cust_test.sql`（BI 权限函数与几个代表性顾客资料函数的 stub 在 `stub_supabase.sql` 最后）。BI 的 `/loyalty.html`
   先留着，两边相通。BI 那边以后改顾客资料函数要写 `bi.crm_require` / `bi.crm_company`（已写进 BI 分支的 CLAUDE.md）；重套 `20261016_ops_customers.sql`
   会把漏掉的改过来。
+  **已上线（2026-10-15）**：前端部署 `dpl_HzebzMKPc348FPaFCqXSErTuud59` READY（122 个档全用 sha 参照）之后套了 `ops_customers_ready`。正式环境核对（交易回滚）：
+  admin = owner、管理层主管 = manager、销售 = sales（只在营运系统、不在 BI 名单的门市员工看得到 8,064 位顾客、「没抓到电话的单据」只有总部 23 张）；
+  送货 / 物流 / 采购 / 仓库 模块等级 none、叫顾客资料函数被挡（「你没有「顾客资料」模块的查看权限」）；`bi.crm_*` 与 `ops_cust_role` 的 md5 与本机一致。
+  合并后另外审查（模拟资料截图 + 程式 / 安全审查）修了：**CSV 公式注入**（`cust-api.ts` `csvCell`：= + - @ Tab CR 开头的格子前面加 '，纯数字照原样；
+  地址可由公开扫码登记页写入）、汇出的生日拆成生日月 / 生日日（Excel 会把 3/12 转成日期）、英文模式业务员「(空白)」、名单类型栏 / 门市 / 买过类别栏宽、
+  报告选中月份加左边粗线。没修（之后再说）：手机 / 平板上表格要横向卷、英文的长标题与下拉选单被截、数字栏标题靠左。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
