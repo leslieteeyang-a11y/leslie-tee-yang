@@ -1,5 +1,8 @@
 # 交接：BI 的订货 / 库存 / 滞销品搬到营运系统（2026-10-14）
 
+> **状态（2026-10-15）：已完成。** 营运系统 session 已合并这个 patch 并部署（另加 `ops_bi_pages_7_fix` 与几处画面修正，推在 `claude/gifted-faraday-b16op8`）；
+> BI production `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C` 已拿掉三个分页。patch 只留作纪录，以后不要再套。
+
 老板 2026-10-14 决定「把订货、滞销品、库存这三个移到员工多部门功能那边，BI 那边去掉」。
 营运系统（`portal/`，Vercel 专案 `homeworks-ops`）由另一个 session「员工多部门功能开发」维护，分支
 `claude/gifted-faraday-b16op8`；本 session 不直接推那条分支，改把完整改动做成一个 commit 的 patch 放在这里：

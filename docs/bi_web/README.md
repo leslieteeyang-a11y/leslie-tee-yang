@@ -171,5 +171,9 @@ BI 端：
 - 本地 `tsc --noEmit --strict --noUnusedLocals` 通过（scratchpad 的 tscheck 专案，tsconfig 的 files 清单同步拿掉五个档）。
 - **Preview 部署 `dpl_6qCnjTtFPCtXG8iFQxWyTaytcgqE`**（2026-10-14 晚，无 target，READY）：`list_deployment_files` 核对四个内嵌档 uid = 本地 sha1
   （App 7731bcfd…、i18n/index d95dbdbf…、Alerts 47f5753d…、finance 5bf623ee…），五个 DROP 的档案已不在档案树。
-- **Production 还没部署**：要等营运系统四页上线、老板确认后，再用同一份 `python3 mkpayload.py opsmove` 的输出（或把四个内嵌档改成 preview 的 SHA 参照）
-  建 `target: production` 部署，然后 `python3 mkpayload.py --commit opsmove`。
+- **Production 部署 `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C`**（2026-10-15 UTC，READY，homeworks-bi.vercel.app）：营运系统那边回报「ops 四页已上线」
+  （homeworks-ops 部署 READY、老板帐号权限查核：补货建议门槛 30 为 853 项、供应商 111 家、库存总表搜 HM-UB001 36 行、滞销 6 个月以上 1,437 项）后才做。
+  62 个档案**全部 `{file, sha}` 参照**（四个改动档用 preview 已验证的 SHA），`list_deployment_files` 核对无误，manifest 已 `--commit opsmove`（67 → 62 个档案）。
+  BI 上订货 / 库存 / 滞销品三个分页从此消失；订货员登入先看应付账款。
+- 营运系统那边合并后另做了 `ops_bi_pages_7_fix`（只 `create or replace` 两个函数：`ops_rpl_rows` 的留言 / 商品备注 / 记录人只给看得到厂家的人；
+  `ops_wh_stock` 每行多回 `item_total` 商品全仓合计），**没动 `bi.v_purchase_suggest` / `public.bi_purchase_suggest`**，BI 的其他页不受影响。

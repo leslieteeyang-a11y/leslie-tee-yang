@@ -144,7 +144,8 @@ apply_migration 看到 `delete from` 会等确认、无人确认回 `cancelled`�
 Migration 档 `portal/supabase/migrations/20261016_ops_bi_pages.sql`，**已分六段套到正式库**（`ops_bi_pages_1_views` ～ `ops_bi_pages_6_grants`；整档一次套会 60 秒 timeout）。
 交接：完整改动做成一个 commit 的 patch 放在本分支 `docs/ops_handoff/0001-bi-pages-to-ops.patch`（基底 3e0352b，`git am -3` 可套），老板要贴给那个 session 的话在
 `docs/ops_handoff/README.md`。BI 端：App.tsx 去掉 `buy` / `stock` / `slow` 与三个页面档、`i18n/purchasing.ts`、`i18n/cscode.ts`，Alerts 的「查看库存 →」按钮拿掉，
-订货员登入预设改应付账款；`mkpayload.py` 新增批 `opsmove`（`DROP:` 前缀 = 从部署里拿掉的档案）。**BI 的 production 部署要等营运系统四页上线后才做**（见 `docs/bi_web/README.md`）。
+订货员登入预设改应付账款；`mkpayload.py` 新增批 `opsmove`（`DROP:` 前缀 = 从部署里拿掉的档案）。营运系统四页 2026-10-15 上线（那边另套了 `ops_bi_pages_7_fix`，只改 `ops_rpl_rows` / `ops_wh_stock`，没动 BI 视图），
+BI production 随即换成 `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C`（全 SHA 参照、manifest 已 commit，剩 62 个档案）：BI 不再有订货 / 库存 / 滞销品。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
 无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。
