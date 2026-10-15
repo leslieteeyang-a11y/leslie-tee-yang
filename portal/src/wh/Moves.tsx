@@ -84,15 +84,17 @@ export function MoveForm({ me, company, locs, itemCode, onClose, onSaved, onMult
 
   return (
     <Modal title="登记搬动" onClose={onClose}>
-      <form className="form" onSubmit={submit}>
+      {/* 扫码框自己是 <form>，不能放在登记表单里：巢状 form 的 submit 在 Chrome 传不到 React，按 Enter 会整页重新载入 */}
+      <div className="form">
         {itemCode ? <p><b>{desc || itemCode}</b></p> : (
           <>
             {onMulti && <div><button type="button" className="ghost small" onClick={onMulti}>一次登记多个商品 →</button></div>}
-            {/* 扫码框自己有 form：按 Enter 不要冒泡成整张登记表单送出 */}
-            <div onSubmit={(e) => e.stopPropagation()}><ScanBox onCode={setCode} placeholder="扫商品条码或打代号" /></div>
+            <ScanBox onCode={setCode} placeholder="扫商品条码或打代号" />
             {code && <p className="small">{desc}</p>}
           </>
         )}
+      </div>
+      <form className="form" onSubmit={submit}>
         <label>做什么
           <select value={kind} onChange={(e) => setKind(e.target.value as MoveKind)}>
             {Object.entries(MOVE_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
