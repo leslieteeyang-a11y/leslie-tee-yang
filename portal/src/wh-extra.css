@@ -1,0 +1,52 @@
+/* 登入纪录、查货补充、多行搬动、搬动筛选（2026-10-15）。颜色一律用 style.css 的变数。 */
+
+/* 登入纪录 */
+.lg-sum { margin: 0 0 10px; color: var(--muted); }
+.lg-table td.num { font-variant-numeric: tabular-nums; }
+.lg-table th.num { text-align: right; }
+.lg-table td:first-child { min-width: 120px; }
+.lg-hot { color: var(--amber); font-weight: 700; }
+.lg-kind { font-size: .78rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; background: var(--soft); color: var(--muted); }
+.lg-kind.k-login { background: var(--green-soft); color: var(--green); }  /* 不能叫 .login：那是登入页的版面 */
+.lg-detail { max-height: 60vh; overflow-y: auto; }
+.lg-detail th { position: sticky; top: 0; z-index: 1; }
+.lg-detail td { font-size: .9rem; }
+
+/* 查货补充（查货卡片里，可收合） */
+details.wh-more { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.wh-more > summary { font-weight: 600; padding: 4px 0; }
+details.wh-more h3 { margin: 14px 0 6px; font-size: .95rem; }
+.wh-outlets td.num, .wh-outlets th.num { text-align: right; }
+.wh-outlets th { white-space: normal; }               /* 手机上表头换行，不要整张表横卷 */
+.wh-outlets td:first-child { min-width: 96px; }
+.list.wh-more-list li { padding: 6px 0; align-items: flex-start; }
+.list.wh-more-list .tag.warn, .wh-more .tag.warn { background: var(--red-soft); color: var(--red); }
+
+/* 多行搬动 */
+.mb-head { margin: 6px 0 0; }
+.list.mb-choices { background: var(--tint); border-radius: 8px; padding: 2px 12px; }
+.list.mb-choices li { align-items: center; }
+.mb-paste textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+/* 弹窗是 grid 的子项：表格的最小宽度会把弹窗撑出手机画面。width: 0 + min-width: 100% = 表格在框里自己横卷 */
+.mb-lines { width: 0; min-width: 100%; }
+.mb-lines th.num { text-align: right; }
+.mb-lines td { vertical-align: middle; }
+.mb-lines select { min-width: 120px; padding: 5px 6px; font-size: .88rem; }
+.mb-lines input.num-input { width: 76px; padding: 5px 6px; }
+.mb-lines tr.mb-miss td { background: var(--red-row); }
+.mb-lines tr.mb-bad td { background: var(--red-soft); }
+.mb-lines tr.mb-bad td:first-child { box-shadow: inset 3px 0 0 var(--red-fill); }
+.mb-lines button.icon { color: var(--muted); padding: 0 6px; }
+
+/* 搬动筛选列（全域 label 是 flex: 1，筛选列里的要自己定宽） */
+.mf-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -4px 0 12px; }
+.mf-bar label.mf-date { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 6px; font-size: .85rem; }
+.mf-bar input[type="date"] { width: 150px; padding: 6px 8px; }
+.mf-bar select { width: auto; max-width: 200px; padding: 6px 8px; }
+.mf-bar input.mf-q { flex: 1 1 200px; width: auto; min-width: 0; padding: 6px 10px; }
+@media (max-width: 640px) {
+  .mf-bar label.mf-date { flex: 1 1 calc(50% - 8px); }
+  .mf-bar label.mf-date input { flex: 1; width: auto; min-width: 0; }
+  .mf-bar select { flex: 1 1 calc(50% - 8px); max-width: none; }
+  .mf-bar input.mf-q { flex: 1 1 100%; }
+}

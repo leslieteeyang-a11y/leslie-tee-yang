@@ -25,6 +25,7 @@ import Customers from "./pages/Customers";
 import { DriverPage } from "./dlv/DriverSign";
 import { SyncNote } from "./sync";
 import LangSwitch from "./LangSwitch";
+import { markOpen } from "./wh-extra-api";
 
 const ICON: Record<string, string> = {
   dashboard: "⌂", tasks: "☑", approvals: "✎", purchasing: "⛴", attendance: "⏱", leave: "✈", warehouse: "▦", delivery: "⛟", customers: "☏", sales: "¤",
@@ -55,6 +56,8 @@ export default function App() {
   }, [session?.user?.id, loadMe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setMenuOpen(false), [route]);
+  // 登入纪录：刚按登入 = login；不然这个分页第一次打开 = open（失败不影响画面）
+  useEffect(() => { if (me) markOpen(me.staff.id); }, [me?.staff.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (route.startsWith("/driver")) return <DriverPage key={route} />; // 司机签收连结：不用登入
   if (session === undefined) return <div className="center">载入中…</div>;

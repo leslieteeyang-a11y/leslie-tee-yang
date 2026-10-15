@@ -5,6 +5,7 @@ import { ErrorBox } from "../ui";
 import { ScanBox } from "./Scanner";
 import { addLabels } from "./Labels";
 import { MoveForm } from "./Moves";
+import { ItemMore } from "./ItemMore";
 import { COUNT_STATUS_LABEL, countClass, FoundItem, ItemDetail, MOVE_STATUS_LABEL, moveText, qtyLabel, whenLabel, wh } from "../wh-api";
 
 export function Lookup({ me, company, locs, canEdit }: { me: Me; company: string; locs: string[]; canEdit: boolean }) {
@@ -161,6 +162,7 @@ function ItemCard({ d, canEdit, onMove, onLabel }: { d: ItemDetail; canEdit: boo
           <ul className="list">{d.counts.map((c) => <li key={c.id}><span>{`${c.location} · 数到 ${qtyLabel(c.qty)}`}{c.diff != null && Number(c.diff) !== 0 ? ` · 差 ${Number(c.diff) > 0 ? "+" : ""}${qtyLabel(c.diff)}` : ""}{" "}<span className="muted small">{`${whenLabel(c.counted_at)} · ${c.counted_by_name}`}</span></span><span className={"ap " + countClass(c)}>{COUNT_STATUS_LABEL[c.status]}</span></li>)}</ul>
         </>
       )}
+      <ItemMore company={d.company} item={d.item_code} />
       {d.barcodes.length > 0 && <p className="muted small">{`绑定的纸箱条码：${d.barcodes.join("、")}`}</p>}
     </section>
   );
