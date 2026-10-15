@@ -1,0 +1,93 @@
+/* 仓库 · 拣货（照 DO 拣货 + 扫码核对，2026-10-15）。颜色一律用 style.css 的变数 */
+.pick-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.pick-search { display: flex; gap: 8px; margin-bottom: 10px; }
+.pick-search input { flex: 1; min-width: 0; }
+.pick-sum { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: .85rem; margin: 0 0 10px; }
+.pick-sum b { color: var(--text); }
+.list.pick-list { padding: 4px 14px; }
+.pick-list li { align-items: center; }
+.pick-list li.click { cursor: pointer; }
+.pick-list li.click:hover { background: var(--hover); margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+.pick-list .main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.pick-list .main > div { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.pick-list .sub { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+.pick-prog { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; width: 96px; flex-shrink: 0; }
+.pick-prog span { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+
+/* 进度条 */
+.pk-bar { display: block; width: 100%; height: 8px; background: var(--track); border-radius: 99px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.pk-bar > i { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
+.pk-bar.full > i { background: var(--green); }
+
+/* 状态小标签 */
+.pk { font-size: .75rem; padding: 1px 8px; border-radius: 99px; white-space: nowrap; background: var(--soft); color: var(--muted); font-weight: 500; }
+.pk.picking { background: var(--amber-soft); color: var(--amber); }
+.pk.done { background: var(--green-soft); color: var(--green); }
+.pk.cancelled, .pk.warn { background: var(--red-soft); color: var(--red); }
+.pk.run { background: var(--primary-soft); color: var(--primary); }
+.pk.today { background: var(--primary); color: var(--on-fill); }
+.pk.none { background: var(--amber-soft); color: var(--amber); }
+
+/* 拣货画面 */
+.pick-back { display: inline-block; margin-bottom: 8px; }
+.pick-title { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 4px; }
+.pick-title h2 { margin: 0; font-size: 1.4rem; }
+.pick-who { color: var(--muted); margin: 0 0 10px; overflow-wrap: anywhere; }
+.pick-warn { background: var(--amber-soft); color: var(--amber); padding: 10px 12px; border-radius: 8px; margin: 8px 0; }
+.pick-note { color: var(--muted); font-size: .88rem; margin: 6px 0; overflow-wrap: anywhere; }
+.pick-note.amber { color: var(--amber); }
+.card.pick-scan { padding: 14px 16px; }
+.pick-bin { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.pick-bin .lbl { color: var(--muted); font-size: .9rem; }
+.pick-bin b { font-size: 1.1rem; }
+.pick-assign { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between;
+  background: var(--amber-soft); color: var(--amber); padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; font-weight: 600; }
+.pick-qty { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pick-qty .lbl { color: var(--muted); font-size: .9rem; }
+.pick-qty input { width: 72px; text-align: center; font-size: 1.1rem; padding: 6px; }
+.pick-qty button { min-width: 40px; }
+.pick-result { padding: 12px 14px; border-radius: 10px; font-size: 1.05rem; font-weight: 600; margin-top: 10px; overflow-wrap: anywhere; }
+.pick-result.ok { background: var(--green-soft); color: var(--green); }
+.pick-result.err { background: var(--red-soft); color: var(--red); }
+.pick-total { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.pick-total .pk-bar { flex: 1; height: 10px; }
+.pick-total span { white-space: nowrap; font-weight: 600; }
+.pick-flash { position: fixed; inset: 0; pointer-events: none; z-index: 60; animation: pick-flash .7s ease-out forwards; }
+.pick-flash.ok { background: var(--green); }
+.pick-flash.err { background: var(--red-fill); }
+@keyframes pick-flash { from { opacity: .5; } to { opacity: 0; } }
+
+.pick-lines { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.pick-line { background: var(--card); border-radius: 12px; padding: 12px 14px; box-shadow: var(--card-shadow);
+  border-left: 4px solid var(--line-strong); }
+.pick-line.done { border-left-color: var(--green); }
+.pick-line.none { border-left-color: var(--amber); }
+.pick-line.skip { border-left-color: var(--line); }
+.pick-line.skip .desc, .pick-line.skip .count { color: var(--muted); }
+.pick-line.hit { box-shadow: 0 0 0 2px var(--green), var(--card-shadow); }
+.pick-line.assign { box-shadow: 0 0 0 2px var(--amber), var(--card-shadow); }
+.pick-line .top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.pick-line .desc { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.pick-line .meta { color: var(--muted); font-size: .85rem; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.pick-line .count { font-size: 1.25rem; font-weight: 700; white-space: nowrap; }
+.pick-line .count.full { color: var(--green); }
+.pick-line .pk-bar { margin-top: 8px; }
+.pick-bins { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.pick-bins .lbl { color: var(--muted); font-size: .8rem; }
+button.bin-chip { background: var(--primary-soft); color: var(--primary); padding: 3px 10px; font-size: .85rem; font-weight: 500;
+  border: 1px solid transparent; }
+button.bin-chip.on { border-color: var(--primary); }
+.pick-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pick-foot { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+button.pk-big { padding: 12px 22px; font-size: 1.05rem; }
+button.danger-fill { background: var(--red-fill); color: var(--on-fill); }
+.list.pick-log { padding: 4px 14px; }
+.pick-log li { align-items: center; font-size: .9rem; }
+.pick-log li .main { min-width: 0; overflow-wrap: anywhere; }
+.pick-log li.voided .main { color: var(--muted); text-decoration: line-through; }
+.pick-done { background: var(--green-soft); color: var(--green); padding: 12px 14px; border-radius: 10px; margin: 8px 0; font-weight: 600; }
+.pick-done small { display: block; font-weight: 400; margin-top: 4px; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .pick-prog { width: 76px; }
+  .pick-foot button { flex: 1 1 auto; }
+}

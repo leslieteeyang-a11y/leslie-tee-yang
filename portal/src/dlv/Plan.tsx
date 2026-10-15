@@ -6,6 +6,8 @@ import {
   routeKm, splitDocNos, Stop, STORE, todayKL, toStop, ui,
 } from "../dlv-api";
 import { ErrorBox } from "../ui";
+import { PickTag, usePickStatus } from "../wh/PickTag";
+import type { PickStatusMap } from "../wh-pick-api";
 
 export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onCount }: {
   meta: DlvMeta; company: string; readOnly: boolean; onSent: () => void;
@@ -35,6 +37,8 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onC
   stopsRef.current = stops;
   // 出发点、外包司机只有「可审批」（主管、管理层）能在「设定」分页改；其他人的提示改成请主管设定
   const canSetup = meta.level === "approve";
+  // 仓库拣货进度（DO 号旁边的小标签；读不到就不显示）
+  const pickSt = usePickStatus(company, [...stops.map((s) => s.doc_no), ...(dayDocs ?? []).map((h) => h.doc_no)]);
   useEffect(() => { onCount?.(stops.length); }, [stops.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 换分店：清掉这次的排单（DO 属于某一间分店）
@@ -297,7 +301,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onC
             <ul className="list">
               {dayDocs.map((h) => (
                 <li key={h.doc_no!} className="dlv-hit">
-                  <span><b>{h.doc_no}</b> {toStop(h).name || h.debtor_name}<br /><span className="muted small">{h.address || "没有地址"}</span></span>
+                  <span><b>{h.doc_no}</b> <PickTag s={pickSt[h.doc_no!]} /> {toStop(h).name || h.debtor_name}<br /><span className="muted small">{h.address || "没有地址"}</span></span>
                   {readOnly ? null : stops.some((s) => s.key === h.doc_no) ? <span className="muted small">已加入</span>
                     : <button className="small" disabled={working} onClick={() => addStops([h])}>加入</button>}
                 </li>
@@ -314,7 +318,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onC
               <thead><tr><th>#</th><th>单号</th><th>顾客 / 货品 / 备注</th><th>送货地址</th><th>位置</th><th /></tr></thead>
               <tbody>
                 {stops.map((s, i) => (
-                  <StopRow key={s.key} s={s} i={i} n={stops.length} readOnly={readOnly}
+                  <StopRow key={s.key} s={s} i={i} n={stops.length} readOnly={readOnly} pk={s.doc_no ? pickSt[s.doc_no] : undefined}
                            onMove={(d) => move(i, d)} onRemove={() => setStops(stops.filter((x) => x.key !== s.key))}
                            onAddress={(a) => saveAddress(s, a)} onNote={(x) => saveNote(s, x)} onCoords={(c) => saveCoords(s, c)} />
                 ))}
@@ -362,8 +366,8 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onC
   );
 }
 
-function StopRow({ s, i, n, readOnly, onMove, onRemove, onAddress, onNote, onCoords }: {
-  s: Stop; i: number; n: number; readOnly: boolean; onMove: (d: number) => void; onRemove: () => void;
+function StopRow({ s, i, n, readOnly, pk, onMove, onRemove, onAddress, onNote, onCoords }: {
+  s: Stop; i: number; n: number; readOnly: boolean; pk?: PickStatusMap[string]; onMove: (d: number) => void; onRemove: () => void;
   onAddress: (a: string) => void; onNote: (x: string) => void; onCoords: (c: string) => void;
 }) {
   const [addr, setAddr] = useState(s.address);
@@ -378,7 +382,7 @@ function StopRow({ s, i, n, readOnly, onMove, onRemove, onAddress, onNote, onCoo
   return (
     <tr>
       <td>{i + 1}</td>
-      <td className="nowrap">{s.doc_no ?? "–"}</td>
+      <td className="nowrap">{s.doc_no ?? "–"}{pk && <><br /><PickTag s={pk} /></>}</td>
       <td className="dlv-cust">
         <b>{s.name || "–"}</b> <span className="muted small">{fmtPhone(s.phone)}</span>
         {s.lines?.length ? (

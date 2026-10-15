@@ -17,9 +17,10 @@ import { StockTab } from "../wh/Stock";
 import { SlowTab } from "../wh/Slow";
 import { BinsTab } from "../wh/Bins";
 import { MapLazy } from "../wh/MapLazy";
+import { PickTab } from "../wh/Pick";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
+type Tab = "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
@@ -39,6 +40,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   tabs.push(["map", "地图"]);         // 货架地图（#/warehouse/map/<仓位>）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
+  tabs.push(["pick", "拣货"]);       // 照 DO 拣货 + 扫码核对（2026-10-15）
   // 开单部（仓库只看）与仓库「可审批」：点货后的进货，在 AutoCount 开 GRN
   if (canGrn(me)) tabs.push(["grn", "待开进货单"]);
   if (canApprove) tabs.push(["review", "差异审核"]);
@@ -71,6 +73,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
       {tab === "bins" && <BinsTab key={co} company={co} level={meta.level} arg={arg} locs={locs.map((l) => l.code)} />}
       {tab === "map" && <MapLazy key={co} company={co} loc={arg} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
+      {tab === "pick" && <PickTab company={co} canEdit={canEdit} doc={arg} />}
     </>
   );
 }
