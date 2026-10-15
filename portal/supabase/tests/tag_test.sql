@@ -107,12 +107,18 @@ do $$ declare g jsonb; begin
   g := public.ops_wh_tag_save('{"name":"展示品","active":false}');
   assert not (g->>'active')::boolean and g->>'color' = 'purple', 'deactivate keeps color';
   assert pg_temp.tags_of('ST003') = '畅销', 'inactive tag hidden';
+end $$;
+-- 自动标签两间分店共用：只属总部的采购不能停用（审查 DBSEC-3）；管理全部分店的人可以
+select pg_temp.expect_error($q$select public.ops_wh_tag_save('{"name":"畅销","active":false}')$q$, '两间分店共用');
+select pg_temp.as_user('boss@example.com');
+do $$ declare g jsonb; begin
   -- 自动标签只能改颜色 / 停用：停用「畅销」→ 没有商品是畅销；再开回来
   perform public.ops_wh_tag_save('{"name":"畅销","active":false}');
   assert pg_temp.tags_of('ST003') = '' and pg_temp.tag_n('畅销') = 0, 'auto tag off';
   g := public.ops_wh_tag_save('{"name":"畅销","active":true,"color":"blue"}');
   assert g->>'kind' = 'auto' and g->>'color' = 'blue' and pg_temp.tags_of('ST003') = '畅销', 'auto tag back on';
 end $$;
+select pg_temp.as_user('buyer3@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_item_tag_set('{"items":["ST004"],"tag":"展示品"}')$q$, '停用');
 -- JB：看不到总部；JB 的 RA 卖 5 件，第一名但不到 10 件 → 不是畅销
 select pg_temp.as_user('jbwh@example.com');

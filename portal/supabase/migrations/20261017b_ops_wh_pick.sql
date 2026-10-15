@@ -192,6 +192,13 @@ language sql stable security definer set search_path = '' as $$
     order by r.run_date desc, r.id desc limit 5) x
 $$;
 
+-- DO 的单位跟商品的基本单位不一样（例 CTN vs PCS；SET / SETS 这种写法不同不算）→ 不能照 DO 的数量从货架扣
+create or replace function ops.wh_pick_uom_diff(p_do_uom text, p_base_uom text) returns boolean
+language sql immutable set search_path = '' as $$
+  select coalesce(nullif(trim(p_do_uom), '') is not null and nullif(trim(p_base_uom), '') is not null
+                  and regexp_replace(upper(trim(p_do_uom)), 'S$', '') <> regexp_replace(upper(trim(p_base_uom)), 'S$', ''), false)
+$$;
+
 -- 总览 / 首页用：今天要送（今天的排单或今天开的 DO，没取消、还没送达）几张、已拣好几张；拣到一半的几张
 create or replace function ops.wh_pick_summary(p_company text) returns jsonb
 language sql stable security definer set search_path = '' as $$
@@ -199,17 +206,55 @@ language sql stable security definer set search_path = '' as $$
     select distinct coalesce(nullif(t.s->>'doc_no', ''), t.s->>'key') doc
     from bi.delivery_run r
     cross join lateral jsonb_array_elements(case when jsonb_typeof(r.stops) = 'array' then r.stops else '[]'::jsonb end) t(s)
-    where r.store = ops.dlv_store(p_company) and r.run_date = ops.today()),
+    where r.store = (select ops.dlv_store(p_company)) and r.run_date = (select ops.today())),
   docs as (
     select d.doc_no from bi.delivery_doc d
     where d.company = p_company and not d.cancelled
-      and (d.doc_date = ops.today() or d.doc_no in (select doc from today_runs))
+      and (d.doc_date = (select ops.today()) or d.doc_no in (select doc from today_runs))
       and not exists (select 1 from bi.delivery_pod p join bi.delivery_run r2 on r2.id = p.run_id
-                      where r2.store = ops.dlv_store(p_company) and p.doc_no = d.doc_no and p.status = 'delivered'))
+                      where r2.store = (select ops.dlv_store(p_company)) and p.doc_no = d.doc_no and p.status = 'delivered'))
   select jsonb_build_object(
     'today', (select count(*) from docs),
     'today_done', (select count(*) from docs join ops.wh_pick k on k.company = p_company and k.doc_no = docs.doc_no and k.status = 'done'),
     'picking', (select count(*) from ops.wh_pick k where k.company = p_company and k.status = 'picking'))
+$$;
+
+-- 已开 DO、还没拣的数量（每个商品）。AutoCount 开 DO 当下就扣库存，可是货还在货架上：货架帐的「应有」要加回去，
+-- 不然每一张还没拣的 DO 都会被列成「货架比系统多」。范围：近 7 天开的、没取消、还没拣好、还没送达的 DO。
+-- 已开始拣的：照拣货单的行，扣掉已经从货架扣的；还没开始的：照 DO 明细配对商品（跟拣货同一套配对）。
+-- DO 的单位不一定是基本单位，这里照 DO 的数量算（没有换算率）。
+create or replace function ops.wh_do_unpicked(p_company text) returns table (item_code text, qty numeric)
+language sql stable security definer set search_path = '' as $$
+  with docs as (
+    select d.doc_no, d.lines from bi.delivery_doc d
+    where d.company = p_company and not d.cancelled and d.doc_date >= (select ops.today()) - 7
+      and not exists (select 1 from ops.wh_pick k where k.company = p_company and k.doc_no = d.doc_no and k.status = 'done')
+      and not exists (select 1 from bi.delivery_pod pd join bi.delivery_run r on r.id = pd.run_id
+                      where r.store = (select ops.dlv_store(p_company)) and pd.doc_no = d.doc_no and pd.status = 'delivered')),
+  started as (
+    select l.item_code, greatest(l.qty - coalesce((select sum(sc.qty) from ops.wh_pick_scan sc
+                                                   where sc.line_id = l.id and not sc.voided and sc.bin_id is not null), 0), 0) q
+    from ops.wh_pick k join ops.wh_pick_line l on l.pick_id = k.id
+    where k.company = p_company and k.status = 'picking' and k.doc_no in (select doc_no from docs)
+      and l.item_code is not null and not l.skip),
+  raw as (
+    select ops.wh_pick_norm(x->>'d') nd, nullif(trim(coalesce(x->>'c', '')), '') c, greatest(ops.wh_pick_num(x->'q'), 0) q
+    from docs
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(docs.lines) = 'array' then docs.lines else '[]'::jsonb end) x
+    where not exists (select 1 from ops.wh_pick k where k.company = p_company and k.doc_no = docs.doc_no and k.status = 'picking')),
+  dn as (
+    select ops.wh_pick_norm(i.description) nd, min(i.item_code) item_code, count(distinct i.item_code) n
+    from bi.dim_item i
+    where i.company = p_company and ops.wh_pick_norm(i.description) in (select r.nd from raw r)
+    group by 1),
+  notstarted as (
+    select coalesce((select i.item_code from bi.dim_item i where i.company = p_company and r.c is not null
+                       and upper(i.item_code) = upper(r.c) limit 1),
+                    case when dn.n = 1 then dn.item_code end) item_code, r.q
+    from raw r left join dn on dn.nd = r.nd)
+  select z.item_code, sum(z.q) from (select item_code, q from started union all select item_code, q from notstarted) z
+  where z.item_code is not null
+  group by z.item_code having sum(z.q) > 0
 $$;
 
 -- ============================================================ 3. 清单 / 一张 DO / 状态
@@ -227,6 +272,7 @@ declare
   v_today date := ops.today();
   v_store text;
   v_from date;
+  v_runs jsonb;
 begin
   me := ops.require_level('warehouse', 'view');
   c := ops.wh_company(me, p->>'company');
@@ -238,33 +284,39 @@ begin
   end if;
   v_store := ops.dlv_store(c);
   v_from := case v_when when 'today' then v_today when 'week' then v_today - 6 else v_today - 60 end;
+  -- 一张 DO 排过好几次：今天那趟优先，不然最近的一趟。先做成 {DO 号: 排单}，下面直接取（不用跟每张 DO 比对）
+  select coalesce(jsonb_object_agg(x.doc, jsonb_build_object('run_id', x.run_id, 'run_date', x.run_date,
+           'driver_name', x.driver_name, 'seq', x.seq)), '{}'::jsonb)
+    into v_runs
+  from (select distinct on (x.doc) x.doc, r.id run_id, r.run_date, r.driver_name, t.o::int seq
+        from bi.delivery_run r
+        cross join lateral jsonb_array_elements(case when jsonb_typeof(r.stops) = 'array' then r.stops else '[]'::jsonb end)
+             with ordinality t(s, o)
+        cross join lateral (select coalesce(nullif(t.s->>'doc_no', ''), t.s->>'key') doc) x
+        where r.store = v_store and r.run_date >= v_today - 60 and x.doc is not null
+        order by x.doc, (r.run_date = v_today) desc, r.run_date desc, r.id desc) x;
   return jsonb_build_object(
     'company', c, 'when', v_when, 'status', v_status, 'today', v_today,
     'summary', ops.wh_pick_summary(c),
     'synced', (select max(d.synced_at) from bi.delivery_doc d where d.company = c),
     'rows', coalesce((
-      with runs as (   -- 一张 DO 排过好几次：今天那趟优先，不然最近的一趟
-        select distinct on (x.doc) x.doc, r.id run_id, r.run_date, r.driver_name, t.o::int seq
-        from bi.delivery_run r
-        cross join lateral jsonb_array_elements(case when jsonb_typeof(r.stops) = 'array' then r.stops else '[]'::jsonb end)
-             with ordinality t(s, o)
-        cross join lateral (select coalesce(nullif(t.s->>'doc_no', ''), t.s->>'key') doc) x
-        where r.store = v_store and r.run_date >= v_today - 60
-        order by x.doc, (r.run_date = v_today) desc, r.run_date desc, r.id desc),
-      picks as (select k.* from ops.wh_pick k where k.company = c and k.status <> 'cancelled'),
+      with picks as (select k.* from ops.wh_pick k where k.company = c and k.status <> 'cancelled'),
+      d0 as (
+        select d.doc_no, d.doc_date, d.debtor_name, d.cancelled, d.lines,
+               (v_runs->d.doc_no->>'run_id')::bigint run_id, (v_runs->d.doc_no->>'run_date')::date run_date,
+               v_runs->d.doc_no->>'driver_name' driver_name, (v_runs->d.doc_no->>'seq')::int seq
+        from bi.delivery_doc d where d.company = c),
       docs as (
-        select d.doc_no, d.doc_date, d.debtor_name, d.cancelled, d.lines, r.run_id, r.run_date, r.driver_name, r.seq,
+        select d.doc_no, d.doc_date, d.debtor_name, d.cancelled, d.lines, d.run_id, d.run_date, d.driver_name, d.seq,
                k.id pick_id, k.status pick_status,
                exists (select 1 from bi.delivery_pod pd join bi.delivery_run r2 on r2.id = pd.run_id
                        where r2.store = v_store and pd.doc_no = d.doc_no and pd.status = 'delivered') delivered
-        from bi.delivery_doc d
-        left join runs r on r.doc = d.doc_no
+        from d0 d
         left join picks k on k.doc_no = d.doc_no
-        where d.company = c
-          and (not d.cancelled or k.id is not null)
+        where (not d.cancelled or k.id is not null)
           and (k.status = 'picking'
-               or case v_when when 'today' then d.doc_date = v_today or r.run_date = v_today
-                              else d.doc_date >= v_from or r.run_date >= v_from end)
+               or case v_when when 'today' then d.doc_date = v_today or d.run_date = v_today
+                              else d.doc_date >= v_from or d.run_date >= v_from end)
           and (v_q = '' or upper(d.doc_no) like '%' || v_q || '%' or upper(coalesce(d.debtor_name, '')) like '%' || v_q || '%')),
       f as (
         select * from docs x
@@ -481,6 +533,11 @@ begin
                       then format('%s 已经拣够了（要 %s）。多拿的请放回去。', v_item, ops.wh_pick_q(l.qty))
                       else format('%s 只差 %s，这次扫了 %s。多拿的请放回去。', v_item, ops.wh_pick_q(v_left), ops.wh_pick_q(v_qty)) end);
   end if;
+  if v_bin is not null and ops.wh_pick_uom_diff(l.uom, (select i.base_uom from bi.dim_item i where i.company = k.company and i.item_code = v_item)) then
+    return jsonb_build_object('ok', false, 'code', 'uom', 'item_code', v_item,
+      'message', format('DO 的单位是 %s，商品的单位是 %s，不能照 DO 的数量从货架扣：请按「不从货架扣」拣，再到「货架」用「拿下」扣实际件数。',
+                        l.uom, (select i.base_uom from bi.dim_item i where i.company = k.company and i.item_code = v_item)));
+  end if;
   if v_bin is not null then
     begin
       b := ops.wh_bin_find(k.company, v_bin, null);
@@ -604,6 +661,10 @@ begin
       if l.item_code is null then
         raise exception '第 % 行对不到商品，不能从货架扣；请不要选货架，或先扫商品指定。', l.line_no using errcode = '22023';
       end if;
+      if ops.wh_pick_uom_diff(l.uom, (select i.base_uom from bi.dim_item i where i.company = k.company and i.item_code = l.item_code)) then
+        raise exception '第 % 行 DO 的单位是 %，跟商品的单位不一样，不能照 DO 的数量从货架扣：请不要选货架，再到「货架」用「拿下」扣实际件数。',
+          l.line_no, l.uom using errcode = '22023';
+      end if;
       b := ops.wh_bin_find(k.company, v_bin, null);
       if not b.active then
         raise exception '货架 % 已经停用，请换一个货架。', b.code using errcode = '22023';
@@ -685,6 +746,10 @@ begin
   if not ops.wh_pick_can_manage(me, k) then
     raise exception '只有开始拣货的人或仓库「可审批」可以取消。' using errcode = '42501';
   end if;
+  -- 已拣好的（货多半已经出门）取消会把货架加回去：只给仓库「可审批」
+  if k.status = 'done' and ops.level_rank(ops.module_level(me, 'warehouse')) < 3 then
+    raise exception '已拣好的拣货单只有仓库「可审批」可以取消（取消会把货架上的数量加回去）。' using errcode = '42501';
+  end if;
   if v_reason = '' then
     raise exception '取消要写原因（例：DO 取消了、拣错要重来）。' using errcode = '22023';
   end if;
@@ -733,6 +798,8 @@ revoke all on function ops.wh_pick_scan_json(ops.wh_pick_scan) from public, anon
 revoke all on function ops.wh_pick_json(ops.wh_pick) from public, anon, authenticated;
 revoke all on function ops.wh_pick_runs(text, text) from public, anon, authenticated;
 revoke all on function ops.wh_pick_summary(text) from public, anon, authenticated;
+revoke all on function ops.wh_do_unpicked(text) from public, anon, authenticated;
+revoke all on function ops.wh_pick_uom_diff(text, text) from public, anon, authenticated;
 revoke all on function ops.wh_pick_can_manage(ops.staff, ops.wh_pick) from public, anon, authenticated;
 do $$
 declare

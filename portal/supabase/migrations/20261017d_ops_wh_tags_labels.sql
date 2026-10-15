@@ -124,8 +124,8 @@ create or replace function ops.wh_slow_items(p_company text) returns setof text
 language sql stable security definer set search_path = '' as $$
   select a.item_code::text from bi.fact_item_aging a
   where a.company = p_company and a.on_hand > 0 and a.last_receipt_date is not null
-    and (extract(year from age(ops.today(), a.last_receipt_date)) * 12
-         + extract(month from age(ops.today(), a.last_receipt_date))) >= 6
+    and (extract(year from age((select ops.today()), a.last_receipt_date)) * 12
+         + extract(month from age((select ops.today()), a.last_receipt_date))) >= 6
 $$;
 
 -- 有某个标签的商品（手动 + 自动；停用的标签没有商品）
@@ -144,13 +144,15 @@ $$;
 -- 一批商品的标签（手动 + 自动，照标签顺序）：{"ST003": ["清货", "畅销"], …}；没有标签的商品不出现
 create or replace function ops.wh_item_tags(p_company text, p_codes text[]) returns jsonb
 language sql stable security definer set search_path = '' as $$
-  with t as (
+  with codes as (select distinct u.code from unnest(p_codes) u(code)),
+  t as (
     select it.item_code, it.tag from ops.wh_item_tag it join ops.wh_tag g on g.name = it.tag and g.kind = 'manual'
-    where it.company = p_company and it.active and it.item_code = any (p_codes)
+    join codes on codes.code = it.item_code
+    where it.company = p_company and it.active
     union
-    select x, (select g.name from ops.wh_tag g where g.rule = 'hot') from ops.wh_hot_items(p_company) h(x) where x = any (p_codes)
+    select x, (select g.name from ops.wh_tag g where g.rule = 'hot') from ops.wh_hot_items(p_company) h(x) join codes on codes.code = x
     union
-    select x, (select g.name from ops.wh_tag g where g.rule = 'slow') from ops.wh_slow_items(p_company) s(x) where x = any (p_codes))
+    select x, (select g.name from ops.wh_tag g where g.rule = 'slow') from ops.wh_slow_items(p_company) s(x) join codes on codes.code = x)
   select coalesce(jsonb_object_agg(z.item_code, z.tags), '{}'::jsonb)
   from (select t.item_code, jsonb_agg(g.name order by g.sort, g.name) tags
         from t join ops.wh_tag g on g.name = t.tag and g.active group by t.item_code) z
@@ -210,6 +212,13 @@ begin
             coalesce(nullif(p->>'sort', '')::int, (select coalesce(max(x.sort), 0) + 10 from ops.wh_tag x)), me.id)
     returning * into g;
   else
+    -- 标签两间分店共用：自动标签、或另一间分店也在用的标签，只有管理全部分店的人能改颜色 / 停用
+    if not coalesce(me.branch = 'ALL', false)
+       and (g.kind = 'auto'
+            or exists (select 1 from ops.wh_item_tag it where it.tag = g.name and it.active
+                       and not coalesce(ops.sees_company(me, it.company), false))) then
+      raise exception '标签「%」两间分店共用（另一间分店也在用），只有管理全部分店的人能改颜色或停用。', g.name using errcode = '42501';
+    end if;
     update ops.wh_tag set color = coalesce(v_color, color), active = coalesce((p->>'active')::boolean, active),
       sort = coalesce(nullif(p->>'sort', '')::int, sort)
     where name = g.name returning * into g;
@@ -522,7 +531,9 @@ language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'lot_no', l.lot_no, 'company', l.company, 'item_code', l.item_code,
     'description', coalesce(i.description, l.item_code), 'uom', i.base_uom,
-    'qty', l.qty, 'boxes', l.boxes, 'outlet', l.outlet,
+    -- 点货后补记坏货 / 到货少会改进货的数量：照进货现在的数量
+    'qty', case when m.id is not null and m.status <> 'cancelled' then m.qty else l.qty end, 'boxes', l.boxes, 'outlet', l.outlet,
+    'move_status', m.status,
     'outlet_name', (select coalesce(nullif(o.short_name, ''), o.name) from ops.outlet o where o.code = l.outlet),
     'location', l.location, 'move_id', l.move_id, 'do_id', l.do_id, 'note', l.note,
     'received_at', l.received_at, 'received_by_name', (select s.name from ops.staff s where s.id = l.received_by),
@@ -589,7 +600,8 @@ begin
         if o->>'move_id' !~ '^[0-9]{1,12}$' then
           raise exception '找不到这笔进货。' using errcode = 'P0002';
         end if;
-        select * into m from ops.wh_move x where x.id = (o->>'move_id')::bigint and x.company = c;
+        -- 锁住这笔进货：两个人同时替同一笔进货建批次时排队，第二个人会读到已经建好的批次
+        select * into m from ops.wh_move x where x.id = (o->>'move_id')::bigint and x.company = c for no key update;
         if m.id is null or m.kind <> 'receive' then
           raise exception '找不到这笔进货。' using errcode = 'P0002';
         end if;
@@ -598,7 +610,7 @@ begin
         end if;
         select * into l from ops.wh_lot x where x.move_id = m.id for update;
         if l.lot_no is not null then
-          update ops.wh_lot set boxes = v_boxes where lot_no = l.lot_no returning * into l;
+          update ops.wh_lot set boxes = v_boxes, qty = m.qty where lot_no = l.lot_no returning * into l;
         else
           select * into d from ops.supplier_do x where x.id = m.do_id;
           insert into ops.wh_lot (lot_no, company, item_code, qty, boxes, outlet, location, move_id, do_id,
@@ -718,6 +730,17 @@ begin
       '[]'::jsonb));
 end $$;
 
+-- 扫到箱贴的 QR（批次网址 …#/warehouse/lot/L…）或批次号 → 那一批的商品。上架、拣货、盘点、多行搬动扫箱贴都认得
+-- （20261004 的 ops.wh_resolve 加第三个分支；查货画面在前端先把批次 QR 带去批次页，不受影响）
+create or replace function ops.wh_resolve(p_company text, p_code text) returns text
+language sql stable security definer set search_path = '' as $$
+  select coalesce(
+    (select b.item_code from ops.wh_barcode b where b.company = p_company and b.barcode = trim(p_code)),
+    (select i.item_code from bi.dim_item i where i.company = p_company and upper(i.item_code) = upper(trim(p_code))),
+    (select l.item_code from ops.wh_lot l where l.company = p_company
+       and l.lot_no = upper(substring(trim(p_code) from '(?i)(L[0-9]{6}-[0-9]+)$'))))
+$$;
+
 -- ==================================================================== 6. 打印纪录
 -- 记打印（按了列印才记）。p: {company, rows: [{kind: lot|item|bin, lot_no?, item_code?, bin_id?, copies, size}]}
 -- 商品条码、货架标签：仓库「只看」以上；箱贴：仓库或订货「可编辑」
@@ -754,6 +777,9 @@ begin
       where x.lot_no = upper(btrim(coalesce(o->>'lot_no', ''))) and x.company = c;
       if v_lot is null then
         raise exception '找不到批次「%」。', coalesce(o->>'lot_no', '') using errcode = 'P0002';
+      end if;
+      if exists (select 1 from ops.wh_lot x join ops.wh_move m on m.id = x.move_id where x.lot_no = v_lot and m.status = 'cancelled') then
+        raise exception '批次 % 的进货已经取消，不用再印箱贴。', v_lot using errcode = '22023';
       end if;
     elsif k = 'item' then
       v_item := left(btrim(coalesce(o->>'item_code', '')), 60);

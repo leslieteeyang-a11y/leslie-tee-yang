@@ -13,13 +13,14 @@ declare
   c text;
   lvl int;
   cost boolean;
+  td date := ops.today();                             -- 只算一次（放在 where 里会每一列都算）
 begin
   me := ops.require_level('warehouse', 'view');
   c := ops.wh_company(me, p->>'company');
   lvl := ops.level_rank(ops.module_level(me, 'warehouse'));
   cost := lvl >= 3;
   return jsonb_build_object(
-    'company', c, 'synced_at', ops.wh_synced_at(c), 'show_cost', cost, 'today', ops.today(),
+    'company', c, 'synced_at', ops.wh_synced_at(c), 'show_cost', cost, 'today', td,
     -- AutoCount 库存：负数的 商品×仓位、各仓位几种货 / 几件 / 成本
     'neg_rows', (select count(*) from bi.fact_stock f where f.company = c and f.qty < 0),
     'locations', coalesce((
@@ -36,15 +37,15 @@ begin
     'grn_pending_do', (select count(distinct m.do_id) from ops.wh_move m where m.company = c and m.status = 'pending' and m.kind = 'receive'),
     'do_to_count', (select count(*) from ops.supplier_do d
                     left join ops.shipment s on s.id = d.shipment_id and s.status <> 'cancelled'
-                    where d.company = c and d.status = 'confirmed' and coalesce(s.eta, d.eta) <= ops.today() + 3),
+                    where d.company = c and d.status = 'confirmed' and coalesce(s.eta, d.eta) <= td + 3),
     'variances', (select count(*) from ops.wh_count k where k.company = c and k.status = 'variance'
-                    and (k.attempt = 2 or k.count_date < ops.today())),
+                    and (k.attempt = 2 or k.count_date < td)),
     -- 今天的每日小盘点：盘了几项 / 目标（要盘的仓位每天几件加起来）
     'count_today', jsonb_build_object(
       'counted', (select count(distinct (k.location, k.item_code)) from ops.wh_count k
-                  where k.company = c and k.count_date = ops.today() and k.status <> 'superseded'),
+                  where k.company = c and k.count_date = td and k.status <> 'superseded'),
       'target', (select coalesce(sum(l.daily_target), 0) from ops.wh_location l where l.company = c and l.counting),
-      'people', (select count(distinct k.counted_by) from ops.wh_count k where k.company = c and k.count_date = ops.today())),
+      'people', (select count(distinct k.counted_by) from ops.wh_count k where k.company = c and k.count_date = td)),
     -- 货架帐
     'bins', ops.wh_bin_summary(c),
     -- 拣货（照 DO）：今天要送几张、已拣好几张、拣到一半几张
@@ -102,8 +103,10 @@ begin
   sh := case when lvl >= 2 then public.ops_wh_sheet_home() else '[]'::jsonb end;
   return jsonb_build_object(
     'picks_left', case when lvl >= 2 then (
-      select coalesce(sum((ops.wh_pick_summary(c)->>'today')::int - (ops.wh_pick_summary(c)->>'today_done')::int), 0)
-      from unnest(array['HOMEWORKSSB', 'HOMEWORKSSOUTHERN']) c where ops.sees_company(me, c)) end,
+      select coalesce(sum((x.j->>'today')::int - (x.j->>'today_done')::int), 0)
+      from unnest(array['HOMEWORKSSB', 'HOMEWORKSSOUTHERN']) c,
+           lateral (select ops.wh_pick_summary(c) j offset 0) x
+      where ops.sees_company(me, c)) end,
     'sheets', coalesce(sh, '[]'::jsonb),
     'bins_over', case when lvl >= 3 then (
       select coalesce(sum((b->>'items_over')::int), 0)

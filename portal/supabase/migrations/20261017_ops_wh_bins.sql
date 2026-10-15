@@ -72,7 +72,9 @@ create table ops.wh_map (
   foreign key (company, location) references ops.wh_location (company, code)
 );
 
-create sequence ops.wh_bin_ref_seq;                      -- 一次货架动作（可能动到两个货架）的 ref_id
+create sequence ops.wh_bin_ref_seq;
+-- 扫码 / 打代号找商品（ops.wh_resolve）比对 upper(item_code)：没有这个索引每次都要扫整间公司 5,000 多个商品（Excel 带入几千行会超过 8 秒）
+create index if not exists dim_item_company_upper_code_idx on bi.dim_item (company, upper(item_code));                      -- 一次货架动作（可能动到两个货架）的 ref_id
 
 alter table ops.wh_bin enable row level security;
 alter table ops.wh_bin_stock enable row level security;
@@ -134,12 +136,28 @@ begin
   return b;
 end $$;
 
--- 应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动
+-- 已开 DO、还没拣的数量：AutoCount 开 DO 当下就扣库存，可是货还在货架上（拣货时才拿下来）。
+-- 真正的算法在拣货（20261017b_ops_wh_pick.sql 换掉这个函数）；这里先回空，让这个档自己也能套。
+create or replace function ops.wh_do_unpicked(p_company text) returns table (item_code text, qty numeric)
+language sql stable security definer set search_path = '' as $$
+  select null::text, null::numeric where false
+$$;
+
+-- 一个商品在某仓位的已开 DO 未拣（DO 没有仓位：算在这间公司的主要仓位）
+create or replace function ops.wh_do_unpicked_item(p_company text, p_item text, p_loc text) returns numeric
+language sql stable security definer set search_path = '' as $$
+  select case when p_loc = ops.podo_main_loc(p_company)
+              then coalesce((select sum(u.qty) from ops.wh_do_unpicked(p_company) u where u.item_code = p_item), 0)
+              else 0 end
+$$;
+
+-- 应有（货架上该有的）= AutoCount 库存 + 还没输入 AutoCount 的搬动 + 已开 DO 还没拣的
 create or replace function ops.wh_bin_expected(p_company text, p_item text, p_loc text) returns numeric
 language sql stable security definer set search_path = '' as $$
   select coalesce((select sum(f.qty) from bi.fact_stock f
                    where f.company = p_company and f.item_code = p_item and f.location = p_loc), 0)
        + ops.wh_pending(p_company, p_item, p_loc)
+       + ops.wh_do_unpicked_item(p_company, p_item, p_loc)
 $$;
 
 create or replace function ops.wh_bin_shelved(p_company text, p_item text, p_loc text) returns numeric
@@ -149,7 +167,8 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- 改一个货架上一个商品的数量（所有改货架帐的地方都走这里）。p_set 有值 = 改成这个数；不然加 p_delta。
--- 回传改完的数量。数量不能小于 0。
+-- 回传改完的数量。数量不能小于 0。停用的货架只能减少（拿走、盘成 0、改数），不能再放东西上去。
+-- 先确保那一行存在再上锁（两人同时第一次放上同一格时，for update 才锁得到，不会丢数）。
 create or replace function ops.wh_bin_apply(p_me ops.staff, p_bin bigint, p_item text, p_delta numeric, p_kind text,
   p_ref_type text default null, p_ref_id bigint default null, p_note text default '', p_set numeric default null)
 returns numeric
@@ -160,13 +179,13 @@ declare
   nxt numeric;
   d numeric;
 begin
-  select * into b from ops.wh_bin where id = p_bin;
+  select * into b from ops.wh_bin where id = p_bin for share;   -- 跟停用货架排队
   if b.id is null then
     raise exception '找不到货架。' using errcode = 'P0002';
   end if;
-  if not b.active then
-    raise exception '货架 % 已经停用。', b.code using errcode = '22023';
-  end if;
+  insert into ops.wh_bin_stock (bin_id, company, item_code, qty, updated_at, updated_by)
+  values (p_bin, b.company, p_item, 0, now(), p_me.id)
+  on conflict (bin_id, item_code) do nothing;
   select s.qty into cur from ops.wh_bin_stock s where s.bin_id = p_bin and s.item_code = p_item for update;
   cur := coalesce(cur, 0);
   if p_set is not null then
@@ -182,10 +201,12 @@ begin
       b.code, p_item, trim_scale(cur)::text, trim_scale(-p_delta)::text
       using errcode = '22023';
   end if;
+  if not b.active and nxt > cur then
+    raise exception '货架 % 已经停用，不能再放东西上去。', b.code using errcode = '22023';
+  end if;
   d := nxt - cur;
-  insert into ops.wh_bin_stock (bin_id, company, item_code, qty, updated_at, updated_by)
-  values (p_bin, b.company, p_item, nxt, now(), p_me.id)
-  on conflict (bin_id, item_code) do update set qty = excluded.qty, updated_at = excluded.updated_at, updated_by = excluded.updated_by;
+  update ops.wh_bin_stock set qty = nxt, updated_at = now(), updated_by = p_me.id
+  where bin_id = p_bin and item_code = p_item;
   if d <> 0 or p_kind in ('count', 'adjust', 'import') then
     insert into ops.wh_bin_log (company, bin_id, item_code, delta, qty_after, kind, ref_type, ref_id, note, created_by)
     values (b.company, p_bin, p_item, d, nxt, p_kind, p_ref_type, p_ref_id, left(coalesce(p_note, ''), 300), p_me.id);
@@ -261,11 +282,13 @@ language sql stable security definer set search_path = '' as $$
          where f.company = p_company and f.location in (select location from locs) group by 1, 2),
   allk as (select item_code, loc from shelved union select item_code, loc from ac union
            select item_code, loc from pend where loc in (select location from locs)),
+  dou as (select u.item_code, ops.podo_main_loc(p_company) loc, sum(u.qty) q from ops.wh_do_unpicked(p_company) u group by 1, 2),
   r as (
-    select k.loc, coalesce(a.q, 0) + coalesce(p.q, 0) expected, coalesce(s.q, 0) shelved
+    select k.loc, coalesce(a.q, 0) + coalesce(p.q, 0) + coalesce(du.q, 0) expected, coalesce(s.q, 0) shelved
     from allk k
     left join ac a on a.item_code = k.item_code and a.loc = k.loc
     left join pend p on p.item_code = k.item_code and p.loc = k.loc
+    left join dou du on du.item_code = k.item_code and du.loc = k.loc
     left join shelved s on s.item_code = k.item_code and s.loc = k.loc)
   select coalesce(jsonb_agg(jsonb_build_object(
     'location', l.location,
@@ -458,6 +481,7 @@ begin
           'location', l.loc,
           'ac_qty', coalesce((select sum(f.qty) from bi.fact_stock f where f.company = c and f.item_code = v_item and f.location = l.loc), 0),
           'pending', ops.wh_pending(c, v_item, l.loc),
+          'do_unpicked', ops.wh_do_unpicked_item(c, v_item, l.loc),
           'expected', ops.wh_bin_expected(c, v_item, l.loc),
           'shelved', ops.wh_bin_shelved(c, v_item, l.loc),
           'unshelved', ops.wh_bin_expected(c, v_item, l.loc) - ops.wh_bin_shelved(c, v_item, l.loc),
@@ -563,7 +587,7 @@ begin
   if (r->>'over')::boolean and not coalesce((p->>'confirm')::boolean, false) then
     raise exception 'NEED_CONFIRM:%:%', r->>'expected', r->>'shelved' using errcode = 'P0001';
   end if;
-  return r || jsonb_build_object('ok', true);
+  return r || jsonb_build_object('ok', true, 'ref_id', rid);
 exception when raise_exception then
   if sqlerrm like 'NEED_CONFIRM:%' then
     -- 整个动作已经被回滚：告诉画面要再确认一次
@@ -571,6 +595,32 @@ exception when raise_exception then
       'expected', split_part(sqlerrm, ':', 2)::numeric, 'shelved', split_part(sqlerrm, ':', 3)::numeric);
   end if;
   raise;
+end $$;
+
+-- 撤销自己刚做的货架动作（上架 / 拿下 / 移货架 / 改数）：照纪录反向冲回，不会盖掉这段时间别人做的变动；同一个动作只能撤销一次。
+-- 改数的撤销要可审批。p_ref_id = ops_wh_bin_op 回传的 ref_id
+create or replace function public.ops_wh_bin_undo(p_company text, p_ref_id bigint) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  me ops.staff;
+  c text;
+  n int;
+begin
+  me := ops.require_level('warehouse', 'edit');
+  c := ops.wh_company(me, p_company);
+  if not exists (select 1 from ops.wh_bin_log g where g.ref_type = 'bin_op' and g.ref_id = p_ref_id and g.company = c
+                   and g.created_by = me.id) then
+    raise exception '找不到这个动作（只能撤销自己做的）。' using errcode = 'P0002';
+  end if;
+  if exists (select 1 from ops.wh_bin_log g where g.ref_type = 'bin_op' and g.ref_id = p_ref_id and g.kind = 'adjust')
+     and ops.level_rank(ops.module_level(me, 'warehouse')) < 3 then
+    raise exception '改数的撤销要仓库「可审批」。' using errcode = '42501';
+  end if;
+  n := ops.wh_bin_reverse(me, 'bin_op', p_ref_id, '撤销');
+  if n = 0 then
+    raise exception '这个动作已经撤销过了。' using errcode = '22023';
+  end if;
+  return jsonb_build_object('ok', true, 'reversed', n);
 end $$;
 
 -- 很多动作一起（点货后一次上架、Excel 带入的上架）：全部成功才存；有错回传第几行。
@@ -634,7 +684,7 @@ declare
   z text; s text; l text;
   b ops.wh_bin;
   q numeric;
-  res jsonb := '[]'::jsonb;
+  res jsonb[] := '{}';                                   -- 阵列累加（jsonb || 每次整份复制，几千行会很慢）
   nerr int := 0;
   nnew int := 0;
   rid bigint := nextval('ops.wh_bin_ref_seq');
@@ -651,8 +701,8 @@ begin
   if jsonb_array_length(p->'rows') > 5000 then
     raise exception '一次最多 5,000 行，请分开带入。' using errcode = '22023';
   end if;
-  create temp table if not exists wh_bin_import_tmp (row_no int, item_code text, bin_code text, zone text, shelf text, level text, qty numeric) on commit drop;
-  truncate wh_bin_import_tmp;
+  -- 暂存表（交易结束自动消失）；同一个交易里叫两次时用 call_id 分开
+  create temp table if not exists wh_bin_import_tmp (call_id bigint, row_no int, item_code text, bin_code text, zone text, shelf text, level text, qty numeric) on commit drop;
   for o in select x from jsonb_array_elements(p->'rows') x loop
     i := i + 1;
     begin
@@ -673,39 +723,43 @@ begin
         l := ops.wh_bin_part(o->>'level', '层', false);
         bcode := ops.wh_bin_code(z, s, l);
       end if;
+      if exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = bcode and not x.active) then
+        raise exception '货架 % 已经停用', bcode;
+      end if;
       if not exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = bcode) and (not mk or s is null) then
         raise exception '% 没有货架 %', v_loc, bcode;
       end if;
-      insert into wh_bin_import_tmp values (i, v_item, bcode, z, s, l, q);
-      res := res || jsonb_build_array(jsonb_build_object('row', i, 'ok', true, 'item_code', v_item, 'bin', bcode, 'qty', q));
+      insert into wh_bin_import_tmp values (rid, i, v_item, bcode, z, s, l, q);
+      res := res || jsonb_build_object('row', i, 'ok', true, 'item_code', v_item, 'bin', bcode, 'qty', q);
     exception when others then
       nerr := nerr + 1;
-      res := res || jsonb_build_array(jsonb_build_object('row', i, 'ok', false, 'error', sqlerrm));
+      res := res || jsonb_build_object('row', i, 'ok', false, 'error', sqlerrm);
     end;
   end loop;
   if nerr > 0 or dry then
-    return jsonb_build_object('ok', nerr = 0, 'saved', false, 'errors', nerr, 'rows', res,
+    return jsonb_build_object('ok', nerr = 0, 'saved', false, 'errors', nerr, 'rows', to_jsonb(res),
       'new_bins', (select count(distinct t.bin_code) from wh_bin_import_tmp t
-                   where not exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = t.bin_code)));
+                   where t.call_id = rid and not exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = t.bin_code)));
   end if;
   for agg in select t.bin_code, max(t.zone) zone, max(t.shelf) shelf, max(t.level) level from wh_bin_import_tmp t
-             where not exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = t.bin_code)
+             where t.call_id = rid and not exists (select 1 from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = t.bin_code)
              group by t.bin_code loop
     insert into ops.wh_bin (company, location, zone, shelf, level, code, created_by)
     values (c, v_loc, coalesce(agg.zone, ''), agg.shelf, coalesce(agg.level, ''), agg.bin_code, me.id);
     nnew := nnew + 1;
   end loop;
-  for agg in select t.item_code, t.bin_code, sum(t.qty) qty from wh_bin_import_tmp t group by 1, 2 loop
+  for agg in select t.item_code, t.bin_code, sum(t.qty) qty from wh_bin_import_tmp t where t.call_id = rid group by 1, 2 loop
     select * into b from ops.wh_bin x where x.company = c and x.location = v_loc and x.code = agg.bin_code;
     perform ops.wh_bin_apply(me, b.id, agg.item_code, null, 'import', 'import', rid, 'Excel 带入', agg.qty);
   end loop;
   perform ops.log(me.id, 'import', 'wh_bin_stock', rid, jsonb_build_object('location', v_loc, 'rows', i, 'new_bins', nnew));
-  return jsonb_build_object('ok', true, 'saved', true, 'errors', 0, 'rows', res, 'new_bins', nnew);
+  return jsonb_build_object('ok', true, 'saved', true, 'errors', 0, 'rows', to_jsonb(res), 'new_bins', nnew);
 end $$;
 
 -- ============================================================ 5. 对不上 / 未上架清单
 -- p: {company, location, filter: over|unshelved|all, q, page}；每页 100
 -- over = 货架合计比应有多（卖出去没从货架扣、或货架数错）→ 请人去数；unshelved = 应有比货架合计多（还没上架）
+-- 应有 = AutoCount + 还没输入的搬动 + 已开 DO 还没拣的（主要仓位；AutoCount 开 DO 就扣，货还在架上）
 create or replace function public.ops_wh_bin_recon(p jsonb) returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
 declare
@@ -734,14 +788,17 @@ begin
       from ops.wh_bin_stock s join ops.wh_bin b on b.id = s.bin_id
       where s.company = c and b.location = v_loc group by 1),
     ac as (select f.item_code, sum(f.qty) q from bi.fact_stock f where f.company = c and f.location = v_loc group by 1),
+    dou as (select u.item_code, sum(u.qty) q from ops.wh_do_unpicked(c) u where v_loc = ops.podo_main_loc(c) group by 1),
     k as (select item_code from ac union select item_code from shelved union select item_code from pend),
     r as (
       select k.item_code, coalesce(i.description, k.item_code) description, i.base_uom uom,
-             coalesce(ac.q, 0) ac_qty, coalesce(pend.q, 0) pending, coalesce(ac.q, 0) + coalesce(pend.q, 0) expected,
+             coalesce(ac.q, 0) ac_qty, coalesce(pend.q, 0) pending, coalesce(dou.q, 0) do_unpicked,
+             coalesce(ac.q, 0) + coalesce(pend.q, 0) + coalesce(dou.q, 0) expected,
              coalesce(shelved.q, 0) shelved, coalesce(shelved.nb, 0) n_bins
       from k
       left join ac on ac.item_code = k.item_code
       left join pend on pend.item_code = k.item_code
+      left join dou on dou.item_code = k.item_code
       left join shelved on shelved.item_code = k.item_code
       left join bi.dim_item i on i.company = c and i.item_code = k.item_code),
     f as (
@@ -910,6 +967,8 @@ revoke all on function ops.wh_move_bin_reverse() from public, anon, authenticate
 revoke all on function ops.wh_bin_json(ops.wh_bin) from public, anon, authenticated;
 revoke all on function ops.wh_bin_summary(text) from public, anon, authenticated;
 revoke all on function ops.wh_bin_do(ops.staff, text, jsonb, bigint) from public, anon, authenticated;
+revoke all on function ops.wh_do_unpicked(text) from public, anon, authenticated;
+revoke all on function ops.wh_do_unpicked_item(text, text, text) from public, anon, authenticated;
 do $$
 declare
   f text;
@@ -917,7 +976,7 @@ begin
   foreach f in array array['ops_wh_bins(jsonb)', 'ops_wh_bin_save(jsonb)', 'ops_wh_bin_bulk(jsonb)', 'ops_wh_bin_get(jsonb)',
                            'ops_wh_item_bins(jsonb)', 'ops_wh_bin_op(jsonb)', 'ops_wh_bin_batch(jsonb)', 'ops_wh_bin_import(jsonb)',
                            'ops_wh_bin_recon(jsonb)', 'ops_wh_map_get(jsonb)', 'ops_wh_map_shelf(jsonb)', 'ops_wh_map_find(jsonb)',
-                           'ops_wh_map_save(jsonb)'] loop
+                           'ops_wh_map_save(jsonb)', 'ops_wh_bin_undo(text,bigint)'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;

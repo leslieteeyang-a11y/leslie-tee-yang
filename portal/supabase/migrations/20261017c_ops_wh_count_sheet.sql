@@ -61,7 +61,7 @@ alter table ops.wh_count_bin enable row level security;
 -- 可以被指派盘点的人：在职（没过最后上班日）、看得到这间分店、仓库「可编辑」以上
 create or replace function ops.wh_sheet_eligible(s ops.staff, p_company text) returns boolean
 language sql stable security definer set search_path = '' as $$
-  select coalesce(s.active and (s.last_day is null or s.last_day >= ops.today()) and ops.sees_company(s, p_company)
+  select coalesce(s.active and (s.last_day is null or s.last_day >= (select ops.today())) and ops.sees_company(s, p_company)
                   and ops.level_rank(ops.module_level(s, 'warehouse')) >= 2, false)
 $$;
 
@@ -160,13 +160,16 @@ begin
     'bins', coalesce((select jsonb_agg(jsonb_build_object('id', b.id, 'code', b.code)
                         order by b.sort, b.zone, length(b.shelf), b.shelf, length(b.level), b.level)
                       from ops.wh_bin b
-                      where b.company = c and b.location = loc and b.active
-                        and exists (select 1 from ops.wh_bin_stock s where s.bin_id = b.id and s.item_code = v_item)), '[]'::jsonb),
+                      where b.company = c and b.location = loc
+                        and exists (select 1 from ops.wh_bin_stock s where s.bin_id = b.id and s.item_code = v_item
+                                      and (b.active or s.qty > 0))), '[]'::jsonb),
     'all_bins', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'code', x.code) order by x.o) from (
                           select b.id, b.code, row_number() over (order by b.sort, b.zone, length(b.shelf), b.shelf,
                                                                    length(b.level), b.level) o
                           from ops.wh_bin b where b.company = c and b.location = loc and b.active
                           order by o limit 2000) x), '[]'::jsonb),
+    -- 已开 DO 还没拣的（AutoCount 已经扣了、货还在）：盘点画面提醒
+    'do_unpicked', ops.wh_do_unpicked_item(c, v_item, loc),
     'recount', exists (select 1 from ops.wh_count k where k.company = c and k.location = loc and k.item_code = v_item
                          and k.count_date = ops.today() and k.status = 'variance' and k.attempt = 1),
     'sheet', (select jsonb_build_object('id', s.id, 'title', s.title) from ops.wh_count_sheet s
@@ -212,7 +215,8 @@ begin
   end if;
   for e in select x from jsonb_array_elements(case when jsonb_typeof(p->'bins') = 'array' then p->'bins' else '[]'::jsonb end) x loop
     b := ops.wh_bin_find(c, case when jsonb_typeof(e->'bin') = 'number' then 'BIN:' || (e->>'bin') else e->>'bin' end, loc);
-    if not b.active then
+    -- 停用的货架：上面还记着这个商品才可以数（数完通常是 0）；不然请填在「其他地方 / 地上」
+    if not b.active and not exists (select 1 from ops.wh_bin_stock s2 where s2.bin_id = b.id and s2.item_code = v_item and s2.qty > 0) then
       raise exception '货架 % 已经停用，请把数量填在「其他地方 / 地上」。', b.code using errcode = '22023';
     end if;
     if b.id = any(ids) then
@@ -570,7 +574,7 @@ begin
   return coalesce((select jsonb_agg(jsonb_build_object('id', y.j->'id', 'company', y.j->'company', 'title', y.j->'title',
                      'location', y.j->'location', 'due_date', y.j->'due_date', 'overdue', y.j->'overdue', 'total', y.j->'total',
                      'left', (y.j->>'todo')::int + (y.j->>'recount')::int) order by s.due_date nulls last, s.created_at)
-                   from ops.wh_count_sheet s, lateral (select ops.wh_sheet_json(s, me) j) y
+                   from ops.wh_count_sheet s, lateral (select ops.wh_sheet_json(s, me) j offset 0) y
                    where s.status = 'open' and coalesce(me.id = any(s.assignees), false) and ops.sees_company(me, s.company)),
                   '[]'::jsonb);
 end $$;
@@ -617,7 +621,7 @@ begin
           'value_net', coalesce(sum(k.val) filter (where k.bad), 0),
           'value_abs', coalesce(sum(abs(k.val)) filter (where k.bad), 0),
           'sheets', (select count(*) from ops.wh_count_sheet s where s.company = c and (loc is null or s.location = loc)
-                       and s.created_at::date > td - d and s.status <> 'cancelled'))
+                       and ops.kl(s.created_at)::date > td - d and s.status <> 'cancelled'))
         from k),
       'top', coalesce((select jsonb_agg(jsonb_build_object('item_code', t.item_code, 'description', i.description, 'uom', i.base_uom,
                          'times', t.n, 'units', t.units, 'abs_units', t.abs_units, 'value', t.value, 'abs_value', t.abs_value,
