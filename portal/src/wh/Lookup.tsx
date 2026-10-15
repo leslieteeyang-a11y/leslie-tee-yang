@@ -5,6 +5,9 @@ import { ErrorBox } from "../ui";
 import { ScanBox } from "./Scanner";
 import { addLabels } from "./Labels";
 import { MoveForm } from "./Moves";
+import { ItemMedia } from "./ItemPhoto";
+import { go } from "../router";
+import { lotFromScan } from "../wh-tag-api";
 import { COUNT_STATUS_LABEL, countClass, FoundItem, ItemDetail, MOVE_STATUS_LABEL, moveText, qtyLabel, whenLabel, wh } from "../wh-api";
 
 export function Lookup({ me, company, locs, canEdit }: { me: Me; company: string; locs: string[]; canEdit: boolean }) {
@@ -17,6 +20,8 @@ export function Lookup({ me, company, locs, canEdit }: { me: Me; company: string
   const [notice, setNotice] = useState("");
 
   const open = useCallback(async (code: string) => {
+    const lot = lotFromScan(code);   // 扫到箱贴的 QR / 批次号 → 批次画面
+    if (lot) { go(`/warehouse/lot/${lot}`); return; }
     setError(""); setNotice(""); setBusy(true);
     try {
       const d = await wh.item(company, code);
@@ -111,6 +116,7 @@ function ItemCard({ d, canEdit, onMove, onLabel }: { d: ItemDetail; canEdit: boo
           <button className="ghost" onClick={onLabel}>印条码</button>
         </div>
       </div>
+      <ItemMedia company={d.company} itemCode={d.item_code} canEdit={canEdit} />
       <div className="table-wrap flat">
         <table>
           <thead><tr><th>仓位</th><th className="num">AutoCount</th>{hasPending && <th className="num">未输入（搬动 / 进货）</th>}{hasPending && <th className="num">应有</th>}{showCost && <th className="num hide-sm">单位成本</th>}</tr></thead>

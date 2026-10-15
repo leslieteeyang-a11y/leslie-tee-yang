@@ -7,6 +7,7 @@ import { ErrorBox, Tabs } from "../ui";
 import "../att.css";
 import "../wh.css";
 import Labels from "../wh/Labels";
+import LotView from "../wh/LotView";
 import { Lookup } from "../wh/Lookup";
 import { MovesTab } from "../wh/Moves";
 import { CountTab } from "../wh/Count";
@@ -17,11 +18,11 @@ import { StockTab } from "../wh/Stock";
 import { SlowTab } from "../wh/Slow";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels";
+type Tab = "lookup" | "stock" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "lot";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
-export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string; arg?: string }) {
+export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
   const [meta, setMeta] = useState<WhMeta | null>(null);
   const [error, setError] = useState("");
   const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
@@ -41,7 +42,8 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
   tabs.push(["aged", "旧货"]);
   tabs.push(["slow", "滞销品"]);     // 从 BI 搬进来（2026-10-16）
   tabs.push(["labels", "印条码"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "lookup";
+  // lot = 批次画面（扫箱贴 QR），不在分页列
+  const tab: Tab = sub === "lot" ? "lot" : tabs.some(([k]) => k === sub) ? (sub as Tab) : "lookup";
   const locs = meta.locations.filter((l) => l.company === co);
   const pick = (c: string) => { setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ } };
 
@@ -64,7 +66,8 @@ export default function Warehouse({ me, sub, arg: _arg }: { me: Me; sub?: string
       {tab === "aged" && <AgedTab company={co} />}
       {tab === "stock" && <StockTab key={co} company={co} />}
       {tab === "slow" && <SlowTab key={co} company={co} />}
-      {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
+      {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} arg={arg} />}
+      {tab === "lot" && <LotView key={arg} lotNo={arg ?? ""} canEdit={canEdit} />}
     </>
   );
 }

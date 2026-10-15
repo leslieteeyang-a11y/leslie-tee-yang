@@ -1,9 +1,14 @@
-// 印条码标签：条码内容 = AutoCount 商品代号（Code 128）。清单存在这台手机 / 电脑（localStorage），可以慢慢加再一次印。
-// 版面：A4 贴纸（24 格 70×37mm、21 格 63.5×38.1mm）或标签机 50×30mm。用浏览器的列印，记得把「边界」设成「无」。
+// 印条码：三个子画面（#/warehouse/labels/<子画面>）：商品条码（这个档）、箱贴（BoxLabels.tsx）、打印纪录（LabelLog.tsx）。
+// 商品条码：条码内容 = AutoCount 商品代号（Code 128）。清单存在这台手机 / 电脑（localStorage），可以慢慢加再一次印。
+// 版面：A4 贴纸（24 格 70×37mm、21 格 63.5×38.1mm）或标签机 50×30mm。用浏览器的列印，记得把「边界」设成「无」。按列印会记一笔打印纪录。
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Empty, ErrorBox } from "../ui";
+import { go } from "../router";
+import { Empty, ErrorBox, Tabs } from "../ui";
 import { qtyLabel, wh } from "../wh-api";
+import { whTag } from "../wh-tag-api";
+import BoxLabels from "./BoxLabels";
+import LabelLog from "./LabelLog";
 import { code128Svg } from "./code128";
 import { ScanBox } from "./Scanner";
 
@@ -33,7 +38,24 @@ const LAYOUTS: Layout[] = [
   { key: "roll-50x30", name: "标签机 50×30mm（一张一个）", page: "50mm 30mm", cols: 1, w: 50, h: 30, top: 0, left: 0, gapX: 0, gapY: 0 },
 ];
 
-export default function Labels({ company, locs }: { company: string; locs: string[] }) {
+type View = "items" | "boxes" | "log";
+const VIEWS: [View, string][] = [["items", "商品条码"], ["boxes", "箱贴"], ["log", "打印纪录"]];
+
+/** arg = 网址第三段：items / boxes?do=<厂家到货> / log */
+export default function Labels({ company, locs, arg }: { company: string; locs: string[]; arg?: string }) {
+  const [v, query = ""] = (arg ?? "").split("?");
+  const view: View = VIEWS.some(([k]) => k === v) ? (v as View) : "items";
+  return (
+    <>
+      <div className="filters"><Tabs value={view} options={VIEWS} onChange={(k) => go(`/warehouse/labels/${k}`)} /></div>
+      {view === "items" && <ItemLabels company={company} locs={locs} />}
+      {view === "boxes" && <BoxLabels key={company + query} company={company} locs={locs} query={query} />}
+      {view === "log" && <LabelLog key={company} company={company} />}
+    </>
+  );
+}
+
+function ItemLabels({ company, locs }: { company: string; locs: string[] }) {
   const [rows, setRows] = useState<LabelRow[]>(readList);
   const [layout, setLayout] = useState(() => { try { return localStorage.getItem("hw-label-layout") || "a4-24"; } catch { return "a4-24"; } });
   const [loc, setLoc] = useState("");
@@ -115,7 +137,10 @@ export default function Labels({ company, locs }: { company: string; locs: strin
             {LAYOUTS.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
           </select>
         </label>
-        <button disabled={!total} onClick={() => setPrinting(true)}>{`🖨 列印（${qtyLabel(total)} 张）`}</button>
+        <button disabled={!total} onClick={() => {
+          setPrinting(true);
+          whTag.logPrints(company, rows.map((r) => ({ kind: "item", item_code: r.item_code, copies: Math.min(r.copies, 500), size: L.key }))).catch(() => { /* 纪录失败不挡列印 */ });
+        }}>{`🖨 列印（${qtyLabel(total)} 张）`}</button>
         {rows.length > 0 && <button className="ghost" onClick={() => setRows([])}>清空清单</button>}
       </div>
       <p className="muted small">列印时在浏览器的列印设定把「边界 / Margins」设成「无 / None」、缩放 100%。先用白纸印一张对一下贴纸的位置。手机印不方便的话，在办公室电脑开这一页印。</p>

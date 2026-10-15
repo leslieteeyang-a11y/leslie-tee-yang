@@ -1,6 +1,7 @@
 // 点货纪录（唯读）与点货后的进货待入 AutoCount；从 Receive.tsx 拆出来（只搬程式码）。
 import { useState } from "react";
 import { can, canGrn, fmtDate, fmtQty, Me } from "../api";
+import { go } from "../router";
 import { Receipt, RecvFull, RecvMove, RecvSummary, requestLabel } from "../podo-api";
 import { IssueBadges } from "./common";
 import { AddIssueModal, issueModel } from "./Issues";
@@ -50,6 +51,11 @@ export function ReceiptView({ me, d, flash, onChanged }: { me: Me; d: RecvFull; 
       {d.status === "arrived" && !r && <p className="muted">这张是以前直接「标记到货」的，没有点货纪录。</p>}
       {r && <ReceiptTable d={d} r={r} />}
       {(d.moves ?? []).length > 0 && <MovesView me={me} moves={d.moves!} />}
+      {d.status === "arrived" && (d.moves ?? []).some((m) => m.status !== "cancelled") && can(me, "warehouse", "view")
+        && (can(me, "warehouse", "edit") || can(me, "purchasing", "edit")) && (
+        <p><button className="small" onClick={() => go(`/warehouse/labels/boxes?do=${d.id}`)}>🏷 印箱贴</button>{" "}
+          <span className="muted small">批次号、给哪间分店、建议货架、QR（扫了开批次页）</span></p>
+      )}
       {d.status === "arrived" && (
         <>
           <div className="podo-group-head">
