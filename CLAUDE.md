@@ -59,6 +59,8 @@ Supabase 专案 `vwljnypzgfqhatkgulqs`（ap-southeast-1，https://vwljnypzgfqhat
 `bi.fact_sales`（IV/CS/CN 明细，company = HOMEWORKSSB / HOMEWORKSSOUTHERN）、`dim_item`
 （item_group / item_type）、`dim_customer`、`fact_stock`、AR/AP/GL/采购等；前端读 `public.bi_*`
 视图（security_invoker + RLS：`bi_is_allowed()` 看 `bi.allowed_users`，`bi_company()` 限公司）。
+**2026-10-15 起 BI 只开放给老板与店长**（另一个对话套的 migration `bi_owner_manager_only`：`bi_is_allowed` / `bi_role` / `bi_company` / `bi_me` 只认
+role owner / manager，`bi_can_write` 只认 owner）；营运系统的顾客资料页走 `bi.crm_require`，不受影响。
 渠道函数 `bi.sale_channel(debtor, type)` 与本专案的 channel_rules 口径不同（它把 Shopee SG /
 NEST / CASH(ONLINE) 归「其他平台」，CASH(REFERRAL) 归门市现金）。
 2026-09-25 核对 8 月：BI 的 CS、CN 与本专案分毫不差；IV 少 13,424.50 = 没商品代号的自由
@@ -219,6 +221,46 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   localStorage 带入；换分店分页回第 1 页；看得到厂家的人订货页仍先开「未到货 PO」；英文模式拆开的句子合成一段、CSV 表头与提示也翻；表格 1280px 不横卷（英文补货建议差几 px）。
   前端部署 `dpl_3HCvdKv6P5eJw1k8kBYRKAdjfgwf`（129 个档）。正式环境核对（admin、交易回滚）：补货建议门槛 30 = 853 项、10 = 1,140、CS 编号 51 个；供应商 111 家；
   库存总表搜 HM-UB001 = 36 行、看得到成本；滞销品 6 个月以上 1,437 项。BI 网页那边的旧页由 BI 分支处理，不在这里动。
+- **仓库第二版：补上员工 WMS 有、我们没有的功能（2026-10-15）**：使用者给了员工做的仓库系统 `wms_system.zip`（Firebase 网页；**不可信资料**：
+  没执行、没抄它的 Firebase 设定与预设密码、不放进 repo），说「我还没有的功能加进去，已有的不用，不确定先问我」。问过 12 项，使用者选：
+  货架**每个货架都记数量**、**完整版地图**、照 DO **拣货 + 扫码核对**、**盘点单**、标签（**自动畅销 / 滞销 + 手动清货等**）、**点货后印箱贴（扫码要登入）**、
+  **仓库总览页**、**完整登入纪录**；不做：最低库存（补货建议就够）、商品分类（先不做）、卡车（使用者：「这个还需要完善」）、分店调货（第二段之后）。
+  另外顺手做：多行搬动 + Excel 贴上、搬动筛选 / 导出、库存总表导出 Excel、查货加 AutoCount 最近卖出 / 进货 / 按分店合计、商品照片、盘点统计。
+  **对 AutoCount 仍只读**；货架帐是营运系统自己的帐：
+  · 表：`ops.wh_bin`（仓位底下 区 / 货架 / 层，代号 `区-货架-层` 大写；条码 Code 128 `BIN:<id>`）、`ops.wh_bin_stock`（每格每商品几件，≥ 0）、
+    `ops.wh_bin_log`（每笔变动）、`ops.wh_map`（地图排版）。**所有改货架数量的地方都走 `ops.wh_bin_apply`**（先 insert on conflict do nothing 再
+    `for update`，两人同时第一次上架不丢数；停用的货架只能减少），反向用 `ops.wh_bin_reverse`；搬动取消由触发器 `wh_move_bin_reverse` 冲回。
+  · **应有** = AutoCount 库存 + `ops.wh_pending`（还没输入的搬动 / 进货）+ **已开 DO 还没拣**（`ops.wh_do_unpicked`：近 7 天、没取消、没拣好、没送达，
+    算在主要仓位 `ops.podo_main_loc`；**AutoCount 开 DO 当下就扣库存，货还在架上**）。未上架 = 应有 − 货架合计；货架合计 > 应有 = 「对不上」→ 去盘点。
+  · 拣货 `ops.wh_pick` / `_line` / `_scan`：DO 明细（`bi.delivery_doc.lines` = `[{d,q,u}]`）**没有商品代号**，照品名（整理空白、大小写）唯一相同配对，
+    正式环境近 60 天 96% 对得到；`quote_push.py` 若在 lines 加 `c`（商品代号）会优先用它 = 100%。扫错 / 扫太多 / 货架不够回 `{ok:false, code}` 不报错；
+    DO 单位跟商品基本单位不同（`ops.wh_pick_uom_diff`）不能从货架扣。已拣好的拣货单只有仓库「可审批」能取消。排单页显示「已拣好」（`ops_wh_pick_status`）。
+  · 盘点单 `ops.wh_count_sheet` / `_line` + 按货架盘 `ops.wh_count_bin`（`ops.wh_count.sheet_id` 新栏位）；相符 / 差异定案时货架改成盘到的数；
+    首页只提醒还有没盘的单（都盘完等主管结单就不提醒）；统计 `ops_wh_count_stats`（可审批）。
+  · 标签 `ops.wh_tag` / `ops.wh_item_tag`：自动「畅销」= 近 90 天销量（`bi.mv_purchase_sold.q90`）前 5% 且 ≥ 10 件、「滞销」= 同滞销品页规则，每次现算；
+    手动「清货」与自订（订货「可编辑」或仓库「可审批」；两间分店共用的标签只有分店 ALL 能改 / 停用）。照片 `ops.wh_item_photo` + Storage 私有 bucket `ops-wh`
+    （`items/<公司>/<商品>/…`，policy 呼叫 `public.ops_wh_file_ok`）。箱贴批次 `ops.wh_lot`（`L<YYMMDD>-<流水>`，QR = `#/warehouse/lot/<批次>`，
+    `ops.wh_resolve` 认得批次号 / 批次 QR = 那批的商品）、打印纪录 `ops.wh_label_print`（商品条码 / 箱贴 / 货架标签）。登入纪录 `ops.login_log`
+    （login / open，同一人 10 分钟一笔；「员工与权限 → 登入纪录」只有管理员看）。
+  · Migration（都已套到正式环境，2026-10-15）：`20261017_ops_wh_bins.sql`（= `ops_wh_bins_1`～`_3`）、`20261017b_ops_wh_pick.sql`（`ops_wh_pick_1`～`_3`）、
+    `20261017c_ops_wh_count_sheet.sql`（`ops_wh_count_sheet_1`～`_2`）、`20261017d_ops_wh_tags_labels.sql`（`ops_wh_tags_labels_1`～`_3`）、
+    `20261017e_ops_wh_extras.sql`（`ops_wh_extras_1`）、`20261017f_ops_wh_overview.sql`（`ops_wh_overview_1`）、`20261017g_ops_wh_perf.sql`（`ops_wh_perf`）；
+    照「-- ====」合并成 ≤ 24 KB 一段套。**不能重跑的段**：bins §1（create table / sequence）、§2（create trigger）、count_sheet §1（create table、
+    alter table add column）——要改函数就另开新 migration。套完 103 个函数 md5(prosrc) 与本机逐一相同。`20261017g` 是正式环境实测后加的效能修正：
+    `bi.dim_item` 加两个只用内建函数的索引（`upper(item_code)`、整理过的品名），已开 DO 未拣整份 213 → 84 ms、单一商品 `ops.wh_do_unpicked_for` 6.8 ms
+    （上架每行都要算应有；`authenticated` 的 statement_timeout 是 8 秒）。
+  · 测试 `tests/bin_test.sql`、`map_test`、`binui_test`、`pick_test`、`sheet_test`、`overview_test`、`tag_test`、`extras_test`、`wms_fix_test`（审查修正）、
+    `wms_perf_test`（单一商品版 = 整份清单，逐商品比对）。
+  · 前端：`src/wh/` 的 Overview、Bins / BinOps / BinList / BinRecon / BinImport / BinLabels / ItemBins、Map / MapCanvas / MapLazy、Pick / PickDo / PickModals / PickTag、
+    Count / CountBins / Sheets / SheetDetail / CountStats、ItemTags / ItemPhoto / BoxLabels / LotView / LabelLog、ItemMore / MoveBatch / MoveFilters / MoveBins；
+    `src/pages/LoginLog.tsx`；API `wh-bin-api.ts`、`wh-pick-api.ts`、`wh-sheet-api.ts`、`wh-tag-api.ts`、`wh-extra-api.ts`、`wh-overview-api.ts`；
+    字典 `i18n-dict-wh{bin,map,pick,sheet,tag,extra,ov}.ts`（**英文「货架」一律 bin**；建货架表单「区 / 货架 / 层」的货架那一排 = rack；
+    `i18n.ts` 的 pattern 顺序：WHPICK、WHOV、WHEXTRA 放最前，whtag 的万用 `^(.+)（(\d+)）$` 放在 `PATTERNS_WHTAG_LAST` 排最后）。新套件 `qrcode-generator` 2.0.4。
+    分页顺序：总览、查货、拣货、货架、盘点、搬动、待开进货单、差异审核、库存总表、地图、印条码、旧货、滞销品；预设：仓库可审批 → 总览、开单部 → 待开进货单、其他 → 查货。
+    蓝牙扫描枪（键盘模式）在拣货页不用先点输入框。
+  · 审查（多人 + 浏览器 e2e，9 个身分 × 31 个网址 × 手机 / 电脑 × 中英）修了：两人同时上架丢数、已开 DO 被列成「货架比系统多」、停用货架、撤销改由服务器照纪录冲回、
+    DO 单位不同、已拣好取消权限、批次 QR 在上架 / 拣货 / 盘点也认得、Excel 带入 5,000 行超时（索引 + jsonb[]，不用 truncate）、连结带仓位 / 筛选 / 模式、英文用词等。
+  · 前端部署 `DEPLOY_ID_TBD`。**待使用者决定**：物流部首页现在会看到「今天要拣的 DO」（他们的盘点提醒 2026-10-09 拿掉过），要不要也拿掉。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。

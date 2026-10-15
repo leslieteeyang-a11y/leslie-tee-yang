@@ -19,6 +19,7 @@
 | `src/podo/`、`src/podo-api.ts`、`src/podo.css`、`src/i18n-dict-podo.ts` | 订货页的厂家到货（`#/purchasing/do`、`/do/new`、`/do/<id>`：选厂家 → 选 PO → 上传厂家 DO → 分给各分店 → 确认）、厂家问题（`/issues`：按厂家分组、厂家会补 / 取消、Excel、打印）、在路上（`/transit`：JB 只看 JB）。`podo/parse.ts` 在浏览器读 Excel / CSV（SheetJS CE 0.20.3，npm 套件 `@e965/xlsx`，动态载入）；档案放 Storage 私有 bucket `ops-po`。这四个画面用 `React.lazy`，点到才下载。在路上的算法（同厂家同型号一起算、起算点）写在 migration `20261012_ops_po_do.sql` §3 |
 | `src/pages/Delivery.tsx`、`src/dlv/`、`src/dlv-api.ts`、`src/dlv.css` | 送货：Plan（一键排单、最短路线、WhatsApp 司机）、Runs（排单纪录、签收照片）、Mine（员工司机签收）、Setup（出发点、外包司机）、DriverSign（司机签收页，`#/driver?t=` 不用登入）、HomeCard（首页提醒） |
 | `src/rpl/`、`src/rpl-api.ts`、`src/rpl.css`、`src/wh/Stock.tsx`、`src/wh/Slow.tsx`、`src/i18n-dict-rpl.ts` | 2026-10-14 从 BI 搬来的四页：订货模块的「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有这页）、仓库模块的「库存总表」（`#/warehouse/stock`）与「滞销品」（`/slow`）。资料仍是 BI 同步进来的 `bi.*` 表，算法沿用 BI 的视图（`bi.v_purchase_suggest`）；函数 `ops_rpl_*` / `ops_wh_stock` / `ops_wh_slow` 在 migration `20261016_ops_bi_pages.sql`。补货建议与供应商交期用 `React.lazy` |
+| `src/wh/`（2026-10-15 新增的档）、`src/wh-{bin,pick,sheet,tag,extra,overview}-api.ts`、`src/wh-{bin,map,pick,sheet,tag,extra}.css`、`src/i18n-dict-wh{bin,map,pick,sheet,tag,extra,ov}.ts`、`src/pages/LoginLog.tsx` | 仓库第二版（补上员工 WMS 的功能）：总览、货架（上架 / 拿下 / 移货架 / 改数、对不上清单、Excel 带入、货架标签）、地图、照 DO 拣货 + 扫码、盘点单与按货架盘、标签与照片、入库箱贴（批次 QR）、打印纪录、多行搬动、查货补充、登入纪录。见下面「仓库第二版」 |
 | `supabase/migrations/` | 已套用到 Supabase 的 migration 留底（改动请另开新档，并用 MCP `apply_migration` 套用） |
 | `supabase/functions/ops-account/` | 建账号 / 重设密码的 Edge Function |
 | `supabase/tests/` | 本机 PostgreSQL 跑的权限测试（stub 掉 Supabase 的 auth 与 BI 表） |
@@ -79,6 +80,24 @@ Vercel 自己 `npm install` + `vite build`。
   按「已送达 / 送不成」（要写原因）。照片在 Storage 私有 bucket `delivery-pod/<代码>/`。
 - 权限：`ops_dlv_*` 函数开头检查 `delivery` 模块等级与分店；签收连结代码只给可编辑的人与这趟的司机。照片路径里有连结代码，所以照片同样只给这些人（连结过期后只看的人也看得到）。
 - 英文模式：`translate="no"` 的区块不翻（司机签收页自带中 / 英 / 马来文）；`window.confirm` 用 `dlv-api.ts` 的 `ui()` 先翻。
+
+## 仓库第二版（2026-10-15）
+
+使用者看了员工做的仓库系统后选的功能，对 AutoCount 仍只读：
+
+- **货架帐**：仓位底下分 区 / 货架 / 层（`ops.wh_bin`），每格每个商品几件（`ops.wh_bin_stock`），每次变动留底（`ops.wh_bin_log`）。
+  所有改数量的地方都叫 `ops.wh_bin_apply`；搬动取消时触发器自动冲回。货架条码 = Code 128 `BIN:<编号>`。
+- **应有** = AutoCount 库存 + 还没输入 AutoCount 的搬动 / 进货 + 近 7 天已开、还没拣的 DO（AutoCount 开 DO 就扣，货还在架上）。
+  货架合计比应有多 = 「对不上」，请人去盘点；比应有少 = 「未上架」。
+- **拣货**：照 DO 扫码核对；DO 明细没有商品代号，照品名唯一相同配对（约 96%），对不到的行可以扫商品指定、手动确认或略过。
+  选了「目前货架」才从货架扣；DO 单位跟商品单位不同时不能从货架扣。
+- **盘点单**：主管指定仓位 / 货架 / 商品、指派人、期限；员工盲盘，按货架填数；差异照旧进「差异审核」。
+- **标签 / 照片 / 箱贴**：自动畅销 / 滞销 + 手动清货等；商品照片放私有 bucket `ops-wh`；点货后印箱贴（QR 开批次页，要登入）；印过的都记在「打印纪录」。
+- **登入纪录**：员工与权限 → 登入纪录（只有管理员）。
+- Migration：`20261017_ops_wh_bins.sql`、`b`（拣货）、`c`（盘点单）、`d`（标签 / 照片 / 箱贴）、`e`（登入纪录、查货补充、多行搬动）、`f`（总览）、
+  `g`（效能：`bi.dim_item` 两个索引、单一商品的 DO 未拣）。都已套到正式环境；其中建表 / 建触发器的段不能重跑，要改函数请另开新档。
+- 测试：`supabase/tests/` 的 `bin_test`、`map_test`、`binui_test`、`pick_test`、`sheet_test`、`overview_test`、`tag_test`、`extras_test`、`wms_fix_test`、`wms_perf_test`。
+- 英文：「货架」一律 bin（建货架表单的「货架」那一排 = rack）。新增介面文字加进对应的 `i18n-dict-wh*.ts`。
 
 ## 从 BI 搬来的四页（2026-10-14）
 
