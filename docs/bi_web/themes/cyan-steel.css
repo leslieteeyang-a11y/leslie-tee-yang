@@ -1,0 +1,575 @@
+/* Homeworks BI — theme "cyan-steel"（评审后修订版 2026-10-15）
+   Navy / steel page, lit 1px cyan borders, electric-blue accent, violet second series.
+   Every selector and layout property of the live stylesheet is kept; only visual properties changed,
+   plus new tokens, hover / focus states, ::selection and scrollbar rules.
+   修订：补齐 TSX 裸用的 6 个 token；页面渐层改挂在 html（min-height:100%、no-repeat），不再用
+   background-attachment:fixed（全页截图与 iOS Safari 都会在视口高度处出现一道硬接缝）；
+   .seg button 补 :focus-visible；disabled 按钮 hover 不再变色。 */
+:root {
+  color-scheme:dark;
+  --page: #0a1022;
+  --surface: #142038;
+  --ink: #f1f6ff;
+  --ink-2: #c7d6ee;
+  --muted: #8fa3c2;
+  --grid: #1e2d4a;
+  --baseline: rgba(143, 163, 194, .55);
+  --border: rgba(56, 189, 248, .22);
+  --series-1: #1ba0d5;
+  --series-2: #975afd;
+  --good: #10b981;
+  --good-text: #34d399;
+  --critical: #f87171;
+  --accent: #38bdf8;
+  --accent-ink: #061225;
+  /* 2026-10-15 TSX 直接读的 token（原本写死在页面里的颜色；App.tsx / Targets / Manager / Receivables / Payables / PriceEffect / BranchActual 都是裸 var() 没有 fallback） */
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, .14);
+  --good-green: #34d399;
+  --branch-bg: #3a3220;
+  --row-expand-bg: rgba(56, 189, 248, .05);
+  --tag-bg: rgba(143, 163, 194, .14);
+  --hover-bg: rgba(56, 189, 248, .08);
+  /* 新增 token（cyan-steel 专用） */
+  --accent-2: #975afd;
+  --surface-2: #1a2a47;
+  --field: #0d1730;
+  --border-strong: rgba(56, 189, 248, .45);
+  --accent-soft: rgba(56, 189, 248, .10);
+  --glow: rgba(56, 189, 248, .28);
+  --shadow: 0 10px 30px -18px rgba(2, 8, 23, .9);
+  --accent-grad: linear-gradient(135deg, #5ccbfa 0%, #38bdf8 55%, #1ea5e4 100%);
+}
+* {
+  box-sizing:border-box;
+}
+::selection {
+  background:rgba(56, 189, 248, .32);
+  color:var(--ink);
+}
+::-webkit-scrollbar {
+  width:10px;
+  height:10px;
+}
+::-webkit-scrollbar-track {
+  background:transparent;
+}
+::-webkit-scrollbar-thumb {
+  background:rgba(143, 163, 194, .28);
+  border:3px solid transparent;
+  background-clip:padding-box;
+  border-radius:999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background:rgba(143, 163, 194, .45);
+  border:3px solid transparent;
+  background-clip:padding-box;
+}
+/* 页面渐层挂在 html：根元素背景会延伸到整个画布，且图片按 html 盒（= 整份文件高度）定位，
+   不管页面多长都只有一张渐层、没有接缝；光晕用 px 锚在左上 / 右下角 */
+html {
+  min-height:100%;
+  background:var(--page);
+  background-image:radial-gradient(900px 520px at 6% -120px, rgba(56, 189, 248, .14), transparent 62%),radial-gradient(760px 520px at right -60px bottom -80px, rgba(139, 92, 246, .12), transparent 62%),linear-gradient(160deg,#0a1022,#0d1a30 45%,#10203a);
+  background-repeat:no-repeat;
+}
+body {
+  margin:0;
+  background:transparent;
+  color:var(--ink);
+  font-family:ZhuoJianJianTi,卓健橄榄简体,system-ui,-apple-system,Segoe UI,Microsoft YaHei,sans-serif;
+  font-size:15px;
+}
+.shell {
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 20px 48px;
+}
+.topbar {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:14px 0;
+  border-bottom:1px solid var(--border);
+  margin-bottom:20px;
+}
+.topbar h1 {
+  font-size:32px;
+  margin:0;
+  font-weight:650;
+  letter-spacing:.01em;
+  color:var(--ink);
+}
+.topbar .spacer {
+  flex:1;
+}
+.topbar .who {
+  color:var(--muted);
+  font-size:13px;
+}
+.tabs {
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+}
+.tabs button {
+  border:none;
+  background:none;
+  color:var(--ink-2);
+  font-size:14px;
+  padding:7px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  font-family:inherit;
+  transition:background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.tabs button:hover {
+  background:var(--accent-soft);
+  color:var(--ink);
+}
+.tabs button.active {
+  background:var(--accent-grad);
+  color:var(--accent-ink);
+  font-weight:600;
+  box-shadow:0 0 0 1px rgba(56, 189, 248, .35), 0 6px 16px -8px var(--glow);
+}
+.tabs button:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.btn {
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  color:var(--ink);
+  padding:6px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:13px;
+  font-family:inherit;
+  transition:background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn:hover {
+  border-color:var(--border-strong);
+  background:#203457;
+}
+.btn:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.btn.primary {
+  background:var(--accent-grad);
+  border-color:rgba(56, 189, 248, .6);
+  color:var(--accent-ink);
+  font-weight:600;
+  box-shadow:0 6px 16px -8px var(--glow);
+}
+.btn.primary:hover {
+  border-color:#7dd3fc;
+  background:linear-gradient(135deg, #7dd3fc 0%, #4cc5f9 55%, #38bdf8 100%);
+}
+.btn:disabled {
+  opacity:.5;
+  cursor:default;
+}
+/* disabled 时 hover 不变色（普通钮维持钢蓝、主钮维持原渐层），免得看起来像还能按 */
+.btn:disabled:hover {
+  border-color:var(--border);
+  background:var(--surface-2);
+}
+.btn.primary:disabled:hover {
+  border-color:rgba(56, 189, 248, .6);
+  background:var(--accent-grad);
+}
+.seg {
+  display:inline-flex;
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  background:rgba(10, 16, 34, .45);
+}
+.seg button {
+  border:none;
+  background:none;
+  color:var(--ink-2);
+  font-size:12.5px;
+  padding:6px 12px;
+  cursor:pointer;
+  font-family:inherit;
+  transition:background-color .15s ease, color .15s ease;
+}
+.seg button:hover {
+  background:var(--accent-soft);
+  color:var(--ink);
+}
+/* .seg 是 overflow:hidden，UA 预设焦点环会被裁掉；改画在按钮内侧 */
+.seg button:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+}
+.seg button+button {
+  border-left:1px solid var(--border);
+}
+.seg button.active {
+  background:var(--accent-grad);
+  color:var(--accent-ink);
+  font-weight:600;
+}
+.cmp-grid {
+  display:grid;
+  grid-template-columns:1fr 250px;
+  gap:18px;
+  align-items:start;
+}
+@media (max-width: 900px) {
+  .cmp-grid {
+    grid-template-columns:1fr;
+  }
+}
+.cmp-cards {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.cmp-card {
+  border:1px solid var(--border);
+  border-left:4px solid var(--muted);
+  border-radius:10px;
+  padding:12px 14px;
+  background:rgba(20, 32, 56, .75);
+  box-shadow:var(--shadow);
+}
+.cmp-card.cur {
+  border-left-color:var(--accent);
+  background:linear-gradient(90deg, rgba(56, 189, 248, .08), rgba(20, 32, 56, .75) 45%);
+}
+.cmp-title {
+  font-size:13px;
+  font-weight:650;
+  margin-bottom:8px;
+}
+.cmp-label {
+  color:var(--muted);
+  font-size:12px;
+}
+.cmp-value {
+  font-size:20px;
+  font-weight:650;
+  margin:2px 0 8px;
+  font-variant-numeric:tabular-nums;
+}
+.cmp-delta {
+  font-size:12px;
+  font-weight:600;
+  margin-left:8px;
+}
+.cmp-delta.pos {
+  color:var(--good-text);
+}
+.cmp-delta.neg {
+  color:var(--critical);
+}
+.grid-kpi {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:12px;
+  margin-bottom:20px;
+}
+.card {
+  background:linear-gradient(180deg, rgba(56, 189, 248, .045), rgba(56, 189, 248, 0) 38%), var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px 18px;
+  box-shadow:inset 0 1px 0 rgba(255, 255, 255, .04), var(--shadow);
+}
+.kpi .label {
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:6px;
+  letter-spacing:.02em;
+}
+.kpi .value {
+  font-size:25px;
+  font-weight:650;
+  letter-spacing:-.01em;
+  color:var(--ink);
+}
+.kpi .sub {
+  color:var(--ink-2);
+  font-size:12.5px;
+  margin-top:4px;
+}
+.card h2 {
+  font-size:15px;
+  margin:0 0 12px;
+  font-weight:650;
+  color:var(--ink);
+  letter-spacing:.01em;
+}
+.card-block {
+  margin-bottom:20px;
+}
+.two-col {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+}
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns:1fr;
+  }
+}
+table.data {
+  width:100%;
+  border-collapse:collapse;
+  font-variant-numeric:tabular-nums;
+  font-size:12.5px;
+}
+table.data th {
+  text-align:left;
+  color:var(--muted);
+  font-weight:500;
+  font-size:12px;
+  padding:6px 8px;
+  border-bottom:1px solid rgba(56, 189, 248, .38);
+  white-space:nowrap;
+  letter-spacing:.02em;
+}
+table.data td {
+  padding:6px 8px;
+  border-bottom:1px solid var(--grid);
+}
+table.data td.num,table.data th.num {
+  text-align:right;
+  white-space:nowrap;
+}
+table.data tr:hover td {
+  background:rgba(56, 189, 248, .07);
+}
+.table-scroll {
+  overflow-x:auto;
+}
+.badge {
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+}
+.badge.ok {
+  color:var(--good-text);
+  background:rgba(52, 211, 153, .14);
+  box-shadow:inset 0 0 0 1px rgba(52, 211, 153, .28);
+}
+.badge.fail {
+  color:var(--critical);
+  background:rgba(248, 113, 113, .14);
+  box-shadow:inset 0 0 0 1px rgba(248, 113, 113, .3);
+}
+.pos {
+  color:var(--good-text);
+}
+.neg {
+  color:var(--critical);
+}
+.badge.urg-out {
+  color:#fff;
+  background:#dc2626;
+  font-weight:600;
+}
+.badge.urg-late {
+  color:var(--critical);
+  background:rgba(248, 113, 113, .16);
+  font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(248, 113, 113, .3);
+}
+.badge.urg-now {
+  color:var(--warn);
+  background:var(--warn-bg);
+  font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(251, 191, 36, .28);
+}
+.badge.urg-ok {
+  color:var(--muted);
+  background:var(--tag-bg);
+  box-shadow:inset 0 0 0 1px rgba(143, 163, 194, .22);
+}
+table.data tr.row-overdue td {
+  background:rgba(248, 113, 113, .08);
+}
+input[type=number] {
+  -moz-appearance:textfield;
+}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance:none;
+  margin:0;
+}
+.filters {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-bottom:14px;
+}
+.filters select,.filters input {
+  background:var(--field);
+  color:var(--ink);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:7px 10px;
+  font-size:13px;
+  font-family:inherit;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.filters select:hover,.filters input:hover {
+  border-color:var(--border-strong);
+}
+.filters select:focus,.filters input:focus,.filters select:focus-visible,.filters input:focus-visible {
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(56, 189, 248, .18);
+}
+.filters input::placeholder {
+  color:var(--muted);
+  opacity:.8;
+}
+.filters input {
+  min-width:220px;
+}
+.login-wrap {
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background:radial-gradient(820px 520px at 50% 0%, rgba(56, 189, 248, .12), transparent 62%),radial-gradient(700px 480px at 100% 100%, rgba(139, 92, 246, .10), transparent 62%),linear-gradient(160deg,#0a1022,#0d1a30 45%,#10203a);
+}
+.login-card {
+  width:340px;
+  box-shadow:inset 0 1px 0 rgba(255, 255, 255, .05), 0 0 0 1px rgba(56, 189, 248, .08), 0 30px 70px -30px rgba(2, 8, 23, .95), 0 0 48px -18px var(--glow);
+}
+.login-card h1 {
+  font-size:26px;
+  margin:0 0 4px;
+  color:var(--ink);
+}
+.login-card .hint {
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:18px;
+}
+.login-card label {
+  display:block;
+  font-size:13px;
+  color:var(--ink-2);
+  margin:12px 0 4px;
+}
+.login-card input {
+  width:100%;
+  background:var(--page);
+  color:var(--ink);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:9px 10px;
+  font-size:15px;
+  font-family:inherit;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.login-card input:focus,.login-card input:focus-visible {
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(56, 189, 248, .18);
+}
+.login-card .btn {
+  width:100%;
+  margin-top:18px;
+  padding:9px;
+  font-size:15px;
+}
+.err {
+  color:var(--critical);
+  font-size:13px;
+  margin-top:10px;
+}
+.notice {
+  color:var(--ink-2);
+  background:rgba(20, 32, 56, .85);
+  border:1px dashed rgba(56, 189, 248, .38);
+  border-radius:10px;
+  padding:12px 14px;
+  margin-bottom:16px;
+  font-size:13.5px;
+}
+.muted {
+  color:var(--muted);
+}
+.loading {
+  color:var(--muted);
+  padding:32px;
+  text-align:center;
+}
+.pager {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:12px;
+}
+/* Recharts tooltip：TSX 以 inline style 给 background / border / radius，这里只补阴影让它浮在同色卡片上 */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  box-shadow:0 12px 32px -12px rgba(2, 8, 23, .9), 0 0 0 1px rgba(56, 189, 248, .12);
+}
+.recharts-cartesian-axis-line,.recharts-cartesian-axis-tick-line {
+  stroke:var(--baseline);
+}
+@media (max-width: 640px) {
+  .shell {
+    padding:0 10px 32px;
+  }
+  .topbar {
+    gap:8px;
+    padding:10px 0;
+  }
+  .topbar h1 {
+    font-size:22px;
+    width:100%;
+  }
+  .topbar .who {
+    display:none;
+  }
+  .tabs {
+    width:100%;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:4px;
+  }
+  .tabs button {
+    flex:0 0 auto;
+    padding:8px 12px;
+    font-size:13.5px;
+  }
+  .card {
+    padding:12px;
+    border-radius:10px;
+  }
+  .kpi .value {
+    font-size:20px;
+  }
+  .grid-kpi {
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .filters input {
+    min-width:0;
+    flex:1;
+  }
+  table.data {
+    font-size:12px;
+  }
+  table.data td,table.data th {
+    padding:5px 6px;
+  }
+  .cmp-grid {
+    grid-template-columns:1fr;
+  }
+  .btn {
+    padding:8px 12px;
+  }
+}

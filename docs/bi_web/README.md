@@ -195,3 +195,32 @@ BI 端：
   `i18n/core.ts` 加三个英文键。`mkpayload.py` 批 `biguard`（App.tsx + core.ts 内嵌）。
 - Preview `dpl_GHL5T9WbEm6s9XLXxGpFKTTQwkWP`：App 88d82618…、core 50549662… 与本地 sha1 一致。
 - **Production `dpl_9yWDzWupZUkuTBGBkHr3LjP1bgcx`**（2026-10-15，READY，homeworks-bi.vercel.app）：全 SHA 参照，档案树核对无误，manifest 已 `--commit biguard`。
+
+## 2026-10-15（晚）：未来感主题（老板传来 Nexora 仪表板截图，问「可以把BI改成这种带有未来感，但又不是太夸张的主题吗」）
+
+- **做法**：先从 Vercel sandbox 抓回线上 `styles.css`（`live.pretty.css`），用 Playwright 把一页假资料的 mock（KPI、表格、图表、登入页）
+  在桌机 1280 / 手机 390 两种宽度下截图当基准；做了三个候选主题（`cyan-steel` 青钢色、`glass-indigo` 玻璃靛紫、`nebula-violet` 星云紫），
+  用 Workflow 评审小组各自打分（22 / 21 / 19），最后选 **glass-indigo**——分数只差 1，但它是三个里最接近老板参考图的紫色系，
+  再做一轮润饰：三层径向渐层背景（`html{min-height:100%}`，body 透明）、`:focus-visible` 焦点环、更柔和的 hover、
+  dataviz validator 两个资料系列（`#8b7cff` / `#0ea5c6`，底色 `#191d47`）ALL PASS、文字对比度全部过关。备选 `cyan-steel` 存在
+  `docs/bi_web/themes/cyan-steel.css`（想换只要整份覆盖 `src/styles.css` 再部署）。改版前后对照图：`theme_compare_2026-10-15.png`。
+- **代码**：`src/styles.css` 整份换成新 token（`--page --surface --ink --ink-2 --muted --grid --border --series-1/2 --good --critical
+  --accent --warn --warn-bg --good-green --branch-bg --row-expand-bg --tag-bg --hover-bg --accent-hi/lo --accent-grad --accent-glow
+  --accent-ring --focus --glass* --field --row-hover`）；8 个 TSX 把写死的颜色改成 token（Manager / Payables / Receivables / Targets /
+  EcomReport / BranchActual / PriceEffect / App，commit bc36738），以后换主题只改 CSS。
+- **部署**：`mkpayload.py` 批 `theme`（styles.css + 8 个 TSX）。这次改用 `mcp__Vercel__upload_file`（base64 + `xVercelDigest` sha1）
+  逐档上传、让 Vercel 端校验，再全部以 `{file, sha}` 参照建 preview `dpl_3pAZYQjxkcj3p95y4tnkbidPFWf9`，`list_deployment_files`
+  核对 62 个 uid 全部等于本机 sha1 后，才建 **production `dpl_6GPMnuXZydBAVmJwxNTyc983obGN`**（2026-10-15，READY，homeworks-bi.vercel.app），
+  manifest 已 `--commit theme`。
+- **这次踩到的坑**（以后部署照这个做）：
+  1. `upload_file` 的 base64 若与 digest 不符，MCP **不会回错误，而是 60 秒 timeout**，看起来像伺服器慢。手抄 base64 在中文密集的段落
+     很容易抄错（EcomReport 在第 4129 字元抄错，Manager 28k 字元却一次成功）。要先在本机用 heredoc 把准备上传的字串写进档案
+     `cmp` 一次再上传。
+  2. 明文比 base64 可靠得多：把 TSX 用 heredoc 抄进暂存区、`sha1sum` 核对（两个档案都一次就对），再用 `python3 -c 'json.dumps(...)'`
+     印出 JSON 跳脱字串，以 `{file, data, encoding:"utf-8"}` 内嵌到 create_deployment。
+  3. 内嵌资料里的反斜线：在 sandbox 用 `node -e` 实测，`\d` `\.` `\s` `\\` 都原样到达，**只有 `\uXXXX` 这种合法 JSON 跳脱会被解码**
+     （就是之前 `﻿` 那次）。Targets.tsx 的正则因此可以安全内嵌。
+  4. 旧档案的 SHA 永远留在 Vercel 内容库：回滚 = 用上一版 manifest 的 SHA（styles.css `90e574f0…`、App `88d82618…`、Manager `8f2c7816…`、
+     Payables `f56a059a…`、Receivables `2f73513c…`、Targets `97728c17…`、EcomReport `af6ac3a8…`、BranchActual `95bffc11…`、
+     PriceEffect `3e635a1d…`，完整值见 git 上一版 `deploy_manifest.json`）重建一次全参照部署，或在 Vercel 后台把
+     `dpl_9yWDzWupZUkuTBGBkHr3LjP1bgcx` promote 回 production。

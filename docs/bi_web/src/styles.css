@@ -1,38 +1,96 @@
-/* 2026-10-15 从 Vercel 现行部署抓回的原版样式（之前仓库没有副本；美化过的格式，内容与线上 build 相同） */
+/* Homeworks BI — theme "glass-indigo"（评审后修订版 2026-10-15）
+   深靛蓝底 + 玻璃卡片 + 紫罗兰主色 + 青色第二序列。
+   只改视觉属性（颜色 / 渐层 / 边框色 / 阴影 / 字重），所有选择器与版面属性与原样式表一致；
+   另加新 token、hover / focus 状态、::selection、滚动条与 Recharts 细节。
+   修订（评审 must-fix）：
+   - 补齐 TSX 裸用的 6 个 token：--warn-bg --good-green --branch-bg --row-expand-bg --tag-bg --hover-bg；
+   - 页面渐层改挂在 html（min-height:100%、no-repeat），不再用 background-attachment:fixed
+     （全页截图与 iOS Safari 都会在视口高度处出现一道硬接缝）；晕光用 px 锚在左上 / 右下角，
+     强度提到 .22 / .12，首屏下方再加一层极淡紫晕，离开首屏后页面不再是一片平的；
+   - .btn.primary 与 .seg button 补 :focus-visible（主钮原本 outline:none 又被自身光晕盖掉）；
+   - disabled 钮 hover 不变色、主钮 disabled 去饱和；.badge 的 1px 边框改 inset box-shadow（原先会把徽章撑高 2px）；
+   - transition 只在 prefers-reduced-motion 关闭时启用；.notice 改实线 + 左侧紫条；行 hover 提到 .12。 */
 :root {
   color-scheme:dark;
-  --page: #111721;
-  --surface: #20293E;
-  --ink: #ffffff;
-  --ink-2: #dbe8fa;
-  --muted: #94a3b8;
-  --grid: #272d50;
-  --baseline: rgba(148, 163, 184, .55);
-  --border: rgba(219, 232, 250, .14);
-  --series-1: #dbe8fa;
-  --series-2: #ffffff;
-  --good: #dbe8fa;
-  --good-text: #dbe8fa;
-  --critical: #ef4444;
-  --accent: #dbe8fa;
-  --accent-ink: #111721;
-  /* 2026-10-15 原本写死在 TSX 里的颜色改成 token(警示琥珀、绿灯、分行下拉底色、展开列底、观察标签底、图表 hover 底) */
-  --warn: #f59e0b;
-  --warn-bg: rgba(245, 158, 11, .16);
-  --good-green: #22c55e;
-  --branch-bg: #3d2f14;
-  --row-expand-bg: rgba(219, 232, 250, .04);
-  --tag-bg: rgba(148, 163, 184, .14);
-  --hover-bg: rgba(219, 232, 250, .06);
+  --page: #0b0e24;
+  --surface: #191d47;
+  --ink: #f3f4ff;
+  --ink-2: #c9cdf2;
+  --muted: #9499cc;
+  --grid: #2a2f5e;
+  --baseline: rgba(165, 180, 252, .42);
+  --border: rgba(165, 180, 252, .14);
+  --series-1: #8b7cff;
+  --series-2: #0ea5c6;
+  --good: #34d399;
+  --good-text: #5ee6a8;
+  --critical: #fb7f7f;
+  --accent: #6b5af5;
+  --accent-ink: #ffffff;
+  /* TSX 直接读的 token（App.tsx / Targets / Manager / Receivables / Payables / PriceEffect / BranchActual 都是裸 var() 没有 fallback） */
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, .14);
+  --good-green: #34d399;
+  --branch-bg: #3b3122;
+  --row-expand-bg: rgba(139, 124, 255, .08);
+  --tag-bg: rgba(165, 180, 252, .14);
+  --hover-bg: rgba(139, 124, 255, .10);
+  /* glass-indigo 专用（React 代码不依赖） */
+  --page-2: #161a40;
+  --accent-hi: #7c6cff;
+  --accent-lo: #5f4eea;
+  --accent-grad: linear-gradient(135deg, #6e5df8 0%, var(--accent-lo) 100%);
+  --accent-glow: 0 0 0 1px rgba(124, 108, 255, .35), 0 6px 18px -4px rgba(124, 108, 255, .55);
+  --accent-ring: 0 0 0 3px rgba(124, 108, 255, .28);
+  --focus: #d6d1ff;
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(139, 124, 255, .045) 100%);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, .12);
+  --glass-shadow: 0 10px 30px -12px rgba(2, 4, 24, .65);
+  --border-strong: rgba(165, 180, 252, .26);
+  --field: #111437;
+  --hover-wash: rgba(255, 255, 255, .06);
+  --row-hover: rgba(139, 124, 255, .12);
 }
 * {
   box-sizing:border-box;
 }
+::selection {
+  background:rgba(124, 108, 255, .45);
+  color:#fff;
+}
+/* 滚动条（WebKit；Firefox 走 color-scheme:dark 的原生深色滚动条——不设 scrollbar-width，否则 Chromium ≥121 会忽略下面的规则） */
+::-webkit-scrollbar {
+  width:10px;
+  height:10px;
+}
+::-webkit-scrollbar-track {
+  background:transparent;
+}
+::-webkit-scrollbar-thumb {
+  background:rgba(165, 180, 252, .22);
+  border-radius:999px;
+  border:2px solid transparent;
+  background-clip:padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background:rgba(165, 180, 252, .38);
+  border:2px solid transparent;
+  background-clip:padding-box;
+}
+/* 页面渐层挂在 html：根元素背景会延伸到整个画布，且按 html 盒（= 整份文件高度）定位，
+   不管页面多长都只有一张渐层、没有接缝。三层晕光都用 px 锚点：
+   左上紫晕（.22）、首屏下方一层极淡紫晕（.08，让图表 / 表格区也有层次）、右下青晕（.12） */
+html {
+  min-height:100%;
+  background:var(--page);
+  background-image:radial-gradient(1400px 1000px at 10% -200px, rgba(124, 108, 255, .22), transparent 70%),radial-gradient(1000px 640px at 78% 760px, rgba(124, 108, 255, .08), transparent 66%),radial-gradient(900px 640px at right -80px bottom -120px, rgba(34, 211, 238, .12), transparent 66%),linear-gradient(160deg, var(--page) 0%, #10133a 50%, var(--page-2) 100%);
+  background-repeat:no-repeat;
+}
 body {
   margin:0;
-  background:var(--page);
-  background-image:linear-gradient(160deg,#111721,#171d35 45%,#272d50);
-  background-attachment:fixed;
+  background:transparent;
+  background-image:none;
+  background-attachment:scroll;
   color:var(--ink);
   font-family:ZhuoJianJianTi,卓健橄榄简体,system-ui,-apple-system,Segoe UI,Microsoft YaHei,sans-serif;
   font-size:15px;
@@ -56,6 +114,7 @@ body {
   margin:0;
   font-weight:650;
   letter-spacing:.01em;
+  color:var(--ink);
 }
 .topbar .spacer {
   flex:1;
@@ -80,40 +139,83 @@ body {
   font-family:inherit;
 }
 .tabs button:hover {
-  background:var(--grid);
+  background:var(--hover-wash);
+  color:var(--ink);
 }
 .tabs button.active {
-  background:var(--accent);
+  background:var(--accent-grad);
   color:var(--accent-ink);
   font-weight:600;
+  box-shadow:var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+.tabs button:focus-visible {
+  outline:2px solid var(--accent-hi);
+  outline-offset:2px;
+}
+.tabs button.active:focus-visible {
+  outline-color:var(--focus);
 }
 .btn {
-  border:1px solid var(--border);
-  background:#333;
+  border:1px solid var(--border-strong);
+  background:var(--hover-wash);
   color:var(--ink);
   padding:6px 12px;
   border-radius:8px;
   cursor:pointer;
   font-size:13px;
   font-family:inherit;
+  box-shadow:inset 0 1px 0 rgba(255, 255, 255, .05);
 }
 .btn:hover {
-  border-color:var(--muted);
+  border-color:rgba(139, 124, 255, .55);
+  background:rgba(255, 255, 255, .1);
+}
+.btn:focus-visible {
+  outline:2px solid var(--accent-hi);
+  outline-offset:2px;
+  border-color:var(--accent-hi);
 }
 .btn.primary {
-  background:var(--accent);
-  border-color:var(--accent);
+  background:var(--accent-grad);
+  border-color:rgba(139, 124, 255, .6);
   color:var(--accent-ink);
+  font-weight:600;
+  box-shadow:var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.btn.primary:hover {
+  border-color:rgba(167, 156, 255, .8);
+  background:linear-gradient(135deg, #7868fd 0%, #6655f1 100%);
+}
+/* 主钮本身是紫色光晕，焦点环改用淡薰衣草色画在钮外侧 2px，键盘 Tab 到 搜索 / 登录 时看得见 */
+.btn.primary:focus-visible {
+  outline:2px solid var(--focus);
+  outline-offset:2px;
+  border-color:rgba(214, 209, 255, .9);
+  box-shadow:var(--accent-glow), var(--accent-ring), inset 0 1px 0 rgba(255, 255, 255, .18);
 }
 .btn:disabled {
   opacity:.5;
   cursor:default;
+  box-shadow:none;
+}
+/* disabled 时 hover 不变色，主钮再去饱和，免得看起来像还能按 */
+.btn:disabled:hover {
+  border-color:var(--border-strong);
+  background:var(--hover-wash);
+}
+.btn.primary:disabled {
+  filter:saturate(.35);
+}
+.btn.primary:disabled:hover {
+  border-color:rgba(139, 124, 255, .6);
+  background:var(--accent-grad);
 }
 .seg {
   display:inline-flex;
-  border:1px solid var(--border);
+  border:1px solid var(--border-strong);
   border-radius:8px;
   overflow:hidden;
+  background:var(--field);
 }
 .seg button {
   border:none;
@@ -124,13 +226,25 @@ body {
   cursor:pointer;
   font-family:inherit;
 }
+.seg button:hover {
+  background:var(--hover-wash);
+  color:var(--ink);
+}
+/* .seg 是 overflow:hidden，UA 预设焦点环会被裁掉；改画在按钮内侧 */
+.seg button:focus-visible {
+  outline:2px solid var(--accent-hi);
+  outline-offset:-2px;
+}
 .seg button+button {
   border-left:1px solid var(--border);
 }
 .seg button.active {
-  background:var(--accent);
+  background:var(--accent-grad);
   color:var(--accent-ink);
   font-weight:600;
+}
+.seg button.active:focus-visible {
+  outline-color:var(--focus);
 }
 .cmp-grid {
   display:grid;
@@ -150,13 +264,14 @@ body {
 }
 .cmp-card {
   border:1px solid var(--border);
-  border-left:4px solid var(--muted);
+  border-left:4px solid var(--baseline);
   border-radius:10px;
   padding:12px 14px;
-  background:#dbe8fa0a;
+  background:var(--glass);
+  box-shadow:var(--glass-hi), var(--glass-shadow);
 }
 .cmp-card.cur {
-  border-left-color:var(--accent);
+  border-left-color:var(--accent-hi);
 }
 .cmp-title {
   font-size:13px;
@@ -179,7 +294,7 @@ body {
   margin-left:8px;
 }
 .cmp-delta.pos {
-  color:var(--ink-2);
+  color:var(--good-text);
 }
 .cmp-delta.neg {
   color:var(--critical);
@@ -191,10 +306,11 @@ body {
   margin-bottom:20px;
 }
 .card {
-  background:var(--surface);
+  background:var(--glass);
   border:1px solid var(--border);
   border-radius:12px;
   padding:16px 18px;
+  box-shadow:var(--glass-hi), var(--glass-shadow);
 }
 .kpi .label {
   color:var(--muted);
@@ -255,11 +371,12 @@ table.data td.num,table.data th.num {
   white-space:nowrap;
 }
 table.data tr:hover td {
-  background:#dbe8fa0f;
+  background:var(--row-hover);
 }
 .table-scroll {
   overflow-x:auto;
 }
+/* 徽章的 1px 描边用 inset box-shadow 画，不占版面（border 会把徽章撑高 2px、表格列跟着长高） */
 .badge {
   display:inline-block;
   padding:2px 8px;
@@ -268,11 +385,13 @@ table.data tr:hover td {
 }
 .badge.ok {
   color:var(--good-text);
-  background:#dbe8fa24;
+  background:rgba(52, 211, 153, .14);
+  box-shadow:inset 0 0 0 1px rgba(52, 211, 153, .24);
 }
 .badge.fail {
   color:var(--critical);
-  background:#ef444429;
+  background:rgba(251, 127, 127, .07);
+  box-shadow:inset 0 0 0 1px rgba(251, 127, 127, .3);
 }
 .pos {
   color:var(--good-text);
@@ -282,25 +401,34 @@ table.data tr:hover td {
 }
 .badge.urg-out {
   color:#fff;
-  background:var(--critical);
+  background:#dc2626;
   font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(255, 255, 255, .12);
 }
 .badge.urg-late {
   color:var(--critical);
-  background:#ef44442e;
+  background:rgba(251, 127, 127, .12);
   font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(251, 127, 127, .3);
 }
 .badge.urg-now {
-  color:#f59e0b;
-  background:#f59e0b29;
+  color:var(--warn);
+  background:var(--warn-bg);
   font-weight:600;
+  box-shadow:inset 0 0 0 1px rgba(251, 191, 36, .26);
 }
 .badge.urg-ok {
   color:var(--muted);
-  background:#94a3b824;
+  background:var(--tag-bg);
+  box-shadow:inset 0 0 0 1px rgba(165, 180, 252, .18);
 }
 table.data tr.row-overdue td {
-  background:#ef44440f;
+  background:rgba(251, 127, 127, .08);
+}
+/* 逾期列 hover 也要有反应（同特异度、后声明的 row-overdue 原本会盖掉 hover）：hover 时改用与其他列相同的紫色洗色，
+   红底叠红底再叠 badge.fail 会把 --critical 压到 4.35:1；红字与「逾期」徽章仍在，移开即恢复红底 */
+table.data tr.row-overdue:hover td {
+  background:var(--row-hover);
 }
 input[type=number] {
   -moz-appearance:textfield;
@@ -317,29 +445,47 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
   margin-bottom:14px;
 }
 .filters select,.filters input {
-  background:var(--surface);
+  background:var(--field);
   color:var(--ink);
-  border:1px solid var(--border);
+  border:1px solid var(--border-strong);
   border-radius:8px;
   padding:7px 10px;
   font-size:13px;
   font-family:inherit;
 }
+.filters select:hover,.filters input:hover {
+  border-color:rgba(139, 124, 255, .55);
+}
+.filters select:focus,.filters input:focus,.filters select:focus-visible,.filters input:focus-visible {
+  outline:none;
+  border-color:var(--accent-hi);
+  box-shadow:var(--accent-ring);
+}
+.filters input::placeholder {
+  color:var(--muted);
+  opacity:.8;
+}
 .filters input {
   min-width:220px;
 }
+.filters input[type=checkbox] {
+  accent-color:var(--accent);
+}
+/* 登录页直接露出 html 的同一张渐层（与主页面同口径，不另写一份晕光） */
 .login-wrap {
   min-height:100vh;
   display:grid;
   place-items:center;
-  background:linear-gradient(160deg,#111721,#171d35 45%,#272d50);
+  background:transparent;
 }
 .login-card {
   width:340px;
+  box-shadow:var(--glass-hi), 0 24px 60px -20px rgba(2, 4, 24, .8), 0 0 0 1px rgba(124, 108, 255, .10);
 }
 .login-card h1 {
   font-size:26px;
   margin:0 0 4px;
+  color:var(--ink);
 }
 .login-card .hint {
   color:var(--muted);
@@ -354,13 +500,18 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 }
 .login-card input {
   width:100%;
-  background:var(--page);
+  background:var(--field);
   color:var(--ink);
-  border:1px solid var(--border);
+  border:1px solid var(--border-strong);
   border-radius:8px;
   padding:9px 10px;
   font-size:15px;
   font-family:inherit;
+}
+.login-card input:focus,.login-card input:focus-visible {
+  outline:none;
+  border-color:var(--accent-hi);
+  box-shadow:var(--accent-ring);
 }
 .login-card .btn {
   width:100%;
@@ -375,12 +526,13 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 }
 .notice {
   color:var(--ink-2);
-  background:var(--surface);
-  border:1px dashed var(--baseline);
+  background:rgba(255, 255, 255, .035);
+  border:1px solid rgba(165, 180, 252, .25);
   border-radius:10px;
   padding:12px 14px;
   margin-bottom:16px;
   font-size:13.5px;
+  box-shadow:var(--glass-hi), inset 3px 0 0 var(--accent-hi);
 }
 .muted {
   color:var(--muted);
@@ -395,6 +547,32 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
   gap:10px;
   align-items:center;
   margin-top:12px;
+}
+/* Recharts：tooltip 的底色 / 边框 / 圆角由 TSX inline 给（不透明 --surface），这里只补阴影让它浮在玻璃卡之上；
+   轴线用 --baseline；虚线对照序列（2025）描粗到 2.5px，免得在手机上比紫色主线弱一截 */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  box-shadow:0 12px 32px -12px rgba(2, 4, 24, .9), 0 0 0 1px rgba(124, 108, 255, .14);
+}
+.recharts-cartesian-axis-line,.recharts-cartesian-axis-tick-line {
+  stroke:var(--baseline);
+}
+.recharts-line-curve[stroke-dasharray] {
+  stroke-width:2.5px;
+}
+/* 过渡只给没有要求减少动态效果的使用者（150ms 颜色 / 阴影过渡，无动画） */
+@media (prefers-reduced-motion: no-preference) {
+  .tabs button {
+    transition:background-color .15s ease, color .15s ease, box-shadow .15s ease;
+  }
+  .btn {
+    transition:background-color .15s ease, border-color .15s ease, box-shadow .15s ease, filter .15s ease;
+  }
+  .seg button {
+    transition:background-color .15s ease, color .15s ease;
+  }
+  .filters select,.filters input,.login-card input {
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
 }
 @media (max-width: 640px) {
   .shell {

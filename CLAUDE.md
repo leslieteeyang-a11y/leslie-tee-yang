@@ -150,6 +150,7 @@ BI production 随即换成 `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C`（全 SHA 参照�
 `bi_is_allowed / bi_role / bi_company / bi_me` 改成只认 `allowed_users.role in ('owner','manager')`、`bi_can_write` 只剩 owner；前端 App.tsx 非 owner / manager
 一律看到 `Blocked` 提示页（导去 homeworks-ops.vercel.app）。订货员 / 销售三行名单没删成（MCP 挡 delete），只加了 note；营运系统顾客页走 `bi.crm_require`
 的 ops 权限后备，不受影响（登入账号与营运系统共用同一套 Supabase Auth，只能在 BI 这层挡）。部署批 `biguard`，production `dpl_9yWDzWupZUkuTBGBkHr3LjP1bgcx`（2026-10-15），细节见 `docs/bi_web/README.md`。
+**未来感主题（2026-10-15 晚）**：老板传 Nexora 仪表板截图问「可以把BI改成这种带有未来感，但又不是太夸张的主题吗」→ 三个候选经评审小组打分后选 `glass-indigo`（玻璃靛紫，最接近参考图），`src/styles.css` 整份换成 token 主题、8 个 TSX 写死颜色改 token（以后换主题只改 CSS）；备选 `docs/bi_web/themes/cyan-steel.css`。部署批 `theme`，production `dpl_6GPMnuXZydBAVmJwxNTyc983obGN`（2026-10-15）。**部署新作法**：小档用 `upload_file`（base64 + sha1 digest，Vercel 端校验；digest 不符不会报错而是 60 秒 timeout，先在本机 cmp 一次再传），大档用明文 heredoc 抄进暂存区 `sha1sum` 核对后以 utf-8 内嵌，preview 核对 62 个 uid 再上 production；反斜线实测只有 `\uXXXX` 会被解码，`\d` `\s` 等原样到达。细节与回滚方法见 `docs/bi_web/README.md`。
 **MCP apply_migration 的坑**：SQL 里有 `drop …` / `cron.unschedule` 这类字眼会被当破坏性语句等使用者确认，无人确认就回 `cancelled`，
 整段不会执行；写 migration 用 `create or replace` / `if not exists`，别放 drop。**`truncate`、`on commit drop` 这些字眼（连注释）也会触发，
 无人值守时不回 cancelled 而是卡到 60 秒 timeout、什么都没套用**（2026-10-10 踩到两次）；临时表改用 jsonb 变量累加。
