@@ -1,0 +1,453 @@
+/* 2026-10-15 从 Vercel 现行部署抓回的原版样式（之前仓库没有副本；美化过的格式，内容与线上 build 相同） */
+:root {
+  color-scheme:dark;
+  --page: #111721;
+  --surface: #20293E;
+  --ink: #ffffff;
+  --ink-2: #dbe8fa;
+  --muted: #94a3b8;
+  --grid: #272d50;
+  --baseline: rgba(148, 163, 184, .55);
+  --border: rgba(219, 232, 250, .14);
+  --series-1: #dbe8fa;
+  --series-2: #ffffff;
+  --good: #dbe8fa;
+  --good-text: #dbe8fa;
+  --critical: #ef4444;
+  --accent: #dbe8fa;
+  --accent-ink: #111721;
+  /* 2026-10-15 原本写死在 TSX 里的颜色改成 token(警示琥珀、绿灯、分行下拉底色、展开列底、观察标签底、图表 hover 底) */
+  --warn: #f59e0b;
+  --warn-bg: rgba(245, 158, 11, .16);
+  --good-green: #22c55e;
+  --branch-bg: #3d2f14;
+  --row-expand-bg: rgba(219, 232, 250, .04);
+  --tag-bg: rgba(148, 163, 184, .14);
+  --hover-bg: rgba(219, 232, 250, .06);
+}
+* {
+  box-sizing:border-box;
+}
+body {
+  margin:0;
+  background:var(--page);
+  background-image:linear-gradient(160deg,#111721,#171d35 45%,#272d50);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:ZhuoJianJianTi,卓健橄榄简体,system-ui,-apple-system,Segoe UI,Microsoft YaHei,sans-serif;
+  font-size:15px;
+}
+.shell {
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 20px 48px;
+}
+.topbar {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  padding:14px 0;
+  border-bottom:1px solid var(--border);
+  margin-bottom:20px;
+}
+.topbar h1 {
+  font-size:32px;
+  margin:0;
+  font-weight:650;
+  letter-spacing:.01em;
+}
+.topbar .spacer {
+  flex:1;
+}
+.topbar .who {
+  color:var(--muted);
+  font-size:13px;
+}
+.tabs {
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+}
+.tabs button {
+  border:none;
+  background:none;
+  color:var(--ink-2);
+  font-size:14px;
+  padding:7px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  font-family:inherit;
+}
+.tabs button:hover {
+  background:var(--grid);
+}
+.tabs button.active {
+  background:var(--accent);
+  color:var(--accent-ink);
+  font-weight:600;
+}
+.btn {
+  border:1px solid var(--border);
+  background:#333;
+  color:var(--ink);
+  padding:6px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:13px;
+  font-family:inherit;
+}
+.btn:hover {
+  border-color:var(--muted);
+}
+.btn.primary {
+  background:var(--accent);
+  border-color:var(--accent);
+  color:var(--accent-ink);
+}
+.btn:disabled {
+  opacity:.5;
+  cursor:default;
+}
+.seg {
+  display:inline-flex;
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+.seg button {
+  border:none;
+  background:none;
+  color:var(--ink-2);
+  font-size:12.5px;
+  padding:6px 12px;
+  cursor:pointer;
+  font-family:inherit;
+}
+.seg button+button {
+  border-left:1px solid var(--border);
+}
+.seg button.active {
+  background:var(--accent);
+  color:var(--accent-ink);
+  font-weight:600;
+}
+.cmp-grid {
+  display:grid;
+  grid-template-columns:1fr 250px;
+  gap:18px;
+  align-items:start;
+}
+@media (max-width: 900px) {
+  .cmp-grid {
+    grid-template-columns:1fr;
+  }
+}
+.cmp-cards {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.cmp-card {
+  border:1px solid var(--border);
+  border-left:4px solid var(--muted);
+  border-radius:10px;
+  padding:12px 14px;
+  background:#dbe8fa0a;
+}
+.cmp-card.cur {
+  border-left-color:var(--accent);
+}
+.cmp-title {
+  font-size:13px;
+  font-weight:650;
+  margin-bottom:8px;
+}
+.cmp-label {
+  color:var(--muted);
+  font-size:12px;
+}
+.cmp-value {
+  font-size:20px;
+  font-weight:650;
+  margin:2px 0 8px;
+  font-variant-numeric:tabular-nums;
+}
+.cmp-delta {
+  font-size:12px;
+  font-weight:600;
+  margin-left:8px;
+}
+.cmp-delta.pos {
+  color:var(--ink-2);
+}
+.cmp-delta.neg {
+  color:var(--critical);
+}
+.grid-kpi {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:12px;
+  margin-bottom:20px;
+}
+.card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px 18px;
+}
+.kpi .label {
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:6px;
+}
+.kpi .value {
+  font-size:25px;
+  font-weight:650;
+  letter-spacing:-.01em;
+  color:var(--ink);
+}
+.kpi .sub {
+  color:var(--ink-2);
+  font-size:12.5px;
+  margin-top:4px;
+}
+.card h2 {
+  font-size:15px;
+  margin:0 0 12px;
+  font-weight:650;
+  color:var(--ink);
+}
+.card-block {
+  margin-bottom:20px;
+}
+.two-col {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+}
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns:1fr;
+  }
+}
+table.data {
+  width:100%;
+  border-collapse:collapse;
+  font-variant-numeric:tabular-nums;
+  font-size:12.5px;
+}
+table.data th {
+  text-align:left;
+  color:var(--muted);
+  font-weight:500;
+  font-size:12px;
+  padding:6px 8px;
+  border-bottom:1px solid var(--baseline);
+  white-space:nowrap;
+}
+table.data td {
+  padding:6px 8px;
+  border-bottom:1px solid var(--grid);
+}
+table.data td.num,table.data th.num {
+  text-align:right;
+  white-space:nowrap;
+}
+table.data tr:hover td {
+  background:#dbe8fa0f;
+}
+.table-scroll {
+  overflow-x:auto;
+}
+.badge {
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+}
+.badge.ok {
+  color:var(--good-text);
+  background:#dbe8fa24;
+}
+.badge.fail {
+  color:var(--critical);
+  background:#ef444429;
+}
+.pos {
+  color:var(--good-text);
+}
+.neg {
+  color:var(--critical);
+}
+.badge.urg-out {
+  color:#fff;
+  background:var(--critical);
+  font-weight:600;
+}
+.badge.urg-late {
+  color:var(--critical);
+  background:#ef44442e;
+  font-weight:600;
+}
+.badge.urg-now {
+  color:#f59e0b;
+  background:#f59e0b29;
+  font-weight:600;
+}
+.badge.urg-ok {
+  color:var(--muted);
+  background:#94a3b824;
+}
+table.data tr.row-overdue td {
+  background:#ef44440f;
+}
+input[type=number] {
+  -moz-appearance:textfield;
+}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance:none;
+  margin:0;
+}
+.filters {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-bottom:14px;
+}
+.filters select,.filters input {
+  background:var(--surface);
+  color:var(--ink);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:7px 10px;
+  font-size:13px;
+  font-family:inherit;
+}
+.filters input {
+  min-width:220px;
+}
+.login-wrap {
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(160deg,#111721,#171d35 45%,#272d50);
+}
+.login-card {
+  width:340px;
+}
+.login-card h1 {
+  font-size:26px;
+  margin:0 0 4px;
+}
+.login-card .hint {
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:18px;
+}
+.login-card label {
+  display:block;
+  font-size:13px;
+  color:var(--ink-2);
+  margin:12px 0 4px;
+}
+.login-card input {
+  width:100%;
+  background:var(--page);
+  color:var(--ink);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:9px 10px;
+  font-size:15px;
+  font-family:inherit;
+}
+.login-card .btn {
+  width:100%;
+  margin-top:18px;
+  padding:9px;
+  font-size:15px;
+}
+.err {
+  color:var(--critical);
+  font-size:13px;
+  margin-top:10px;
+}
+.notice {
+  color:var(--ink-2);
+  background:var(--surface);
+  border:1px dashed var(--baseline);
+  border-radius:10px;
+  padding:12px 14px;
+  margin-bottom:16px;
+  font-size:13.5px;
+}
+.muted {
+  color:var(--muted);
+}
+.loading {
+  color:var(--muted);
+  padding:32px;
+  text-align:center;
+}
+.pager {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:12px;
+}
+@media (max-width: 640px) {
+  .shell {
+    padding:0 10px 32px;
+  }
+  .topbar {
+    gap:8px;
+    padding:10px 0;
+  }
+  .topbar h1 {
+    font-size:22px;
+    width:100%;
+  }
+  .topbar .who {
+    display:none;
+  }
+  .tabs {
+    width:100%;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:4px;
+  }
+  .tabs button {
+    flex:0 0 auto;
+    padding:8px 12px;
+    font-size:13.5px;
+  }
+  .card {
+    padding:12px;
+    border-radius:10px;
+  }
+  .kpi .value {
+    font-size:20px;
+  }
+  .grid-kpi {
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .filters input {
+    min-width:0;
+    flex:1;
+  }
+  table.data {
+    font-size:12px;
+  }
+  table.data td,table.data th {
+    padding:5px 6px;
+  }
+  .cmp-grid {
+    grid-template-columns:1fr;
+  }
+  .btn {
+    padding:8px 12px;
+  }
+}

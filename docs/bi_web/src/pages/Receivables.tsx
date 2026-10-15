@@ -219,7 +219,7 @@ export default function Receivables() {
                   </tr>
                   {open === r.debtor_code && (
                     <tr>
-                      <td colSpan={10} style={{ padding: '6px 8px 12px 28px', background: 'rgba(219,232,250,.04)' }}>
+                      <td colSpan={10} style={{ padding: '6px 8px 12px 28px', background: 'var(--row-expand-bg)' }}>
                         {docs === null ? (
                           <span className="muted">{t('载入明细…')}</span>
                         ) : (

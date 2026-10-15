@@ -23,6 +23,9 @@ BATCH = {
               "DROP:src/i18n/purchasing.ts", "DROP:src/i18n/cscode.ts"],
   # 2026-10-15 BI 只开放给老板与店长：App.tsx 的 Blocked 提示页 + core.ts 三个英文键
   "biguard": ["src/App.tsx", "src/i18n/core.ts"],
+  # 2026-10-15 未来感主题：整份 styles.css + 把写死颜色改成 token 的 8 个 TSX
+  "theme": ["src/styles.css", "src/App.tsx", "src/pages/Manager.tsx", "src/pages/Payables.tsx", "src/pages/Receivables.tsx",
+            "src/pages/Targets.tsx", "src/pages/EcomReport.tsx", "src/pages/BranchActual.tsx", "src/pages/PriceEffect.tsx"],
 }
 STUB = "const d: Record<string, string> = {\n};\nexport default d;\n"
 M = Path("deploy_manifest.json")

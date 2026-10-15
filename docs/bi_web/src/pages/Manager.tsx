@@ -115,7 +115,7 @@ function DailyTab() {
         <div className="card card-block">
           <h2>{t('本月门店目标')} {fmtRM(target)}</h2>
           <div style={{ background: 'var(--grid)', borderRadius: 8, height: 22, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ width: `${progress}%`, height: '100%', background: calc.mtdStore >= paceTarget ? 'var(--accent)' : '#f59e0b', borderRadius: 8 }} />
+            <div style={{ width: `${progress}%`, height: '100%', background: calc.mtdStore >= paceTarget ? 'var(--accent)' : 'var(--warn)', borderRadius: 8 }} />
             <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 650, color: 'var(--ink)' }}>
               {fmtRM(calc.mtdStore)} / {fmtRM(target)} · {progress.toFixed(1)}%
             </span>
@@ -242,7 +242,7 @@ function AgentTab() {
                     {target > 0 && (r.agent === '(未指定)' || tgt <= 0
                       ? <td className="num muted">—</td>
                       : <td className="num" title={t('目标 {rm}', { rm: fmtRM(tgt) })}
-                            style={{ fontWeight: 650, color: ach >= 1 ? '#16a34a' : behind ? '#ef4444' : 'inherit' }}>
+                            style={{ fontWeight: 650, color: ach >= 1 ? 'var(--good-green)' : behind ? 'var(--critical)' : 'inherit' }}>
                           {(ach * 100).toFixed(0)}%
                         </td>)}
                     <td className="num muted">{total ? ((r.net / total) * 100).toFixed(1) + '%' : '—'}</td>

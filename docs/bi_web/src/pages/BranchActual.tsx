@@ -15,7 +15,7 @@ type Meta = { month: string; produced_by: string | null; updated_at: string; det
 
 const n = (v: unknown) => Number(v ?? 0);
 const ym = (d: string) => d.slice(0, 7);
-const ORANGE = '#f59e0b';
+const ORANGE = 'var(--warn)';   // 分行「实际销售额」的标示色走主题 token
 
 function num(v: number, strong = false) {
   return v
@@ -209,7 +209,7 @@ export default function BranchActual() {
               <CartesianGrid stroke="var(--grid)" vertical={false} />
               <XAxis dataKey="m" tick={{ fill: 'var(--muted)', fontSize: 12 }} />
               <YAxis tick={{ fill: 'var(--muted)', fontSize: 12 }} tickFormatter={fmtCompact} width={54} />
-              <Tooltip contentStyle={tipStyle} formatter={(v: number) => [fmtRM(v), t('实际销售额')]} cursor={{ fill: 'rgba(219,232,250,.06)' }} />
+              <Tooltip contentStyle={tipStyle} formatter={(v: number) => [fmtRM(v), t('实际销售额')]} cursor={{ fill: 'var(--hover-bg)' }} />
               <Bar dataKey="actual" fill={ORANGE} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

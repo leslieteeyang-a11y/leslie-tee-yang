@@ -59,7 +59,7 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
               {CHANNELS.map(([k, l]) => (
                 <th key={k} className="num">{t(l)} RM</th>
               )).flatMap((th, i) => (CHANNELS[i][0] === 'southern'
-                ? [th, <th key="branch-actual" className="num" style={{ color: '#f59e0b' }} title={t('分行（JB Southern 账套）当月实际销售额：SO 全部 + 非SO发票 − 贷项，排除 agent 空白；不计入 Total')}>{t('当月实际销售额')} RM</th>]
+                ? [th, <th key="branch-actual" className="num" style={{ color: 'var(--warn)' }} title={t('分行（JB Southern 账套）当月实际销售额：SO 全部 + 非SO发票 − 贷项，排除 agent 空白；不计入 Total')}>{t('当月实际销售额')} RM</th>]
                 : [th]))}
               <th className="num">Total RM</th><th className="num">Contribution</th><th className="num">Avg. Price</th>
             </tr>
@@ -75,7 +75,7 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
                     {cell(byCat.get(c.category)?.get(k) ?? 0)}
                     {k === 'southern' && (
                       <td className={'num' + (n(branch.get(c.category)?.actual_amount) < 0 ? ' neg' : '')}
-                          style={{ color: '#f59e0b' }} title={branchTip(branch.get(c.category))}>
+                          style={{ color: 'var(--warn)' }} title={branchTip(branch.get(c.category))}>
                         {hasBranch ? (n(branch.get(c.category)?.actual_amount) ? fmtNum(branch.get(c.category)!.actual_amount, 2) : '–') : ''}
                       </td>
                     )}
@@ -95,7 +95,7 @@ function ForecastTable({ title, cats, chs, branch }: { title: string; cats: Cat[
                 {CHANNELS.map(([k]) => (
                   <span key={k} style={{ display: 'contents' }}>
                     {cell(colTotal(k))}
-                    {k === 'southern' && <td className="num" style={{ color: '#f59e0b' }}>{hasBranch ? fmtNum(actualTotal, 2) : ''}</td>}
+                    {k === 'southern' && <td className="num" style={{ color: 'var(--warn)' }}>{hasBranch ? fmtNum(actualTotal, 2) : ''}</td>}
                   </span>
                 ))}
                 <td className="num">{fmtNum(total, 2)}</td><td className="num">100%</td><td />
@@ -298,7 +298,7 @@ export default function EcomReport({ canEdit = false }: { canEdit?: boolean }) {
               <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)' }} />
               <Legend />
               {skuTrend.platforms.map((p, i) => (
-                <Line key={p} type="monotone" dataKey={p} stroke={i === 0 ? '#e5eefb' : '#8fa3c7'} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                <Line key={p} type="monotone" dataKey={p} stroke={i === 0 ? 'var(--series-1)' : 'var(--series-2)'} strokeWidth={2} dot={{ r: 3 }} connectNulls />
               ))}
             </LineChart>
           </ResponsiveContainer>

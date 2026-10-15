@@ -60,8 +60,8 @@ function Cashflow() {
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmtRM(Math.abs(v))} />
           <Legend wrapperStyle={{ fontSize: 12.5 }} />
           <Bar dataKey={K_IN} fill="var(--series-1)" stackId="a" radius={[3, 3, 0, 0]} maxBarSize={26} />
-          <Bar dataKey={K_OUT} fill="#EF4444" stackId="a" radius={[3, 3, 0, 0]} maxBarSize={26} />
-          <Line dataKey={K_CASH} stroke="#ffffff" strokeWidth={2} dot={{ r: 2.5 }} type="monotone" />
+          <Bar dataKey={K_OUT} fill="var(--critical)" stackId="a" radius={[3, 3, 0, 0]} maxBarSize={26} />
+          <Line dataKey={K_CASH} stroke="var(--ink)" strokeWidth={2} dot={{ r: 2.5 }} type="monotone" />
         </ComposedChart>
       </ResponsiveContainer>
       <p className="muted" style={{ margin: '8px 0 0', fontSize: 12 }}>
@@ -149,7 +149,7 @@ export default function Payables({ showCashflow = true }: { showCashflow?: boole
                     <td className="muted">{fmtDate(r.oldest_invoice)}</td>
                   </tr>
                   {open === r.creditor_code && (
-                    <tr><td colSpan={8} style={{ padding: '6px 8px 12px 28px', background: 'rgba(219,232,250,.04)' }}>
+                    <tr><td colSpan={8} style={{ padding: '6px 8px 12px 28px', background: 'var(--row-expand-bg)' }}>
                       {docs === null ? <span className="muted">{t('载入明细…')}</span> : (
                         <table className="data" style={{ fontSize: 12 }}>
                           <thead><tr><th>{t('类型')}</th><th>{t('单号')}</th><th>{t('日期')}</th><th>{t('到期')}</th><th className="num">{t('账龄(天)')}</th><th className="num">{t('单据额')}</th><th className="num">{t('未结余额')}</th></tr></thead>

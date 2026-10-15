@@ -154,14 +154,14 @@ export default function App() {
         <h1>Homeworks BI</h1>
         {role === 'owner' && (
           <select value={COMPANY} onChange={(e) => switchCompany(e.target.value)}
-                  style={{ background: COMPANY === 'HOMEWORKSSB' ? 'var(--surface)' : '#3d2f14',
+                  style={{ background: COMPANY === 'HOMEWORKSSB' ? 'var(--surface)' : 'var(--branch-bg)',
                            color: 'var(--ink)', border: '1px solid var(--border)', borderRadius: 8,
                            padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600 }}>
             {Object.entries(COMPANIES).map(([k, v]) => <option key={k} value={k}>{t(v)}</option>)}
           </select>
         )}
         {COMPANY !== 'HOMEWORKSSB' && (
-          <span className="badge" style={{ color: '#f59e0b', background: 'rgba(245,158,11,.16)', fontWeight: 600 }}>
+          <span className="badge" style={{ color: 'var(--warn)', background: 'var(--warn-bg)', fontWeight: 600 }}>
             {role === 'owner' ? t('正在看:{c}', { c: t(COMPANIES[COMPANY]) }) : t(COMPANIES[COMPANY])}
           </span>
         )}

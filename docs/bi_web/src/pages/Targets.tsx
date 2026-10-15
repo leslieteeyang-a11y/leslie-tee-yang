@@ -31,9 +31,9 @@ const CH_ORDER = ['门市现金', 'B2B客户', 'Shopee', 'Lazada', 'TikTok', '�
 // 实际已扣平台手续费(ONLINE 贷项)的渠道
 const PLATFORM_CH = ['Shopee', 'Lazada', 'TikTok'];
 const COMPANY_ORDER = Object.keys(COMPANIES);
-// 灯号用固定色:线上 styles.css 的 --good 是浅蓝(#dbe8fa,跟 --accent 同色),不是绿色,不能拿来当绿灯
-const GREEN = '#22c55e';
-const YELLOW = '#f59e0b';
+// 灯号颜色走主题 token(styles.css 的 --good-green / --warn),换主题时一起换
+const GREEN = 'var(--good-green)';
+const YELLOW = 'var(--warn)';
 
 const toNum = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
 // 无条件舍去到整数:让文字跟灯号门槛一致(99.6% 显示 99%、配黄灯;不会出现「100%」配黄灯)。+1e-6 防浮点误差(0.29*100 = 28.999…)

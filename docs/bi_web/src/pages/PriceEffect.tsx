@@ -108,7 +108,7 @@ export default function PriceEffect() {
                   <td>
                     {r.status === 'good' && <span className="badge ok">{t('✅ 成功')}</span>}
                     {r.status === 'drop' && <span className="badge fail">{t('卖不动')}</span>}
-                    {r.status === 'watch' && <span className="badge" style={{ color: 'var(--muted)', background: 'rgba(148,163,184,.14)' }}>{t('观察')}</span>}
+                    {r.status === 'watch' && <span className="badge" style={{ color: 'var(--muted)', background: 'var(--tag-bg)' }}>{t('观察')}</span>}
                   </td>
                 </tr>
               ))}
