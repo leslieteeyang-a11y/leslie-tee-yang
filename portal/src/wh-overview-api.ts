@@ -13,6 +13,9 @@ export interface Overview {
   moves_pending: number; grn_pending: number; grn_pending_do: number; do_to_count: number; variances: number;
   count_today: { counted: number; target: number; people: number };
   bins: BinSummary[];
+  /** 拣货：今天要送几张、已拣好几张、拣到一半几张 */ picks: { today: number; today_done: number; picking: number };
+  /** 开着的盘点单（最多 10 张） */
+  sheets: { id: number; title: string; location: string; due_date: string | null; overdue: boolean; total: number; done: number; recount: number }[];
   recent: OverviewRecent[];
   /** 最近动态里的商品品名 */ names: Record<string, string>;
 }
@@ -21,4 +24,16 @@ export async function overview(company: string): Promise<Overview> {
   const { data, error } = await supabase.rpc("ops_wh_overview", { p: { company } });
   if (error) throw new Error(error.message);
   return data as Overview;
+}
+
+/** 首页的仓库提醒（没有仓库权限 = null / 空） */
+export interface WhHome {
+  picks_left: number | null;
+  sheets: { id: number; company: string; title: string; location: string; due_date: string | null; overdue: boolean; total: number; left: number }[];
+  bins_over: number | null;
+}
+export async function whHome(): Promise<WhHome> {
+  const { data, error } = await supabase.rpc("ops_wh_home");
+  if (error) throw new Error(error.message);
+  return data as WhHome;
 }

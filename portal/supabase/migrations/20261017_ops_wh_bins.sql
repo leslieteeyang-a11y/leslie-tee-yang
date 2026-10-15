@@ -179,7 +179,7 @@ begin
   end if;
   if nxt < 0 then
     raise exception '货架 % 上的 % 只有 % 件，不够拿 % 件。如果实际有货，请先盘点或请主管改数。',
-      b.code, p_item, trim(to_char(cur, 'FM999999990.##')), trim(to_char(-p_delta, 'FM999999990.##'))
+      b.code, p_item, trim_scale(cur)::text, trim_scale(-p_delta)::text
       using errcode = '22023';
   end if;
   d := nxt - cur;

@@ -48,7 +48,7 @@ export function Tabs<T extends string>({ value, options, onChange }: { value: T;
   return (
     <div className="tabs" ref={ref}>
       {options.map(([k, label]) => (
-        <button key={k} className={k === value ? "on" : ""} onClick={() => onChange(k)}>{label}</button>
+        <button key={k} type="button" className={k === value ? "on" : ""} onClick={() => onChange(k)}>{label}</button>
       ))}
     </div>
   );

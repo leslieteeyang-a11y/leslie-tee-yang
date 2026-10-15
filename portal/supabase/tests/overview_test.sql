@@ -25,6 +25,11 @@ do $$ declare o jsonb; hq jsonb; begin
   assert (o->>'neg_rows')::int >= 1, 'negative rows';
   assert jsonb_array_length(o->'bins') >= 1 and jsonb_array_length(o->'recent') between 1 and 15, 'bins + recent';
   assert o->'names' ? (o->'recent'->0->>'item_code'), 'names for recent items';
+  assert o->'picks' ? 'today' and jsonb_typeof(o->'sheets') = 'array', 'picks + sheets';
+end $$;
+-- 首页的仓库提醒：可审批有 bins_over；可编辑有 picks_left 没有 bins_over；没有仓库权限 = null
+do $$ declare h jsonb := public.ops_wh_home(); begin
+  assert h->'bins_over' <> 'null'::jsonb and h->'picks_left' <> 'null'::jsonb, 'approve home: ' || h::text;
 end $$;
 select pg_temp.as_user('picker@example.com');
 do $$ declare o jsonb; begin
@@ -32,11 +37,17 @@ do $$ declare o jsonb; begin
   assert not (o->>'show_cost')::boolean and (select x->'value' from jsonb_array_elements(o->'locations') x where x->>'location' = 'HQ') = 'null'::jsonb,
     'edit level has no cost';
 end $$;
+do $$ declare h jsonb := public.ops_wh_home(); begin
+  assert h->'bins_over' = 'null'::jsonb and h->'picks_left' <> 'null'::jsonb, 'edit home: ' || h::text;
+end $$;
 select pg_temp.as_user('hqsales@example.com');
 do $$ begin assert public.ops_wh_overview('{}')->>'company' = 'HOMEWORKSSB', 'view level ok'; end $$;
 select pg_temp.as_user('jbwh@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_overview('{"company":"HOMEWORKSSB"}')$q$, '分店');
 select pg_temp.as_user('hr@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_overview('{}')$q$, '仓库');
+do $$ declare h jsonb := public.ops_wh_home(); begin
+  assert h->'picks_left' = 'null'::jsonb and h->'bins_over' = 'null'::jsonb and h->'sheets' = '[]'::jsonb, 'no warehouse: ' || h::text;
+end $$;
 reset role;
 select 'overview_test ok' as result;

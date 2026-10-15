@@ -43,6 +43,7 @@ export function OverviewTab({ company, canEdit, canApprove, canGrn }: { company:
         {canGrn && (
           <a className={"kpi" + (d.grn_pending ? " warn" : "")} href="#/warehouse/grn"><b>{d.grn_pending_do}</b><span>厂家到货待开进货单</span></a>
         )}
+        <a className={"kpi" + (d.picks.today > d.picks.today_done ? " warn" : "")} href="#/warehouse/pick"><b>{`${d.picks.today_done} / ${d.picks.today}`}</b><span>{d.picks.picking ? `今天的 DO 已拣好（${d.picks.picking} 张拣到一半）` : "今天的 DO 已拣好"}</span></a>
         <a className={"kpi" + (d.do_to_count ? " warn" : "")} href="#/purchasing/transit"><b>{d.do_to_count}</b><span>三天内到 / 待点货的厂家货</span></a>
         {canEdit && (
           <a className="kpi" href="#/warehouse/count"><b>{`${ct.counted} / ${ct.target}`}</b><span>{`今天盘点（${ct.people} 人）`}</span></a>
@@ -57,6 +58,22 @@ export function OverviewTab({ company, canEdit, canApprove, canGrn }: { company:
           </>
         )}
       </div>
+
+      {d.sheets.length > 0 && (
+        <section className="card">
+          <h2>开着的盘点单</h2>
+          <ul className="list">
+            {d.sheets.map((sh) => (
+              <li key={sh.id}>
+                <a href={`#/warehouse/count/${sh.id}`}><b>{sh.title}</b></a>
+                <span className="muted small">{` · ${sh.location}${sh.due_date ? ` · 期限 ${sh.due_date}` : ""}`}</span>
+                {sh.overdue && <span className="small rpl-neg">{" 已过期限"}</span>}
+                <div className="small">{`已盘 ${sh.done} / ${sh.total}${sh.recount ? `，要再数 ${sh.recount}` : ""}`}</div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {d.bins.length > 0 && (
         <section className="card">

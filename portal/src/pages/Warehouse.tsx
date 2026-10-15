@@ -18,9 +18,10 @@ import { SlowTab } from "../wh/Slow";
 import { BinsTab } from "../wh/Bins";
 import { MapLazy } from "../wh/MapLazy";
 import { PickTab } from "../wh/Pick";
+import { OverviewTab } from "../wh/Overview";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick";
+type Tab = "overview" | "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
@@ -34,7 +35,8 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   const co = meta.companies.includes(company) ? company : meta.companies[0];
   const canEdit = meta.level !== "view";
   const canApprove = meta.level === "approve";
-  const tabs: [Tab, string][] = [["lookup", "查货"]];
+  // 总览（2026-10-15）放第一个也是预设；查货第二
+  const tabs: [Tab, string][] = [["overview", "总览"], ["lookup", "查货"]];
   tabs.push(["stock", "库存总表"]);   // 从 BI 搬进来（2026-10-16）
   tabs.push(["bins", "货架"]);       // 货架帐（2026-10-17）
   tabs.push(["map", "地图"]);         // 货架地图（#/warehouse/map/<仓位>）
@@ -47,7 +49,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   tabs.push(["aged", "旧货"]);
   tabs.push(["slow", "滞销品"]);     // 从 BI 搬进来（2026-10-16）
   tabs.push(["labels", "印条码"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "lookup";
+  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "overview";
   const locs = meta.locations.filter((l) => l.company === co);
   const pick = (c: string) => { setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ } };
 
@@ -62,6 +64,7 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
         )}
       </div>
       <div className="filters"><Tabs value={tab} options={tabs} onChange={(k) => go(`/warehouse/${k}`)} /></div>
+      {tab === "overview" && <OverviewTab key={co} company={co} canEdit={canEdit} canApprove={canApprove} canGrn={canGrn(me)} />}
       {tab === "lookup" && <Lookup me={me} company={co} locs={locs.map((l) => l.code)} canEdit={canEdit} />}
       {tab === "count" && <CountTab company={co} locs={locs.filter((l) => l.counting).map((l) => l.code)}
                                     allLocs={locs.map((l) => l.code)} arg={arg} canApprove={canApprove} />}

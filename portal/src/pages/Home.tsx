@@ -4,6 +4,7 @@ import { missingText } from "./MyProfile";
 import { hhmm } from "../att-api";
 import { ErrorBox } from "../ui";
 import { DeliveryHomeCard } from "../dlv/HomeCard";
+import { whHome, WhHome } from "../wh-overview-api";
 import "../extra.css";
 import "../att.css";
 import { canPromptInstall, dismissHint, hintDismissed, isIos, isStandalone, onInstallChange, promptInstall } from "../install";
@@ -110,11 +111,13 @@ export default function HomePage({ me }: { me: Me }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
   const [profileMissing, setProfileMissing] = useState<string[]>([]);   // 自己的档案还缺什么（我的资料卡片提醒用）
+  const [wh, setWh] = useState<WhHome | null>(null);   // 仓库：今天要拣的 DO、指派给我的盘点单、货架对不上（2026-10-15）
 
   useEffect(() => {
     api.home().then(setHome).catch((e: Error) => setError(e.message));
     api.profile().then((p) => setProfileMissing(p.missing)).catch(() => {});
     if (can(me, "tasks", "view")) api.tasks("mine", "open").then((t) => setTasks(t.slice(0, 8))).catch(() => {});
+    if (can(me, "warehouse", "view")) whHome().then(setWh).catch(() => {});
   }, [me]);
 
   const hour = new Date().getHours();
@@ -156,6 +159,17 @@ export default function HomePage({ me }: { me: Me }) {
           )}
           {!!home.wh_moves_pending && (
             <a className="kpi warn" href="#/warehouse/moves"><b>{home.wh_moves_pending}</b><span>搬动待输入 AutoCount</span></a>
+          )}
+          {!!wh?.picks_left && (
+            <a className="kpi warn" href="#/warehouse/pick"><b>{wh.picks_left}</b><span>今天要拣的 DO</span></a>
+          )}
+          {wh?.sheets.map((sh) => (
+            <a key={sh.id} className={"kpi" + (sh.overdue ? " warn" : "")} href={`#/warehouse/count/${sh.id}`}>
+              <b>{sh.left}</b><span>{`盘点单：${sh.title}（还有 ${sh.left} 项）`}</span>
+            </a>
+          ))}
+          {!!wh?.bins_over && (
+            <a className="kpi warn" href="#/warehouse/bins/recon"><b>{wh.bins_over}</b><span>货架比系统多</span></a>
           )}
           {home.wh_counted_today != null && (
             <a className="kpi" href="#/warehouse/count"><b>{home.wh_counted_today}</b><span>我今天盘了几件</span></a>

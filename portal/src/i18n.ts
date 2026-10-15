@@ -27,6 +27,7 @@ import { DICT_WHBIN, PATTERNS_WHBIN } from "./i18n-dict-whbin";
 import { DICT_WHMAP, PATTERNS_WHMAP } from "./i18n-dict-whmap";
 import { DICT_WHPICK, PATTERNS_WHPICK } from "./i18n-dict-whpick";
 import { DICT_WHSHEET, PATTERNS_WHSHEET } from "./i18n-dict-whsheet";
+import { DICT_WHOV, PATTERNS_WHOV } from "./i18n-dict-whov";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -44,8 +45,8 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL, ...DICT_WHBIN, ...DICT_WHMAP, ...DICT_WHPICK, ...DICT_WHSHEET };
-const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH, ...PATTERNS_SOP, ...PATTERNS_RPL, ...PATTERNS_WHBIN, ...PATTERNS_WHMAP, ...PATTERNS_WHPICK, ...PATTERNS_WHSHEET];
+const DICT: Record<string, string> = { ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL, ...DICT_WHBIN, ...DICT_WHMAP, ...DICT_WHPICK, ...DICT_WHSHEET, ...DICT_WHOV };
+const ALL_PATTERNS = [...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH, ...PATTERNS_SOP, ...PATTERNS_RPL, ...PATTERNS_WHBIN, ...PATTERNS_WHMAP, ...PATTERNS_WHPICK, ...PATTERNS_WHSHEET, ...PATTERNS_WHOV];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */
