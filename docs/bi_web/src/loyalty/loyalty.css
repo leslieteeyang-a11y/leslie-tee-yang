@@ -1,0 +1,73 @@
+/* 顾客资料页专用;配色沿用 styles.css 的变数 */
+.lp-click { cursor: pointer; }
+.lp-click:hover td { background: rgba(219, 232, 250, 0.06); }
+.lp-void td { opacity: 0.45; text-decoration: line-through; }
+.lp-void td:last-child, .lp-void td:nth-child(8) { text-decoration: none; }
+.lp-panel { border: 1px solid var(--accent); }
+.lp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.lp-forms { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
+.lp-form { display: flex; flex-direction: column; gap: 6px; flex: 1 1 280px; max-width: 420px; }
+.lp-form h3 { margin: 0 0 4px; font-size: 16px; }
+.lp-form label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.lp-form input, .lp-form select, .lp-form textarea { width: 100%; }
+.lp-form textarea { font: inherit; resize: vertical; }
+.lp-form .btn { margin-top: 8px; align-self: flex-start; }
+.lp-row { display: flex; gap: 8px; }
+.lp-row .btn { margin-top: 0; }
+.lp-items { background: rgba(0, 0, 0, 0.18); padding: 6px 10px 10px; }
+.lp-items table.data { margin: 0; }
+details.card > summary { cursor: pointer; list-style-position: inside; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+/* 2026-09-30:分级标签、同意标记、WhatsApp 按钮、活动 / 范本编辑框 */
+.lp-tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; line-height: 18px; white-space: nowrap;
+  border: 1px solid currentColor; }
+.lp-tier-vip { color: #e0b43c; }
+.lp-tier-regular { color: #4fbf7f; }
+.lp-tier-normal { color: var(--muted); }
+.lp-tier-lapsed { color: #e07a6a; }
+.lp-tier-lead { color: #6aa8e0; }
+.lp-yes { color: #4fbf7f; padding: 0 5px; }
+.lp-no { color: #e07a6a; padding: 0 5px; }
+.lp-wa { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-right: 6px; }
+.lp-wa a.btn { font-size: 13px; }
+.lp-box { border: 1px dashed var(--muted); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-tpl { border-top: 1px solid rgba(219, 232, 250, 0.12); padding-top: 6px; }
+.lp-sel td { background: rgba(219, 232, 250, 0.08); }
+/* 2026-10-05:快速登记、报价标记、装修阶段、手机版面 */
+.lp-quote { color: #d98c3a; margin-left: 4px; }
+.lp-quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; margin-top: 10px; }
+.lp-quick-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.lp-quick-grid input, .lp-quick-grid select { width: 100%; font-size: 16px; }
+.lp-quick-grid .lp-row select { flex: 1; }
+.lp-stages button { font-size: 13px; }
+@media (max-width: 640px) {
+  .shell { padding-left: 10px; padding-right: 10px; }
+  .topbar { flex-wrap: wrap; gap: 6px; }
+  .topbar h1 { font-size: 20px; }
+  .grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filters { flex-wrap: wrap; }
+  .filters input, .filters select { flex: 1 1 140px; min-width: 0; font-size: 16px; }
+  .lp-form { max-width: none; }
+  .lp-form input, .lp-form select, .lp-form textarea { font-size: 16px; }
+  .lp-wa a.btn, .btn { padding: 8px 10px; }
+  .lp-head { flex-direction: column; }
+  table.data { font-size: 13px; }
+  .lp-quick-grid { grid-template-columns: 1fr; }
+}
+/* 2026-10-06:送货排单 */
+.lp-delivery { border: 1px solid var(--accent); }
+.lp-pre { white-space: pre-wrap; font-size: 12px; background: rgba(0, 0, 0, 0.18); padding: 8px 10px; border-radius: 6px; max-height: 320px; overflow: auto; }
+.lp-bulk textarea { width: 100%; font: inherit; font-size: 16px; resize: vertical; }
+.lp-issues { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #e0b43c; }
+
+/* 送货排单:完整货品、给司机的备注(2026-10-07) */
+.lp-lines { font-size: 12px; margin-top: 2px; }
+.lp-lines summary { cursor: pointer; }
+.lp-lines ul { margin: 4px 0 0; padding-left: 18px; }
+.lp-dnote { width: 100%; font: inherit; font-size: 13px; margin-top: 6px; min-width: 180px; }
+
+/* 排单纪录:司机签收进度与照片(2026-10-07) */
+.lp-run { border-top: 1px solid var(--line, #d7dcea); padding: 6px 0; }
+.lp-run summary { cursor: pointer; }
+.lp-pod-photos { display: flex; gap: 4px; flex-wrap: wrap; }
+.lp-pod-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }

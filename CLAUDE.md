@@ -158,7 +158,10 @@ BI production 随即换成 `dpl_5Hv676uke15ChRu5ZkbCsWMTAg3C`（全 SHA 参照�
 字典键就是中文原文，英文缺键退回中文；右上角 `LangToggle` 记 localStorage `bi_lang`），字典分七档在 `src/i18n/`。
 完整原始码副本在 `docs/bi_web/src/`；分批部署工具 `docs/bi_web/mkpayload.py` + `deploy_manifest.json`，
 步骤与坑（不带 teamId、部署后用 `list_deployment_files` 核对 SHA、缺 SHA 用 `upload_file` 带 digest 上传）见 `docs/bi_web/README.md`。
-**BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
+**BI 网页改 GitHub 自动部署（2026-10-15 准备好，等老板在 Vercel 网页接 Git）**：`docs/bi_web/` 已补成完整可建置专案（与 production 逐档核对 SHA，只有 package-lock 是重新产生的），
+`vercel.json` 只在该资料夹有改动时建置；Root Directory = `docs/bi_web`、Production Branch = `claude/monthly-data-prep-vtcnct`。**接好之后改网页只要 commit + 推到预设分支，
+不要再用 MCP 直接上传**（直接上传的版本会被下一次 git 部署盖掉）。步骤与规矩见 `docs/bi_web/README.md` 开头。
+**BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，目前仍是非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
 latestDeployment）。

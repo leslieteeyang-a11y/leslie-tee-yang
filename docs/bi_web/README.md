@@ -1,5 +1,28 @@
 # HomeWorks BI 网页（Vercel `homeworks-bi`）里的「电商月报」分页
 
+## 2026-10-15：这个资料夹已是完整专案，可改成 GitHub 自动部署（老板：「要」，为了不再一直按 Approve）
+
+- 这里现在有建置所需的全部档案：`package.json`、`index.html`、`tsconfig.json`、`public/`（4 个图示 + manifest）、
+  `src/{delivery,driver,join,loyalty}/`、`src/pages/{Delivery,Loyalty}.tsx`、`src/i18n/loyalty.ts`。
+  与 production `dpl_6GPMnuXZydBAVmJwxNTyc983obGN`（theme 批）的档案树逐档核对 SHA1：62 个档里 61 个完全相同；
+  唯一不同的是 `package-lock.json`（Vercel 上的副本 10 万字、MCP 只回 4KB，所以在本机用 `npm install` 重新产生，依赖范围不变）。
+  图示是从 homeworks-bi.vercel.app 用 Vercel Sandbox 抓回来的（本机代理挡 vercel.app），SHA1 与档案树一致。
+- 本机验证：`npm install && npm run build` 成功（5 个入口都建出来）。`node_modules/`、`dist/` 已在 `.gitignore`。
+- `vercel.json` 的 `ignoreCommand`：这个资料夹没改动的 commit 不建置（其他 `claude/*` 分支推送不会一直产生 preview）。
+
+### 接 GitHub 的步骤（老板在 Vercel 网页上做）
+1. Vercel → `homeworks-bi` → Settings → Git → Connect Git Repository → GitHub → `leslieteeyang-a11y/leslie-tee-yang`。
+2. Settings → Build and Deployment → **Root Directory = `docs/bi_web`**（Framework 仍是 Vite）。
+3. Settings → Environments → Production → **Branch = `claude/monthly-data-prep-vtcnct`**（仓库预设分支）。
+4. 接好后推一个改到 `docs/bi_web/` 的 commit 到预设分支 → Vercel 自动建 production；用 `get_project` 看 latestDeployment 变 READY。
+
+### 接好之后的规矩（重要）
+- **改 BI 网页 = 改 `docs/bi_web/` → commit → 推到预设分支**，Vercel 自己部署。不要再用 `create_deployment` / `upload_file` /
+  `mkpayload.py` 直接上传：直接上传的版本不在 git，下一次 git 部署会把它盖掉。
+- 部署前先 `git pull` 预设分支，别拿旧副本覆盖别人刚推的改动。
+- 回滚：Vercel 网页 Deployments → 上一个 → Promote，或 `git revert` 再推。
+- `deploy_manifest.json` / `mkpayload.py` 只留作历史，接好 Git 后就不用了。
+
 BI 网页原始码不在 GitHub；使用者电脑上有一份（Vite + React 18 + recharts + supabase-js），
 部署方式是把档案上传到 Vercel（非 git）。这里留的是本专案加进去的两个档：
 
