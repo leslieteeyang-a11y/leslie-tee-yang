@@ -182,6 +182,15 @@ loyalty.html 从那天起 404**；overlay 改以它为底把整组顾客页加�
 经两轮多人审查（资料库第二轮零问题；前端修了表单被盖掉、筛选消失、设定用预设值存回去、横向卷动等）。**使用者问「资料可以一起搬家吗？」（2026-10-14）**：资料本来就只有一份（同一个 Supabase），两边只是入口，不搬（购买纪录是 BI 每天从
 AutoCount 同步的、扫码登记 / 报价提醒 / 送货地址都读同一份）；做法是关掉 BI 的入口。使用者决定：BI `/loyalty.html` **等营运系统的顾客资料上线、试用后再关**
 （改成转到营运系统 `#/customers`，到时再改 overlay）；顾客扫码登记 `/join.html` **留在 BI 原网址**（QR 海报不用重印）；旧送货页一起关（见上）。
+**顾客资料第二版（2026-10-15）**：使用者问「还可以怎么让我更能锁着老顾客？」，看了数据（回头的顾客一半在 22 天内买第二次、81% 在 90 天内）后选
+**新客 30 天回访**、**首页「今天要跟进」+ 员工排行**、**登记送延长保修**。做在营运系统（交接 `docs/ops_customers/HANDOFF_v2.md` + `customers-v2.patch`，
+以营运系统 `91dfc0f` 为底）；migration `20261018_ops_customers_v2.sql` 正式环境已套（`ops_customers_v2` + `ops_customers_v2_new_order`），**其中
+`bi_customer_merge` 那段含删除语句、连接器会卡，要使用者在 SQL Editor 贴 `docs/ops_customers/merge_v2.sql`**。重点：跟进提醒改在资料库算
+`bi_customer_followups(p_store)`（营运系统顾客页与首页 `ops_cust_home()` 共用；BI 的 Loyalty.tsx 仍用自己的 JS 规则，没有「新客回访」）；员工排行
+`bi_customer_staff_board`；延长保修 = 「Hemos 保修登记」：`customer_profile.warranty_at / _months / _by / _from`（第一次登记时记下）、设定
+`customer_settings.warranty_months`（**0 = 不送，预设 0**，营运系统「顾客资料 → 设定」由 admin 改）/ `warranty_back_days`；`bi_customer` 明细多 `brand`；
+`bi_customer_signup`（9 参数版）回传实际记下的 `warranty_months`；BI 扫码登记页 `/join.html` 读 `bi_customer_signup_offer()`（anon），月数 > 0 才显示保修那行
+（overlay 改 `src/join/main.tsx`、`join.css`）。**以后在这边改 `bi.customer_signup_apply` / `bi_customer_merge` / `bi_customer` 要保留保修栏位**。
 
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`

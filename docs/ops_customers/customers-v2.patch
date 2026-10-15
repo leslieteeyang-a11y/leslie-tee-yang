@@ -1,0 +1,1566 @@
+From f5a279ee798339fddb38c85e8662b1217e3854dc Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 15 Oct 2026 17:45:25 +0000
+Subject: [PATCH] =?UTF-8?q?=E9=A1=BE=E5=AE=A2=E8=B5=84=E6=96=99=E7=AC=AC?=
+ =?UTF-8?q?=E4=BA=8C=E7=89=88=EF=BC=9A=E6=96=B0=E5=AE=A2=E5=9B=9E=E8=AE=BF?=
+ =?UTF-8?q?=E3=80=81=E9=A6=96=E9=A1=B5=E4=BB=8A=E5=A4=A9=E8=A6=81=E8=B7=9F?=
+ =?UTF-8?q?=E8=BF=9B=E3=80=81=E5=91=98=E5=B7=A5=E6=8E=92=E8=A1=8C=E3=80=81?=
+ =?UTF-8?q?=E7=99=BB=E8=AE=B0=E9=80=81=E5=BB=B6=E9=95=BF=E4=BF=9D=E4=BF=AE?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+使用者问「还可以怎么让我更能锁住老顾客？」，看了数据（回头的顾客一半在 22 天内买第二次、
+81% 在 90 天内）后选了三项：
+- 新客第 7 / 21 天出现在跟进提醒；跟进规则搬到资料库（bi_customer_followups），
+  顾客页与首页卡片同一套，跟进分页可切 HQ / JB
+- 首页「今天要跟进 N 位」+ 这个月我联络 / 补资料几位；报告多员工排行与业务员新客回头率，
+  都算「几位顾客」，按很多次不会灌水
+- 扫码登记送 Hemos 延长保修：登记当时记下月数与起算日，之后改设定不影响；只在有 Hemos
+  产品的单标 🛡️；月数预设 0（不送），由管理员在设定开
+
+资料仍在 BI 的 bi.customer_*；新函数开头一律 bi.crm_require。资料库正式环境已套。
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FukrbyV1LJiGqNzUs29hwZ
+---
+ CLAUDE.md                                     |   9 +
+ portal/src/App.tsx                            |   2 +-
+ portal/src/cust-api.ts                        |  67 +--
+ portal/src/cust.css                           |   1 +
+ portal/src/cust/Follow.tsx                    |  36 +-
+ portal/src/cust/HomeCard.tsx                  |  31 ++
+ portal/src/cust/Panel.tsx                     |  44 +-
+ portal/src/cust/Reports.tsx                   |  82 ++-
+ portal/src/cust/SettingsTab.tsx               |  27 +
+ portal/src/cust/dict.ts                       |  47 ++
+ portal/src/pages/Customers.tsx                |  45 +-
+ portal/src/pages/Home.tsx                     |   2 +
+ .../migrations/20261018_ops_customers_v2.sql  | 470 ++++++++++++++++++
+ portal/supabase/tests/cust2_test.sql          | 255 ++++++++++
+ portal/supabase/tests/run.sh                  |   1 +
+ portal/supabase/tests/stub_supabase.sql       |  40 +-
+ 16 files changed, 1091 insertions(+), 68 deletions(-)
+ create mode 100644 portal/src/cust/HomeCard.tsx
+ create mode 100644 portal/supabase/migrations/20261018_ops_customers_v2.sql
+ create mode 100644 portal/supabase/tests/cust2_test.sql
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index e2b4a5b..515a59b 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -208,6 +208,15 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   合并后另外审查（模拟资料截图 + 程式 / 安全审查）修了：**CSV 公式注入**（`cust-api.ts` `csvCell`：= + - @ Tab CR 开头的格子前面加 '，纯数字照原样；
+   地址可由公开扫码登记页写入）、汇出的生日拆成生日月 / 生日日（Excel 会把 3/12 转成日期）、英文模式业务员「(空白)」、名单类型栏 / 门市 / 买过类别栏宽、
+   报告选中月份加左边粗线。没修（之后再说）：手机 / 平板上表格要横向卷、英文的长标题与下拉选单被截、数字栏标题靠左。
++  **第二版（2026-10-15，BI 分支 `docs/ops_customers/HANDOFF_v2.md`）**：使用者问「还可以怎么让我更能锁住老顾客？」→ 选新客 30 天回访、首页「今天要跟进」
++  + 员工排行、登记送延长保修。migration `20261018_ops_customers_v2.sql`（正式环境已套 = `ops_customers_v2` + `ops_customers_v2_new_order`；里面
++  `bi_customer_merge` 那段含删除语句，连接器会卡在确认，由使用者在 Supabase SQL Editor 套）：跟进提醒改在资料库算 `bi_customer_followups(p_store)`
++  （顾客页「跟进」与首页卡片 `ops_cust_home()` 共用；新客只买过一次、第 7 / 21 天各一次、45 天后不追，刚到第 7 / 21 天的排前面；HQ / JB 照买过的门市，
++  没买过的看报价单在哪间开，都没有的两边都列）；员工排行 `bi_customer_staff_board`（联络 / 补资料 / 取得同意都算「几位顾客」，合并搬过去的不算）+ 业务员
++  新客 90 天回头率；延长保修（「Hemos 保修登记」）：`bi.customer_profile.warranty_at / _months / _by / _from` 在第一次登记时记下（之后改设定不影响），
++  设定 `bi.customer_settings.warranty_months`（**0 = 不送，预设 0**）/ `warranty_back_days` 只有 admin 改（`bi_customer_set_warranty`）；只算 Hemos 产品：
++  `bi_customer` 的购买明细多 `brand`（dim_item.item_type），顾客页只在有 HEMOS / HEMOSX 的单标 🛡️。BI 的扫码登记页 `/join.html` 读
++  `bi_customer_signup_offer()`（anon），送出后照 `bi_customer_signup` 回传的实际月数显示。前端多 `src/cust/HomeCard.tsx`（首页）；测试 `tests/cust2_test.sql`。
+ - **BI 的订货 / 库存 / 滞销品四页（2026-10-15 上线）**：老板 2026-10-14 决定「把订货、滞销品、库存这三个移到员工多部门功能那边，BI 那边去掉」；
+   另一个 Claude 对话在 `claude/monthly-data-prep-vtcnct` 做好，以 patch（`docs/ops_handoff/0001-bi-pages-to-ops.patch`）交过来，`git am` 成 b9f9819。
+   订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。
+diff --git a/portal/src/App.tsx b/portal/src/App.tsx
+index 37c1bb8..1685113 100644
+--- a/portal/src/App.tsx
++++ b/portal/src/App.tsx
+@@ -110,7 +110,7 @@ export default function App() {
+       page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
+       break;
+     case "customers":
+-      page = can(me, "customers", "view") ? <Customers sub={arg} arg={arg2} /> : <NoAccess />;
++      page = can(me, "customers", "view") ? <Customers me={me} sub={arg} arg={arg2} /> : <NoAccess />;
+       break;
+     case "payroll":
+       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
+diff --git a/portal/src/cust-api.ts b/portal/src/cust-api.ts
+index 2092287..b8724cd 100644
+--- a/portal/src/cust-api.ts
++++ b/portal/src/cust-api.ts
+@@ -15,7 +15,12 @@ export interface Customer {
+   last_contact_at: string | null; profile_created_at: string | null; profile_updated_at: string | null;
+   reno_stage?: string | null; reno_stage_at?: string | null; quote_open?: number; quote_amount?: number; quote_due?: string | null;
+ }
+-export interface Item { item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number }
++export interface Item {
++  item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number;
++  brand?: string | null;   // AutoCount 的 ItemType（HEMOS / HEMOSX / VATTI…）
++}
++/** 延长保修只算 Hemos 产品（「Hemos 保修登记」） */
++export const isHemos = (it: Item) => /^HEMOS/i.test(it.brand ?? "");
+ export interface Doc {
+   company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string; debtor_name: string | null;
+   sales_agent: string | null; amount: number; items: Item[];
+@@ -25,6 +30,8 @@ export interface Profile {
+   customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
+   next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
+   reno_stage?: string | null; reno_stage_at?: string | null; email?: string | null;
++  warranty_at?: string | null; warranty_months?: number | null; warranty_by?: string | null;   // 延长保修登记（第一次为准）
++  warranty_from?: string | null;   // 从哪天买的 Hemos 产品算（登记当时记下；旧资料没有就用设定推算）
+ }
+ export interface Quote {
+   company: string; doc_no: string; doc_date: string; sales_agent: string | null; amount: number; transferred: boolean;
+@@ -49,6 +56,7 @@ export interface Settings {
+   vip_min_12m: number; regular_min_docs: number; lapsed_days: number; lead_follow_days: number; birthday_days: number;
+   quote_follow_days: number; quote_max_days: number; stage_follow_days: number; stage_reco: Record<string, string[]>;
+   updated_at?: string | null; updated_by?: string | null;
++  warranty_months?: number; warranty_back_days?: number;   // 登记送延长保修：月数（0 = 不送）、登记前几天内的购买也算
+ }
+ export interface Template { id: number; title: string; body: string; sort: number }
+ export interface Campaign {
+@@ -101,6 +109,21 @@ export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promis
+   return data as T;
+ }
+ export const custRole = () => rpc<CustRole | null>("ops_cust_role");
++/** 跟进提醒（资料库算，顾客页与首页同一套规则；migration 20261018_ops_customers_v2.sql）。store：HQ / JB / "" = 全部 */
++export const followRows = (store: string) =>
++  rpc<{ member_id: string; reasons: Reason[] }[]>("bi_customer_followups", { p_store: store || null });
++export interface CustHome {
++  store: string | null; total: number; by_kind: Partial<Record<Reason["kind"], number>>; my_contacts: number; my_registered: number;
++}
++export interface StaffBoard {
++  staff: { by: string; name: string; contacts: number; registered: number; consents: number }[];
++  agents: { company: string; agent: string; new_customers: number; returned_90: number }[];
++  cohort_from: string; cohort_to: string;
++}
++/** 员工分店 → 门市代号（跟进提醒预设只看自己门市；全部分店 = 两边） */
++export function storeOf(branch: string | null | undefined): string {
++  return branch === "HOMEWORKSSB" ? "HQ" : branch === "HOMEWORKSSOUTHERN" ? "JB" : "";
++}
+ /** 「已联络」：记下联络时间（跟进提醒就消失）；回传错误讯息（空字串 = 成功） */
+ export async function touch(id: string): Promise<string> {
+   const { error } = await supabase.rpc("bi_customer_touch", { p_member: id });
+@@ -181,14 +204,6 @@ export function daysSince(d: string | null, today: Date = new Date()): number {
+   return (midnight(today).getTime() - midnight(at).getTime()) / 86400000;
+ }
+ 
+-/** 离下一次生日还有几天（今天生日 = 0）；2/29 在平年算 3/1 */
+-export function daysUntilBirthday(month: number, day: number, today: Date = new Date()): number {
+-  const t0 = midnight(today);
+-  let b = new Date(t0.getFullYear(), month - 1, day);
+-  if (b < t0) b = new Date(t0.getFullYear() + 1, month - 1, day);
+-  return Math.round((b.getTime() - t0.getTime()) / 86400000);
+-}
+-
+ export type Tier = "vip" | "regular" | "normal" | "lapsed" | "lead";
+ export const TIERS: Tier[] = ["vip", "regular", "normal", "lapsed", "lead"];
+ export const TIER_LABEL: Record<Tier, string> = { vip: "VIP", regular: "常客", normal: "一般", lapsed: "流失", lead: "潜在客" };
+@@ -202,40 +217,10 @@ export function tierOf(c: Pick<Customer, "last_date" | "spent_12m" | "doc_count_
+   return "normal";
+ }
+ 
+-export interface Reason { kind: "due" | "birthday" | "lead" | "quote" | "stage"; days: number }
++export interface Reason { kind: "due" | "birthday" | "lead" | "quote" | "stage" | "new"; days: number }
+ export interface FollowUp { c: Customer; reasons: Reason[] }
+ 
+-/** 跟进提醒：约好的联络日到了、生日快到（这段期间还没联络过）、潜在客建档后 N 天都没联络、报价没成交、装修进度太久没更新 */
+-export function followUps(list: Customer[], s: Settings, today: Date = new Date()): FollowUp[] {
+-  const iso = localISO(today);
+-  const out: FollowUp[] = [];
+-  for (const c of list) {
+-    const reasons: Reason[] = [];
+-    const contacted = daysSince(c.last_contact_at, today);
+-    if (c.next_contact && c.next_contact <= iso) reasons.push({ kind: "due", days: daysSince(c.next_contact, today) });
+-    if (c.birth_month && c.birth_day) {
+-      const d = daysUntilBirthday(c.birth_month, c.birth_day, today);
+-      if (d <= s.birthday_days && !(contacted <= s.birthday_days - d)) reasons.push({ kind: "birthday", days: d });
+-    }
+-    if (!c.last_date && c.profile_created_at && !c.last_contact_at && !(c.next_contact && c.next_contact > iso)
+-        && daysSince(c.profile_created_at, today) >= s.lead_follow_days) {
+-      reasons.push({ kind: "lead", days: daysSince(c.profile_created_at, today) });
+-    }
+-    // 报价单开出 N 天还没成交（没转单、之后也没买），从该跟进的那天起还没联络过
+-    if (c.quote_due && (!c.last_contact_at || localISO(new Date(c.last_contact_at)) < c.quote_due)) {
+-      reasons.push({ kind: "quote", days: daysSince(c.quote_due, today) + s.quote_follow_days });
+-    }
+-    // 装修进度太久没更新（完工的不追）
+-    if (c.reno_stage && c.reno_stage !== "done" && c.reno_stage_at && daysSince(c.reno_stage_at, today) >= s.stage_follow_days
+-        && !(contacted < s.stage_follow_days)) {
+-      reasons.push({ kind: "stage", days: daysSince(c.reno_stage_at, today) });
+-    }
+-    if (reasons.length) out.push({ c, reasons });
+-  }
+-  const order = { due: 0, quote: 50, birthday: 100, stage: 500, lead: 1000 };
+-  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => order[r.kind] + (r.kind === "birthday" ? r.days : 0)));
+-  return out.sort((a, b) => rank(a) - rank(b));
+-}
++// 跟进提醒的规则在资料库（public.bi_customer_followups，首页人数也用它）：这里不再自己算，免得两套规则对不上。
+ 
+ export interface Filters {
+   q: string; store: string; recency: string; minSpent: string; category: string; notCategory: string; ctype: string;
+diff --git a/portal/src/cust.css b/portal/src/cust.css
+index 6ba557a..52a3ea5 100644
+--- a/portal/src/cust.css
++++ b/portal/src/cust.css
+@@ -82,3 +82,4 @@ a.cu-link { text-decoration: underline; text-decoration-color: var(--line-strong
+   .toolbar input.cu-short:not([type]) { flex: 1 1 140px; max-width: none; }
+   .toolbar .cu-new input:not([type]) { flex: 1 1 auto; width: auto; }
+ }
++.cu-wrapbtn { white-space: normal; max-width: 100%; text-align: left; }
+diff --git a/portal/src/cust/Follow.tsx b/portal/src/cust/Follow.tsx
+index 5c5709b..7e176dd 100644
+--- a/portal/src/cust/Follow.tsx
++++ b/portal/src/cust/Follow.tsx
+@@ -1,4 +1,5 @@
+-// 顾客资料 · 跟进：跟进提醒（生日、约好的联络日、潜在客、报价没成交、装修进度）、柜台快速登记、最近扫码登记的顾客
++// 顾客资料 · 跟进：跟进提醒（约好的联络日、报价没成交、生日、新客回访、装修进度、潜在客；规则在资料库 bi_customer_followups）、
++// 柜台快速登记、最近扫码登记的顾客
+ import { useEffect, useState } from "react";
+ import {
+   cleanName, errText, fmtMember, fmtNum, fmtTime, FollowUp, num, Reason, rpc, Settings, Signup, STAGE_LABEL, STAGES, stageNext,
+@@ -6,8 +7,10 @@ import {
+ } from "../cust-api";
+ import { ConsentTag, MemberLink, WaButtons } from "./Common";
+ 
+-export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTouched }: {
+-  items: FollowUp[]; settings: Settings; templates: Template[]; canEdit: boolean; onOpen: (id: string) => void; onTouched: () => void;
++/** items = null：载入中。store：HQ / JB / "" = 两间门市 */
++export function FollowUpList({ items, error, store, onStore, settings, templates, canEdit, onOpen, onTouched, onRetry }: {
++  items: FollowUp[] | null; error: string; store: string; onStore: (s: string) => void; settings: Settings; templates: Template[];
++  canEdit: boolean; onOpen: (id: string) => void; onTouched: () => void; onRetry: () => void;
+ }) {
+   const [shown, setShown] = useState(20);
+   const [busy, setBusy] = useState<string | null>(null);
+@@ -24,18 +27,32 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
+     if (r.kind === "birthday") return r.days === 0 ? t("今天生日 🎂") : t("{d} 天后生日 🎂", { d: r.days });
+     if (r.kind === "quote") return t("报价 {d} 天还没成交", { d: r.days });
+     if (r.kind === "stage") return t("装修进度 {d} 天没更新", { d: r.days });
++    if (r.kind === "new") return t("新客第 {d} 天,还没回来买第二次", { d: r.days });
+     return t("潜在客,建档 {d} 天还没联络", { d: r.days });
+   };
+   return (
+     <section className="card">
+-      <h2>{t("跟进提醒({n} 位)", { n: fmtNum(items.length) })}</h2>
++      <h2>{items === null ? t("跟进提醒") : t("跟进提醒({n} 位)", { n: fmtNum(items.length) })}</h2>
++      <div className="toolbar">
++        <div className="tabs cu-wrap">
++          {[["", t("两间门市")], ["HQ", "HQ"], ["JB", "JB"]].map(([k, v]) => (
++            <button key={k} className={store === k ? "on" : ""} onClick={() => { onStore(k); setShown(20); }}>{v}</button>
++          ))}
++        </div>
++      </div>
+       <p className="muted small">
+         {t("{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了、报价开出 {q} 天还没成交、装修进度 {s} 天没更新。按 WhatsApp 或「已联络」后就会从这里消失。", {
+           b: settings.birthday_days, l: settings.lead_follow_days, q: settings.quote_follow_days, s: settings.stage_follow_days })}
++        {" "}{t("新客买完第 7 天、第 21 天各提醒一次(回头的顾客有一半在 22 天内买第二次,过了 90 天就很难回来)。")}
+       </p>
+-      {err && <div className="error">{err}</div>}
+-      {items.length === 0 && <p className="muted">{t("目前没有要跟进的顾客 👍")}</p>}
+-      {items.length > 0 && (
++      {(err || error) && (
++        <div className="error">{err || error}
++          {!err && <> <button className="ghost" onClick={onRetry}>{t("重试")}</button></>}
++        </div>
++      )}
++      {items === null && !error && <p className="muted">{t("载入中…")}</p>}
++      {items !== null && items.length === 0 && <p className="muted">{t("目前没有要跟进的顾客 👍")}</p>}
++      {items !== null && items.length > 0 && (
+         <ul className="cu-fu">
+           {items.slice(0, shown).map(({ c, reasons }) => (
+             <li key={c.member_id}>
+@@ -48,6 +65,9 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
+                 {reasons.some((r) => r.kind === "quote") && (
+                   <div className="muted small">{t("未成交报价 RM {a}", { a: fmtNum(c.quote_amount, 2) })}</div>
+                 )}
++                {reasons.some((r) => r.kind === "new") && c.categories.length > 0 && (
++                  <div className="muted small">{t("买了:{c}", { c: c.categories.join(" / ") })}</div>
++                )}
+                 {c.reno_stage && (
+                   <div className="muted small">
+                     {t("装修:{s}", { s: t(STAGE_LABEL[c.reno_stage] ?? c.reno_stage) })}
+@@ -67,7 +87,7 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
+           ))}
+         </ul>
+       )}
+-      {items.length > shown && (
++      {items !== null && items.length > shown && (
+         <div className="actions left"><button className="ghost" onClick={() => setShown(shown + 50)}>{t("显示更多")}</button></div>
+       )}
+     </section>
+diff --git a/portal/src/cust/HomeCard.tsx b/portal/src/cust/HomeCard.tsx
+new file mode 100644
+index 0000000..d1e5da2
+--- /dev/null
++++ b/portal/src/cust/HomeCard.tsx
+@@ -0,0 +1,31 @@
++// 首页的顾客提醒：今天要跟进几位（自己门市；规则与「顾客资料 → 跟进」同一套，资料库 ops_cust_home 算）、这个月我联络 / 补资料了几位
++import { useEffect, useState } from "react";
++import { can, Me } from "../api";
++import { CustHome, fmtNum, rpc, t } from "../cust-api";
++
++const KIND: [keyof CustHome["by_kind"], string][] = [
++  ["due", "约好联络 {n}"], ["quote", "报价没成交 {n}"], ["birthday", "生日 {n}"], ["new", "新客回访 {n}"], ["stage", "装修进度 {n}"],
++  ["lead", "潜在客 {n}"],
++];
++
++export function CustomersHomeCard({ me }: { me: Me }) {
++  const [h, setH] = useState<CustHome | null>(null);
++  const show = can(me, "customers", "view");
++  useEffect(() => {
++    if (show) rpc<CustHome | null>("ops_cust_home").then(setH).catch(() => { /* 首页不因这张卡出错 */ });
++  }, [show]);
++  if (!h) return null;
++  const parts = KIND.filter(([k]) => (h.by_kind[k] ?? 0) > 0).map(([k, label]) => t(label, { n: fmtNum(h.by_kind[k]) }));
++  return (
++    <a className={"card att-home" + (h.total > 0 ? " warn" : "")} href="#/customers/follow" translate="no">
++      <span>
++        <b>{"☏ "}{h.total > 0 ? t("今天要跟进 {n} 位顾客", { n: fmtNum(h.total) }) : t("顾客跟进")}</b>
++        {h.store && <span className="muted">{` · ${h.store}`}</span>}<br />
++        {parts.length > 0 && <span className="late">{parts.join(" · ")}</span>}
++        {parts.length > 0 && <br />}
++        <span className="muted">{t("这个月你联络了 {c} 位、补资料 {r} 位", { c: fmtNum(h.my_contacts), r: fmtNum(h.my_registered) })}</span>
++      </span>
++      <span className="go">{h.total > 0 ? t("去跟进 →") : t("看 →")}</span>
++    </a>
++  );
++}
+diff --git a/portal/src/cust/Panel.tsx b/portal/src/cust/Panel.tsx
+index 01fa9b4..140bf7d 100644
+--- a/portal/src/cust/Panel.tsx
++++ b/portal/src/cust/Panel.tsx
+@@ -1,8 +1,8 @@
+ // 顾客资料 · 一位顾客：基本资料（可编辑以上能改）、装修进度、报价单、购买历史、合并重复号码（可审批）、修改纪录
+ import { Fragment, useEffect, useRef, useState } from "react";
+ import {
+-  cleanName, CustRole, dbText, Detail, errText, fmtDay, fmtMember, fmtMoney, fmtNum, fmtTime, localISO, LogRow, num, rpc, Settings,
+-  STAGE_LABEL, STAGES, STORE, t, Template, tierOf, TYPES,
++  cleanName, CustRole, dbText, Detail, Doc, errText, fmtDay, fmtMember, fmtMoney, fmtNum, fmtTime, localISO, LogRow, num, rpc, Settings,
++  isHemos, STAGE_LABEL, STAGES, STORE, t, Template, tierOf, TYPES,
+ } from "../cust-api";
+ import { TierTag, WaButtons } from "./Common";
+ 
+@@ -83,6 +83,20 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+     }
+   }
+ 
++  async function registerWarranty() {
++    setBusy(true);
++    try {
++      await rpc("bi_customer_warranty_register", { p_member: d?.member_id ?? id });
++      setMsg({ ok: true, text: t("已登记延长保修。") });
++      await load();
++      onSaved();
++    } catch (e) {
++      setMsg({ ok: false, text: errText(e) });
++    } finally {
++      setBusy(false);
++    }
++  }
++
+   const key = d?.member_id ?? id;
+   const categories = categoriesOf(key);
+   const docs = d?.docs ?? [];
+@@ -95,6 +109,10 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+     doc_count_12m: recent.filter((x) => num(x.amount) > 0).length,
+   }, settings);
+   const p = d?.profile;
++  // 延长保修：起算日（登记当时记下的「登记前 N 天」）以后买的 Hemos 产品都算；只在有 Hemos 产品的单标 🛡️
++  const wFrom = p?.warranty_from ?? (p?.warranty_at
++    ? localISO(new Date(new Date(p.warranty_at).getTime() - num(settings.warranty_back_days) * 86400000)) : null);
++  const wCovered = (x: Doc) => !!wFrom && x.doc_date >= wFrom && num(x.amount) > 0 && x.items.some(isHemos);
+ 
+   return (
+     <>
+@@ -122,6 +140,19 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+               <div className="kpi"><b>{docs.length ? fmtDay(docs[0].doc_date) : "–"}</b>
+                 <span>{t("最后消费")}{docs[0]?.sales_agent ? ` · ${t("业务员 {a}", { a: docs[0].sales_agent })}` : ""}</span></div>
+             </div>
++            {p?.warranty_at ? (
++              <div className="ok">
++                {t("🛡️ 已登记延长保修 +{m} 个月({d},{w}):{f} 以后买的 Hemos 产品都算(购买历史标 🛡️ 的单)。", {
++                  m: num(p.warranty_months), d: fmtDay(localISO(new Date(p.warranty_at))), w: dbText(p.warranty_by), f: fmtDay(wFrom) })}
++              </div>
++            ) : num(settings.warranty_months) > 0 && /^[0-9]+$/.test(key) && canEdit ? (
++              <div className="toolbar">
++                <button className="ghost cu-wrapbtn" disabled={busy} onClick={registerWarranty}>
++                  {t("登记延长保修(+{m} 个月)", { m: num(settings.warranty_months) })}
++                </button>
++                <span className="muted small">{t("顾客没扫码时,店员可以在这里帮他登记。")}</span>
++              </div>
++            ) : null}
+             {!canEdit && <p className="muted small">{t("你的权限是「只看」:可以看,不能改。")}</p>}
+             <fieldset className="plain cu-forms" disabled={!canEdit || busy}>
+               <div className="form cu-form">
+@@ -214,7 +245,8 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+                         <tr className="click" onClick={() => setOpen(open === k ? null : k)}>
+                           <td className="nowrap">{fmtDay(x.doc_date)}</td>
+                           <td>{STORE[x.company] ?? x.company}</td>
+-                          <td className="nowrap">{open === k ? "▾ " : "▸ "}{x.doc_no}{x.doc_type === "CN" ? ` (${t("退货")})` : ""}</td>
++                          <td className="nowrap">{open === k ? "▾ " : "▸ "}{x.doc_no}{x.doc_type === "CN" ? ` (${t("退货")})` : ""}
++                            {wCovered(x) && <div><span className="cu-tag cu-yes">{t("🛡️ +{m} 个月", { m: num(p?.warranty_months) })}</span></div>}</td>
+                           <td>{x.sales_agent}</td>
+                           <td className={"num" + (num(x.amount) < 0 ? " cu-neg" : "")}>{fmtNum(x.amount, 2)}</td>
+                         </tr>
+@@ -226,7 +258,7 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+                                   {x.items.map((it, i) => (
+                                     <tr key={i}>
+                                       <td className="nowrap">{it.item_code ?? ""}</td>
+-                                      <td>{it.description}</td>
++                                      <td>{it.description}{wCovered(x) && isHemos(it) ? " 🛡️" : ""}</td>
+                                       <td className="num">{fmtNum(it.qty)} {it.uom ?? ""}</td>
+                                       <td className="num">{fmtNum(it.sub_total, 2)}</td>
+                                     </tr>
+@@ -256,13 +288,15 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
+ const FIELD_LABEL: Record<string, string> = {
+   name: "名字", birth_month: "生日月", birth_day: "生日日", area: "地区", address: "地址", customer_type: "类型",
+   note: "备注", consent: "同意收促销", next_contact: "下次联络", last_contact_at: "联络", reno_stage: "装修阶段", email: "电邮",
++  warranty_at: "延长保修登记", warranty_months: "延长保修月数", warranty_by: "保修登记人", warranty_from: "保修起算日",
+ };
+ 
+ function fmtVal(k: string, v: unknown): string {
+   if (v == null || v === "") return "–";
+   if (k === "consent") return v === "yes" ? t("同意") : v === "no" ? t("不同意") : String(v);
+   if (k === "reno_stage") return t(STAGE_LABEL[String(v)] ?? String(v));
+-  if (k === "last_contact_at") return fmtTime(String(v));
++  if (k === "last_contact_at" || k === "warranty_at") return fmtTime(String(v));
++  if (k === "warranty_by") return dbText(String(v));
+   if (k === "customer_type") return t(String(v));
+   return String(v);
+ }
+diff --git a/portal/src/cust/Reports.tsx b/portal/src/cust/Reports.tsx
+index caf9afe..32dfb04 100644
+--- a/portal/src/cust/Reports.tsx
++++ b/portal/src/cust/Reports.tsx
+@@ -1,7 +1,7 @@
+-// 顾客资料 · 促销活动（可审批：成效、汇出名单；管理员可删）、每月顾客报告、没抓到电话的门市单据
++// 顾客资料 · 促销活动（可审批：成效、汇出名单；管理员可删）、员工排行、每月顾客报告、没抓到电话的门市单据
+ import { useEffect, useRef, useState } from "react";
+ import {
+-  Agent, Campaign, cleanName, Customer, downloadCsv, errText, fmtDay, fmtMember, fmtNum, localISO, Missing, Monthly, num, pct,
++  Agent, Campaign, cleanName, dbText, StaffBoard, Customer, downloadCsv, errText, fmtDay, fmtMember, fmtNum, localISO, Missing, Monthly, num, pct,
+   rpc, Settings, STORE, t, TIER_LABEL, tierOf, waNumber,
+ } from "../cust-api";
+ 
+@@ -244,3 +244,81 @@ export function MissingPhone() {
+     </details>
+   );
+ }
++
++/** 员工排行：这个月 / 上个月各员工联络、补资料、取得同意几位（修改纪录算的，同一位只算一次）；业务员新客 90 天回头率（AutoCount 单上的业务员） */
++export function StaffBoardBox() {
++  const [month, setMonth] = useState<"this" | "last">("this");
++  const [b, setB] = useState<StaffBoard | null>(null);
++  const [err, setErr] = useState("");
++  const asked = useRef("");
++  useEffect(() => {
++    const now = new Date();
++    const from = month === "this" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
++    const to = month === "this" ? now : new Date(now.getFullYear(), now.getMonth(), 0);
++    asked.current = month;
++    setB(null); setErr("");
++    rpc<StaffBoard>("bi_customer_staff_board", { p_from: localISO(from), p_to: localISO(to) })
++      .then((r) => { if (asked.current === month) setB(r); })
++      .catch((e) => { if (asked.current === month) setErr(errText(e)); });
++  }, [month]);
++  const STORE_NAME: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB" };
++  return (
++    <section className="card">
++      <h2>{t("员工排行")}</h2>
++      <div className="toolbar">
++        <div className="tabs cu-wrap">
++          <button className={month === "this" ? "on" : ""} onClick={() => setMonth("this")}>{t("这个月")}</button>
++          <button className={month === "last" ? "on" : ""} onClick={() => setMonth("last")}>{t("上个月")}</button>
++        </div>
++      </div>
++      <p className="muted small">{t("每个人在顾客资料做了多少(都是几位顾客,同一位按很多次只算一次):按 WhatsApp / 已联络、补资料(名字、生日、同意、地址、电邮或保修从空白填上,新建档或补旧顾客都算)、取得「同意收促销」。")}</p>
++      {err && <div className="error">{t("查询失败:")}{err}</div>}
++      {b === null && !err && <p className="muted">{t("载入中…")}</p>}
++      {b && (
++        <div className="cu-scroll">
++          <table>
++            <thead><tr><th>{t("员工")}</th><th className="num">{t("联络")}</th><th className="num">{t("补资料")}</th>
++              <th className="num">{t("取得同意")}</th></tr></thead>
++            <tbody>
++              {b.staff.length === 0 && <tr><td colSpan={4} className="muted">{t("这段时间还没有人用")}</td></tr>}
++              {b.staff.map((x) => (
++                <tr key={x.by}>
++                  <td>{dbText(x.name)}</td>
++                  <td className="num">{fmtNum(x.contacts)}</td>
++                  <td className="num">{fmtNum(x.registered)}</td>
++                  <td className="num">{fmtNum(x.consents)}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      )}
++      {b && (
++        <>
++          <h3>{t("业务员新客回头率")}</h3>
++          <p className="muted small">
++            {t("{f} ~ {to} 第一次来买的门市新客,90 天内回来买第二次的比例(业务员照第一张单)。", { f: b.cohort_from, to: b.cohort_to })}
++          </p>
++          <div className="cu-scroll">
++            <table>
++              <thead><tr><th>{t("门市")}</th><th>{t("业务员")}</th><th className="num">{t("新客")}</th>
++                <th className="num">{t("90 天内回来")}</th><th className="num">{t("回头率")}</th></tr></thead>
++              <tbody>
++                {b.agents.length === 0 && <tr><td colSpan={5} className="muted">{t("没有资料")}</td></tr>}
++                {b.agents.map((a) => (
++                  <tr key={`${a.company}|${a.agent}`}>
++                    <td>{STORE_NAME[a.company] ?? a.company}</td>
++                    <td>{a.agent === "(空白)" ? t("(空白)") : a.agent}</td>
++                    <td className="num">{fmtNum(a.new_customers)}</td>
++                    <td className="num">{fmtNum(a.returned_90)}</td>
++                    <td className="num"><b>{pct(a.returned_90, a.new_customers)}</b></td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </div>
++        </>
++      )}
++    </section>
++  );
++}
+diff --git a/portal/src/cust/SettingsTab.tsx b/portal/src/cust/SettingsTab.tsx
+index 7e47f4d..7e02ae6 100644
+--- a/portal/src/cust/SettingsTab.tsx
++++ b/portal/src/cust/SettingsTab.tsx
+@@ -22,6 +22,16 @@ export function SettingsTab({ isOwner, loaded, settings, templates, onChanged }:
+   const [busy, setBusy] = useState(false);
+   const dirty = useRef(false);   // 门槛改了还没存：存范本后重新载入设定时不盖掉
+   useEffect(() => { if (!dirty.current) setS(toForm(settings)); }, [settings]);
++  // 登记送延长保修（月数 0 = 不送）：跟上面的门槛分开存
++  const [w, setW] = useState({ months: String(settings.warranty_months ?? 0), back: String(settings.warranty_back_days ?? 90) });
++  const wDirty = useRef(false);
++  useEffect(() => {
++    if (!wDirty.current) setW({ months: String(settings.warranty_months ?? 0), back: String(settings.warranty_back_days ?? 90) });
++  }, [settings]);
++  const saveWarranty = () => run(async () => {
++    await rpc("bi_customer_set_warranty", { p_months: num(w.months), p_back_days: num(w.back) });
++    wDirty.current = false;
++  });
+ 
+   async function run(f: () => Promise<unknown>): Promise<boolean> {
+     setBusy(true); setMsg(null);
+@@ -127,6 +137,23 @@ export function SettingsTab({ isOwner, loaded, settings, templates, onChanged }:
+           )}
+         </section>
+ 
++        <section className="card cu-form">
++          <h2>{t("登记送延长保修")}</h2>
++          <div className="muted small">
++            {t("填 0 = 不送。填了月数,顾客扫码登记页会写「登记即享 Hemos 产品保修延长 N 个月」;顾客扫码(或店员在顾客页按「登记延长保修」)就记下来,登记前 N 天内与之后买的 Hemos 产品都算。已登记的顾客以登记当时的月数与起算日为准,之后改设定不影响。")}
++          </div>
++          <fieldset className="plain" disabled={!isOwner || busy || !loaded}>
++            <label>{t("延长几个月(0 = 不送)")}
++              <input value={w.months} inputMode="numeric" onChange={(e) => { wDirty.current = true; setW({ ...w, months: e.target.value }); }} />
++            </label>
++            <label>{t("登记前几天内的购买也算")}
++              <input value={w.back} inputMode="numeric" onChange={(e) => { wDirty.current = true; setW({ ...w, back: e.target.value }); }} />
++            </label>
++            {isOwner && <div className="actions left"><button onClick={saveWarranty}>{t("储存")}</button></div>}
++          </fieldset>
++          {!isOwner && <p className="muted small">{t("只有管理员可以改。")}</p>}
++        </section>
++
+         <section className="card cu-form">
+           <h2>{t("顾客自己登记的 QR")}</h2>
+           <div className="muted small">
+diff --git a/portal/src/cust/dict.ts b/portal/src/cust/dict.ts
+index 6fab742..70e95c6 100644
+--- a/portal/src/cust/dict.ts
++++ b/portal/src/cust/dict.ts
+@@ -1,6 +1,53 @@
+ // 顾客资料页（#/customers）的英文。大部分照抄 BI 的 src/i18n/loyalty.ts（同一页搬过来，用语一致），
+ // 加上营运系统才有的句子与 BI 顾客资料函数的错误讯息。新增介面文字要把中文原句加进来（这一页 translate="no"，不走 i18n.ts）。
+ export const CUST_EN: Record<string, string> = {
++  // 顾客资料第二版（2026-10-15）：新客回访、首页卡片、员工排行、延长保修
++  "90 天内回来": "Back ≤90d",
++  "{f} ~ {to} 第一次来买的门市新客,90 天内回来买第二次的比例(业务员照第一张单)。": "Store customers whose first purchase was {f} ~ {to}: share who came back for a second purchase within 90 days (sales agent = the one on the first bill).",
++  "🛡️ 已登记延长保修 +{m} 个月({d},{w}):{f} 以后买的 Hemos 产品都算(购买历史标 🛡️ 的单)。": "🛡️ Extended warranty registered: +{m} months ({d}, {w}). Hemos products bought from {f} onwards are covered (bills marked 🛡️ in the purchase history).",
++  "上个月": "Last month",
++  "业务员新客回头率": "New-customer return rate by sales agent",
++  "两间门市": "Both stores",
++  "买了:{c}": "Bought: {c}",
++  "今天要跟进 {n} 位顾客": "{n} customers to follow up today",
++  "🛡️ +{m} 个月": "🛡️ +{m} mo",
++  "保修登记人": "Warranty registered by",
++  "补资料": "Details added",
++  "保修起算日": "Warranty from",
++  "去跟进 →": "Follow up →",
++  "取得同意": "Consents",
++  "只有管理员可以改。": "Only admins can change this.",
++  "员工": "Staff",
++  "员工排行": "Staff ranking",
++  "回头率": "Return rate",
++  "填 0 = 不送。填了月数,顾客扫码登记页会写「登记即享 Hemos 产品保修延长 N 个月」;顾客扫码(或店员在顾客页按「登记延长保修」)就记下来,登记前 N 天内与之后买的 Hemos 产品都算。已登记的顾客以登记当时的月数与起算日为准,之后改设定不影响。": "0 = no offer. With a number of months, the QR sign-up page says \"Register to extend your Hemos product warranty by N months\". It is recorded when the customer scans the QR (or staff press \"Register warranty\" on the customer page); Hemos products bought from N days before registering, and later, are covered. Registered customers keep the months and start date in force when they registered; later changes here don't affect them.",
++  "已登记延长保修。": "Extended warranty registered.",
++  "延长保修月数": "Warranty months",
++  "延长保修登记": "Warranty registered",
++  "延长几个月(0 = 不送)": "Extend by how many months (0 = no offer)",
++  "报价没成交 {n}": "Open quotes {n}",
++  "新客买完第 7 天、第 21 天各提醒一次(回头的顾客有一半在 22 天内买第二次,过了 90 天就很难回来)。": "New customers are listed on day 7 and day 21 after their first purchase (half of customers who return do so within 22 days; after 90 days they rarely come back).",
++  "新客回访 {n}": "New customers {n}",
++  "新客第 {d} 天,还没回来买第二次": "New customer, day {d} — no second purchase yet",
++  "每个人在顾客资料做了多少(都是几位顾客,同一位按很多次只算一次):按 WhatsApp / 已联络、补资料(名字、生日、同意、地址、电邮或保修从空白填上,新建档或补旧顾客都算)、取得「同意收促销」。": "What each person did in Customers, counted in customers (several clicks on one customer count once): contacted (WhatsApp / Contacted), details added (a name, birthday, consent, address, email or warranty filled in where it was blank, for new or existing customers), and promotion consents obtained.",
++  "没有资料": "No data",
++  "潜在客 {n}": "Leads {n}",
++  "生日 {n}": "Birthdays {n}",
++  "登记前几天内的购买也算": "Also cover purchases made this many days before registering",
++  "登记延长保修(+{m} 个月)": "Register warranty (+{m} mo)",
++  "登记送延长保修": "Extended warranty for registering",
++  "看 →": "Open →",
++  "约好联络 {n}": "Scheduled {n}",
++  "装修进度 {n}": "Renovation {n}",
++  "跟进提醒": "Follow-ups",
++  "这个月": "This month",
++  "这个月你联络了 {c} 位、补资料 {r} 位": "This month you contacted {c} and added details for {r} customers",
++  "这段时间还没有人用": "Nobody has used it in this period yet",
++  "顾客没扫码时,店员可以在这里帮他登记。": "If the customer didn't scan the QR, staff can register it here.",
++  "顾客跟进": "Customer follow-ups",
++  "看不出电话号码：延长保修要用顾客的手机号登记": "Can't read a phone number: extended warranty must be registered with the customer's mobile number",
++  "还没开延长保修：请管理员在「顾客资料 → 设定」填延长几个月": "Extended warranty is not on yet: an admin needs to set the number of months in Customers → Settings",
++  "延长保修设定不合理（月数 0～60，登记前 0～365 天）": "Warranty settings out of range (0–60 months, 0–365 days before registering)",
+   "← 返回": "← Back",
+   "重试": "Retry",
+   "货品": "Items",
+diff --git a/portal/src/pages/Customers.tsx b/portal/src/pages/Customers.tsx
+index 6d7ebbf..e067bf6 100644
+--- a/portal/src/pages/Customers.tsx
++++ b/portal/src/pages/Customers.tsx
+@@ -4,21 +4,23 @@
+ // 只看 = 看；可编辑 = 改资料、登记、联络；可审批 = 汇出、合并、活动、范本；管理员 = 分级门槛、删活动。
+ // 这一页自己带中英文（cust/dict.ts），所以整页 translate="no"。
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { Me } from "../api";
+ import { go } from "../router";
+ import { ErrorBox, Tabs } from "../ui";
+ import {
+-  custRole, CustRole, Customer, DEFAULT_SETTINGS, errText, fmtNum, followUps, rpc, Settings, t, Template, daysSince,
++  custRole, CustRole, Customer, DEFAULT_SETTINGS, errText, fmtNum, FollowUp, followRows, Reason, rpc, Settings, storeOf, t, Template,
++  daysSince,
+ } from "../cust-api";
+ import { CustomerList } from "../cust/List";
+ import { CustomerPanel } from "../cust/Panel";
+ import { FollowUpList, QuickRegister, Signups } from "../cust/Follow";
+-import { Campaigns, MissingPhone, MonthlyReport } from "../cust/Reports";
++import { Campaigns, MissingPhone, MonthlyReport, StaffBoardBox } from "../cust/Reports";
+ import { SettingsTab } from "../cust/SettingsTab";
+ import "../cust.css";
+ 
+ type Tab = "follow" | "list" | "campaigns" | "report" | "setup";
+ 
+-export default function Customers({ sub, arg }: { sub?: string; arg?: string }) {
++export default function Customers({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
+   const [role, setRole] = useState<CustRole | null | undefined>(undefined);
+   const [list, setList] = useState<Customer[] | null>(null);
+   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+@@ -27,6 +29,12 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+   const [roleErr, setRoleErr] = useState("");
+   const [settingsErr, setSettingsErr] = useState("");
+   const [settingsLoaded, setSettingsLoaded] = useState(false);   // 还没拿到真的设定前，设定分页不给存（免得把预设值存回去）
++  // 跟进提醒：资料库算好的（规则与首页同一套），预设只看自己门市（全部分店 = 两边）
++  const [fstore, setFstore] = useState(() => storeOf(me.staff.branch));
++  const [frows, setFrows] = useState<{ member_id: string; reasons: Reason[] }[] | null>(null);
++  const [ferr, setFerr] = useState("");
++  const fasked = useRef("");
++  const fseq = useRef(0);   // 跟进提醒：连续重新载入时只收最后一次的回应（旧的比较晚回来不会盖掉新的）
+   const lastTab = useRef<Tab>("follow");
+   const scrollAt = useRef(0);        // 打开顾客前名单卷到哪里，回来时卷回去
+ 
+@@ -53,6 +61,19 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+     const bad = [s, w].find((x) => x.status === "rejected") as PromiseRejectedResult | undefined;
+     setSettingsErr(bad ? errText(bad.reason) : "");
+   }, []);
++  const loadFollow = useCallback(async (store: string) => {
++    fasked.current = store;
++    const n = ++fseq.current;
++    try {
++      const r = await followRows(store);
++      if (fseq.current === n) { setFrows(r ?? []); setFerr(""); }
++    } catch (e) {
++      if (fseq.current === n) setFerr(errText(e));
++    }
++  }, []);
++  useEffect(() => { setFrows(null); setFerr(""); loadFollow(fstore); }, [fstore, loadFollow]);
++  // 存了资料 / 联络过：名单与跟进提醒一起重新载入
++  const reload = useCallback(() => { load(); loadFollow(fasked.current); }, [load, loadFollow]);
+   const loadAll = useCallback(() => {
+     setRoleErr("");
+     // 拿不到角色（断线等）不当成「没有权限」，给重试
+@@ -75,7 +96,10 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+     }
+   }, [memberId]);
+ 
+-  const follow = useMemo(() => followUps(list ?? [], settings), [list, settings]);
++  const follow = useMemo<FollowUp[]>(() => {
++    const byId = new Map((list ?? []).map((c) => [c.member_id, c]));
++    return (frows ?? []).flatMap((r) => { const c = byId.get(r.member_id); return c ? [{ c, reasons: r.reasons }] : []; });
++  }, [list, frows]);
+   const totals = useMemo(() => {
+     const all = list ?? [];
+     const month = new Date().getMonth() + 1;
+@@ -146,7 +170,7 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+       {settingsErr && <ErrorBox error={t("查询失败:") + settingsErr} />}
+       {memberId && (
+         <CustomerPanel key={memberId} id={memberId} role={role} settings={settings} templates={templates}
+-                       categoriesOf={categoriesOf} onBack={back} onSaved={load} onOpen={open} />
++                       categoriesOf={categoriesOf} onBack={back} onSaved={reload} onOpen={open} />
+       )}
+       <div hidden={!!memberId}>
+         {/* 藏起来时量不到宽度，「右边还有分页」的淡出提示会算错：回来时重新挂上 */}
+@@ -157,15 +181,17 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+               <span>{t("顾客人数")} · {t("近 12 个月有消费 {a} 位", { a: fmtNum(totals.active) })}</span></div>
+             <div className="kpi"><b>{fmtNum(totals.profiled)}</b><span>{t("已补资料")} · {t("有填名字 / 生日 / 地区等")}</span></div>
+             <div className="kpi"><b>{fmtNum(totals.consent)}</b><span>{t("同意收促销")} · {t("只有这些人会被汇出 / 放进活动")}</span></div>
+-            <div className="kpi"><b>{fmtNum(follow.length)}</b>
++            <div className="kpi"><b>{frows === null ? "…" : fmtNum(follow.length)}</b>
+               <span>{t("待跟进")} · {t("本月生日 {b} 位", { b: fmtNum(totals.birthday) })}</span></div>
+           </div>
+         )}
+         {tab === "follow" && (
+           <>
+-            {canEdit && <QuickRegister onSaved={load} onOpen={open} />}
+-            <FollowUpList items={follow} settings={settings} templates={templates} canEdit={canEdit} onOpen={open} onTouched={load} />
+-            <Signups canEdit={canEdit} onDone={load} onOpen={open} />
++            {canEdit && <QuickRegister onSaved={reload} onOpen={open} />}
++            <FollowUpList items={frows === null ? null : follow} error={ferr} store={fstore} onStore={setFstore} settings={settings}
++                          templates={templates} canEdit={canEdit} onOpen={open} onTouched={reload}
++                          onRetry={() => { setFrows(null); setFerr(""); loadFollow(fasked.current); }} />
++            <Signups canEdit={canEdit} onDone={reload} onOpen={open} />
+           </>
+         )}
+         {tab === "list" && (
+@@ -174,6 +200,7 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string })
+         {tab === "campaigns" && <Campaigns isOwner={isOwner} list={list} settings={settings} />}
+         {tab === "report" && (
+           <>
++            <StaffBoardBox />
+             <MonthlyReport settings={settings} />
+             <MissingPhone />
+           </>
+diff --git a/portal/src/pages/Home.tsx b/portal/src/pages/Home.tsx
+index 17391e0..6c207a9 100644
+--- a/portal/src/pages/Home.tsx
++++ b/portal/src/pages/Home.tsx
+@@ -4,6 +4,7 @@ import { missingText } from "./MyProfile";
+ import { hhmm } from "../att-api";
+ import { ErrorBox } from "../ui";
+ import { DeliveryHomeCard } from "../dlv/HomeCard";
++import { CustomersHomeCard } from "../cust/HomeCard";
+ import { whHome, WhHome } from "../wh-overview-api";
+ import "../extra.css";
+ import "../att.css";
+@@ -131,6 +132,7 @@ export default function HomePage({ me }: { me: Me }) {
+       <InstallHint />
+       {home?.att && <AttCard a={home.att} />}
+       <DeliveryHomeCard me={me} />
++      <CustomersHomeCard me={me} />
+       {home && <Todo h={home} />}
+       <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
+       <a className={"card att-home" + (profileMissing.length ? " warn" : "")} href="#/profile">
+diff --git a/portal/supabase/migrations/20261018_ops_customers_v2.sql b/portal/supabase/migrations/20261018_ops_customers_v2.sql
+new file mode 100644
+index 0000000..1b36094
+--- /dev/null
++++ b/portal/supabase/migrations/20261018_ops_customers_v2.sql
+@@ -0,0 +1,470 @@
++-- 顾客资料第二版（2026-10-15）：使用者问「还可以怎么让我更能锁住老顾客？」，看了数据后选了三项：
++--   ① 新客 30 天回访：第一次买后第 7 天、第 21 天出现在「跟进提醒」（回头的顾客有一半在 22 天内买第二次、81% 在 90 天内；
++--      过了就很难回来）。只算有电话、只来买过一次、没说「不收促销」的；店员自己约了以后的联络日就照约的。
++--   ② 首页「今天要跟进」+ 员工排行：跟进提醒改在资料库算（bi_customer_followups，顾客页与首页共用同一套规则），
++--      首页只拿人数（ops_cust_home）；「报告」多员工排行（登记 / 联络 / 取得同意）与业务员新客回头率（bi_customer_staff_board）。
++--   ③ 登记送延长保修（「Hemos 保修登记」，只算 Hemos 产品）：顾客扫码登记（或店员按「登记延长保修」）就记下登记时间、当时的延长月数
++--      与起算日（登记前 N 天）；之后改设定不影响已登记的。月数在「设定」由管理员填，**0 = 不送**（预设 0：登记页不会出现保修字样）。
++-- 资料都在 BI 的 bi.customer_*（与 20261016_ops_customers.sql 同样不搬家）；新函数开头一律 bi.crm_require（读取的第二个参数 true）。
++-- 对 AutoCount 仍只读。可以重复套用，不含 DROP / DELETE。
++
++-- ------------------------------------------------------------ ③ 延长保修：栏位与设定
++alter table bi.customer_profile add column if not exists warranty_at timestamptz;      -- 第一次登记延长保修的时间
++alter table bi.customer_profile add column if not exists warranty_months smallint;     -- 登记当时答应延长几个月（之后改设定不影响已登记的）
++alter table bi.customer_profile add column if not exists warranty_by text;             -- 谁登记的（顾客自己扫码 / 店员 email）
++alter table bi.customer_profile add column if not exists warranty_from date;           -- 从哪天买的算（登记日 - 当时的「登记前几天」）
++alter table bi.customer_settings add column if not exists warranty_months smallint not null default 0;     -- 0 = 不送
++alter table bi.customer_settings add column if not exists warranty_back_days smallint not null default 90;  -- 登记前几天内的购买也算
++
++-- 扫码登记送出即生效（customer_signup_apply 是 BI 的共用写入规则）：送保修的期间第一次登记就记下来；其余照旧
++create or replace function bi.customer_signup_apply(p_id bigint, p_actor text) returns text
++language plpgsql security definer set search_path = '' as $$
++declare
++  s bi.customer_signup;
++  v_key text;
++  v_consent text;
++  v_months smallint := (select st.warranty_months from bi.customer_settings st where st.id = 1);
++  v_from date := (now() at time zone 'Asia/Kuala_Lumpur')::date
++                 - coalesce((select st.warranty_back_days from bi.customer_settings st where st.id = 1), 0);
++begin
++  select * into s from bi.customer_signup x where x.id = p_id;
++  if not found then
++    raise exception '找不到登记 #%', p_id;
++  end if;
++  v_key := bi.customer_key(s.member_id);
++  v_consent := case when s.consent then 'yes' else 'no' end;
++  perform set_config('bi.actor', p_actor, true);
++  insert into bi.customer_profile as p (member_id, name, birth_month, birth_day, area, address, email, consent, consent_at,
++                                        consent_by, created_by, updated_by, warranty_at, warranty_months, warranty_by, warranty_from)
++  values (v_key, s.name, s.birth_month, s.birth_day, s.area, s.address, s.email, v_consent, now(), p_actor, p_actor, p_actor,
++          case when coalesce(v_months, 0) > 0 then now() end, nullif(coalesce(v_months, 0), 0),
++          case when coalesce(v_months, 0) > 0 then p_actor end, case when coalesce(v_months, 0) > 0 then v_from end)
++  on conflict (member_id) do update
++     set name = coalesce(p.name, excluded.name),
++         birth_month = case when p.birth_month is null then excluded.birth_month else p.birth_month end,
++         birth_day = case when p.birth_month is null then excluded.birth_day else p.birth_day end,
++         area = coalesce(p.area, excluded.area),
++         address = coalesce(excluded.address, p.address),
++         email = coalesce(excluded.email, p.email),
++         consent = excluded.consent,
++         consent_at = case when p.consent is distinct from excluded.consent then now() else p.consent_at end,
++         consent_by = case when p.consent is distinct from excluded.consent then excluded.consent_by else p.consent_by end,
++         -- 已经登记过保修的不改（时间、月数、起算日都以第一次为准）
++         warranty_at = coalesce(p.warranty_at, excluded.warranty_at),
++         warranty_months = case when p.warranty_at is null then excluded.warranty_months else p.warranty_months end,
++         warranty_by = case when p.warranty_at is null then excluded.warranty_by else p.warranty_by end,
++         warranty_from = case when p.warranty_at is null then excluded.warranty_from else p.warranty_from end,
++         updated_at = now(), updated_by = p_actor;
++  update bi.customer_signup x set status = 'confirmed', handled_at = now(), handled_by = p_actor where x.id = p_id;
++  return v_key;
++end;
++$$;
++revoke all on function bi.customer_signup_apply(bigint, text) from public, anon, authenticated;
++
++-- 公开的登记页（BI join.html，不用登入）读：现在送不送、送几个月
++create or replace function public.bi_customer_signup_offer() returns jsonb
++language sql stable security definer set search_path = '' as $$
++  select jsonb_build_object('warranty_months', coalesce(s.warranty_months, 0), 'warranty_back_days', coalesce(s.warranty_back_days, 0))
++    from bi.customer_settings s where s.id = 1
++$$;
++revoke all on function public.bi_customer_signup_offer() from public;
++grant execute on function public.bi_customer_signup_offer() to anon, authenticated;
++
++-- 店员在柜台帮顾客登记延长保修（顾客没扫码时）
++create or replace function public.bi_customer_warranty_register(p_member text) returns jsonb
++language plpgsql volatile security definer set search_path = '' as $$
++declare
++  v_key text := bi.customer_key(p_member);
++  v_who text := coalesce(auth.jwt() ->> 'email', 'unknown');
++  v_months smallint := (select s.warranty_months from bi.customer_settings s where s.id = 1);
++  v_from date := (now() at time zone 'Asia/Kuala_Lumpur')::date
++                 - coalesce((select s.warranty_back_days from bi.customer_settings s where s.id = 1), 0);
++begin
++  perform bi.crm_require(array['owner', 'manager', 'sales']);
++  if v_key is null or v_key like 'A:%' then
++    raise exception '看不出电话号码：延长保修要用顾客的手机号登记';
++  end if;
++  if coalesce(v_months, 0) <= 0 then
++    raise exception '还没开延长保修：请管理员在「顾客资料 → 设定」填延长几个月';
++  end if;
++  insert into bi.customer_profile as p (member_id, created_by, updated_by, warranty_at, warranty_months, warranty_by, warranty_from)
++  values (v_key, v_who, v_who, now(), v_months, v_who, v_from)
++  on conflict (member_id) do update
++     set warranty_at = coalesce(p.warranty_at, excluded.warranty_at),
++         warranty_months = case when p.warranty_at is null then excluded.warranty_months else p.warranty_months end,
++         warranty_by = case when p.warranty_at is null then excluded.warranty_by else p.warranty_by end,
++         warranty_from = case when p.warranty_at is null then excluded.warranty_from else p.warranty_from end,
++         updated_at = case when p.warranty_at is null then now() else p.updated_at end,
++         updated_by = case when p.warranty_at is null then v_who else p.updated_by end;
++  return (select to_jsonb(x) from bi.customer_profile x where x.member_id = v_key);
++end $$;
++revoke all on function public.bi_customer_warranty_register(text) from public, anon;
++grant execute on function public.bi_customer_warranty_register(text) to authenticated;
++
++-- 管理员设定：送几个月（0 = 不送）、登记前几天内的购买也算
++create or replace function public.bi_customer_set_warranty(p_months integer, p_back_days integer) returns jsonb
++language plpgsql volatile security definer set search_path = '' as $$
++declare
++  v_who text := coalesce(auth.jwt() ->> 'email', 'unknown');
++begin
++  perform bi.crm_require(array['owner']);
++  if p_months is null or p_months < 0 or p_months > 60 or p_back_days is null or p_back_days < 0 or p_back_days > 365 then
++    raise exception '延长保修设定不合理（月数 0～60，登记前 0～365 天）';
++  end if;
++  update bi.customer_settings s
++     set warranty_months = p_months, warranty_back_days = p_back_days, updated_at = now(), updated_by = v_who
++   where s.id = 1;
++  return (select to_jsonb(s) from bi.customer_settings s where s.id = 1);
++end $$;
++revoke all on function public.bi_customer_set_warranty(integer, integer) from public, anon;
++grant execute on function public.bi_customer_set_warranty(integer, integer) to authenticated;
++
++-- 顾客扫码登记（BI join.html 用的 9 参数版）：跟正式环境原本一字不差，只多回传「资料库实际记下的」保修月数，
++-- 完成页照这个显示（以前登记过的以第一次为准；送出前管理员刚关掉的就不显示）
++create or replace function public.bi_customer_signup(p_phone text, p_name text, p_birth_month integer, p_birth_day integer,
++                                                     p_area text, p_consent boolean, p_store text, p_address text, p_email text)
++returns jsonb language plpgsql security definer set search_path = '' as $$
++declare
++  v_key text := bi.customer_phone(p_phone);
++  v_name text := nullif(trim(p_name), '');
++  v_area text := nullif(trim(p_area), '');
++  v_addr text := nullif(trim(p_address), '');
++  v_email text := lower(nullif(trim(p_email), ''));
++  v_store text := nullif(upper(trim(p_store)), '');
++  v_id bigint;
++  v_member text;
++begin
++  if v_key is null then
++    raise exception '电话号码看不懂，请输入完整手机号，例如 012-345 6789';
++  end if;
++  if v_name is null then
++    raise exception '请填名字';
++  end if;
++  if length(v_name) > 60 or length(coalesce(v_area, '')) > 60 or length(coalesce(v_addr, '')) > 300 then
++    raise exception '名字或地址太长';
++  end if;
++  if v_email is not null and (length(v_email) > 120 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$') then
++    raise exception '电邮地址格式不对';
++  end if;
++  if (p_birth_month is null) <> (p_birth_day is null) then
++    raise exception '生日要月、日都填，或都不填';
++  end if;
++  if p_birth_month is not null then
++    begin
++      perform make_date(2000, p_birth_month, p_birth_day);
++    exception when others then
++      raise exception '生日日期不对';
++    end;
++  end if;
++  if v_store is not null and v_store not in ('HQ', 'JB') then
++    v_store := null;
++  end if;
++  if (select count(*) from bi.customer_signup s where s.created_at > now() - interval '10 minutes') >= 30 then
++    raise exception '现在登记的人太多，请稍后再试，或请店员帮忙登记';
++  end if;
++  insert into bi.customer_signup (member_id, name, birth_month, birth_day, area, address, email, consent, store)
++  values (v_key, v_name, p_birth_month, p_birth_day, v_area, v_addr, v_email, coalesce(p_consent, false), v_store)
++  returning id into v_id;
++  v_member := bi.customer_signup_apply(v_id, '顾客自己扫码登记' || coalesce('（' || v_store || '）', ''));
++  return jsonb_build_object('ok', true,
++                            'warranty_months', (select p.warranty_months from bi.customer_profile p
++                                                 where p.member_id = v_member and p.warranty_at is not null));
++end;
++$$;
++revoke all on function public.bi_customer_signup(text, text, integer, integer, text, boolean, text, text, text) from public;
++grant execute on function public.bi_customer_signup(text, text, integer, integer, text, boolean, text, text, text)
++  to anon, authenticated;
++
++-- 合并重复顾客：跟正式环境原本一字不差，另外把电邮与延长保修一起搬过来（以前合并时这几栏会跟着被删掉的号码不见）。
++-- 两边都登记过保修就留比较早的那次（时间、月数、起算日、谁登记的一起）
++create or replace function public.bi_customer_merge(p_keep text, p_drop text) returns jsonb
++language plpgsql security definer set search_path = '' as $$
++declare
++  v_who text := coalesce(auth.jwt() ->> 'email', 'unknown');
++  v_keep text := bi.customer_key(p_keep);
++  v_drop text := case when p_drop ~ '^A:' then p_drop else bi.customer_phone(p_drop) end;
++  d bi.customer_profile;
++begin
++  perform bi.crm_require(array['owner', 'manager']);
++  if v_keep is null or v_drop is null then
++    raise exception '看不出电话号码：两边都要填完整手机号';
++  end if;
++  if bi.customer_key(v_drop) = v_keep then
++    raise exception '这两个号码已经是同一位顾客';
++  end if;
++  if exists (select 1 from bi.customer_alias a where a.alias_id = v_drop) then
++    raise exception '% 已经合并到别的顾客，请先取消那次合并', v_drop;
++  end if;
++  perform set_config('bi.actor', v_who || '（合并）', true);
++  update bi.customer_alias set member_id = v_keep where member_id = v_drop;
++  insert into bi.customer_alias (alias_id, member_id, created_by) values (v_drop, v_keep, v_who);
++
++  select * into d from bi.customer_profile p where p.member_id = v_drop;
++  if found then
++    if exists (select 1 from bi.customer_profile p where p.member_id = v_keep) then
++      update bi.customer_profile p
++         set name = coalesce(p.name, d.name),
++             birth_month = case when p.birth_month is null then d.birth_month else p.birth_month end,
++             birth_day = case when p.birth_month is null then d.birth_day else p.birth_day end,
++             area = coalesce(p.area, d.area), address = coalesce(p.address, d.address),
++             customer_type = coalesce(p.customer_type, d.customer_type),
++             note = case when p.note is null then d.note when d.note is null or d.note = p.note then p.note
++                         else p.note || ' / ' || d.note end,
++             consent = coalesce(p.consent, d.consent), consent_at = case when p.consent is null then d.consent_at else p.consent_at end,
++             consent_by = case when p.consent is null then d.consent_by else p.consent_by end,
++             next_contact = least(p.next_contact, d.next_contact),
++             last_contact_at = greatest(p.last_contact_at, d.last_contact_at),
++             reno_stage = coalesce(p.reno_stage, d.reno_stage),
++             reno_stage_at = case when p.reno_stage is null then d.reno_stage_at else p.reno_stage_at end,
++             email = coalesce(p.email, d.email),
++             warranty_at = case when d.warranty_at < p.warranty_at or p.warranty_at is null then d.warranty_at else p.warranty_at end,
++             warranty_months = case when d.warranty_at < p.warranty_at or p.warranty_at is null then d.warranty_months else p.warranty_months end,
++             warranty_by = case when d.warranty_at < p.warranty_at or p.warranty_at is null then d.warranty_by else p.warranty_by end,
++             warranty_from = case when d.warranty_at < p.warranty_at or p.warranty_at is null then d.warranty_from else p.warranty_from end,
++             updated_at = now(), updated_by = v_who
++       where p.member_id = v_keep;
++      delete from bi.customer_profile p where p.member_id = v_drop;
++    else
++      update bi.customer_profile p set member_id = v_keep, updated_at = now(), updated_by = v_who where p.member_id = v_drop;
++    end if;
++  end if;
++  insert into bi.customer_campaign_member (campaign_id, member_id)
++  select m.campaign_id, v_keep from bi.customer_campaign_member m where m.member_id = v_drop
++  on conflict do nothing;
++  delete from bi.customer_campaign_member m where m.member_id = v_drop;
++  insert into bi.customer_profile_log (member_id, by, action, changes)
++  values (v_keep, v_who, 'merge', jsonb_build_object('merged', v_drop));
++  return jsonb_build_object('member_id', v_keep, 'merged', v_drop);
++end;
++$$;
++revoke all on function public.bi_customer_merge(text, text) from public, anon;
++grant execute on function public.bi_customer_merge(text, text) to authenticated;
++
++-- 一位顾客：跟正式环境原本一字不差，只在购买明细每一行多 brand（AutoCount 的 ItemType：HEMOS / HEMOSX / VATTI…），
++-- 顾客页用它只在有 Hemos 产品的单标「保修」
++create or replace function public.bi_customer(p_member text) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  v_key text := bi.customer_key(p_member);
++  v_docs jsonb;
++begin
++  perform bi.crm_require(array['owner', 'manager', 'sales'], true);
++  if v_key is null then
++    raise exception '看不出电话号码：请输入完整手机号，例如 012-3456789 或 +65 9123 4567';
++  end if;
++  select coalesce(jsonb_agg(x order by x.doc_date desc, x.doc_no desc), '[]'::jsonb) into v_docs
++    from (
++      select cd.company, cd.doc_type, cd.doc_no, cd.doc_date, cd.debtor_code, cd.debtor_name,
++             cd.sales_agent, round(cd.amount, 2) as amount,
++             (select coalesce(jsonb_agg(jsonb_build_object(
++                        'item_code', f.item_code, 'description', f.item_description,
++                        'qty', f.qty, 'uom', f.uom, 'sub_total', f.sub_total, 'brand', i.item_type)
++                      order by f.dtl_key), '[]'::jsonb)
++                from bi.fact_sales f
++                left join bi.dim_item i on i.company = f.company and i.item_code = f.item_code
++               where f.company = cd.company and f.doc_type = cd.doc_type and f.doc_key = cd.doc_key) as items
++        from bi.customer_doc cd
++       where cd.member_id = v_key
++    ) x;
++  return jsonb_build_object(
++    'member_id', v_key,
++    'profile', (select to_jsonb(p) from bi.customer_profile p where p.member_id = v_key),
++    'docs', v_docs,
++    'aliases', (select coalesce(jsonb_agg(a.alias_id order by a.alias_id), '[]'::jsonb)
++                  from bi.customer_alias a where a.member_id = v_key),
++    'quotes', (select coalesce(jsonb_agg(jsonb_build_object(
++                        'company', q.company, 'doc_no', q.doc_no, 'doc_date', q.doc_date, 'sales_agent', q.sales_agent,
++                        'amount', round(q.amount, 2), 'transferred', q.transferred, 'items', q.items,
++                        'bought_after', exists (select 1 from bi.customer_doc cd
++                                                 where cd.member_id = v_key and cd.doc_type in ('IV', 'CS')
++                                                   and cd.doc_date >= q.doc_date))
++                      order by q.doc_date desc), '[]'::jsonb)
++                 from bi.customer_quote q where q.member_id = v_key)
++  );
++end;
++$$;
++revoke all on function public.bi_customer(text) from public, anon;
++grant execute on function public.bi_customer(text) to authenticated;
++
++-- ------------------------------------------------------------ ①② 跟进提醒（顾客页「跟进」与首页共用）
++-- 规则与 BI 顾客资料页的 followUps()（Loyalty.tsx）相同，另加「新客回访」：
++--   due      约好的下次联络日到了
++--   quote    报价开出 N 天还没成交（没转单、之后也没买），而且从该跟进那天起还没联络
++--   birthday N 天内生日，这段期间还没联络过
++--   new      新客：只来买过一次（之后的退货 CN 不算回来）、有电话、没说不收促销；第 7 天、第 21 天各一次（之前联络过就不重复），
++--            45 天后不再追；刚到第 7 / 21 天的排前面（回头的一半在 22 天内，越早联络越有用）；约了以后的联络日就照约的
++--   stage    装修进度太久没更新（完工的不追）
++--   lead     潜在客（没买过）建档 N 天还没联络
++-- p_store：'HQ' / 'JB' 只看那间门市买过的；没买过的看报价单是哪间开的；都没有的（潜在客）两边都列；其他 = 全部。
++-- 回传 [{member_id, reasons:[{kind, days}]}]，最急的在前（同样急的，最近来过的在前，跟顾客名单一样）。
++create or replace function public.bi_customer_followups(p_store text default null) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  s bi.customer_settings;
++  v_today date := (now() at time zone 'Asia/Kuala_Lumpur')::date;
++  v_store text := case when p_store in ('HQ', 'JB') then p_store end;
++begin
++  perform bi.crm_require(array['owner', 'manager', 'sales'], true);
++  select * into s from bi.customer_settings x where x.id = 1;
++  return coalesce((
++    with qs as (
++      -- 没买过的顾客：报价单在哪间门市开的
++      select q.member_id, string_agg(distinct case q.company when 'HOMEWORKSSB' then 'HQ' else 'JB' end, ' + ') as stores
++        from bi.customer_quote q where q.member_id is not null and not q.transferred group by q.member_id
++    )
++    select jsonb_agg(jsonb_build_object('member_id', f.member_id, 'reasons', f.reasons)
++                     order by f.rank, f.last_date desc nulls last, f.member_id)
++      from (
++        select c.member_id, c.last_date, r.reasons, r.rank, coalesce(c.stores, qs.stores) as stores
++          from public.bi_customers() c
++          left join qs on qs.member_id = c.member_id
++          cross join lateral (
++            select v_today - (c.last_contact_at at time zone 'Asia/Kuala_Lumpur')::date as contacted,
++                   v_today - c.first_date as age,
++                   -- 生日：这个月的 1 号 + (日 - 1)，2/29 在平年自然变 3/1（跟 BI 页的 JS 一样）；月 / 日不合理的不算，免得整份清单出错
++                   case when c.birth_month between 1 and 12 and c.birth_day between 1 and 31 then
++                     (select case when b >= v_today then b
++                                  else make_date(extract(year from v_today)::int + 1, c.birth_month, 1) + (c.birth_day - 1) end - v_today
++                        from (select make_date(extract(year from v_today)::int, c.birth_month, 1) + (c.birth_day - 1) as b) bb)
++                   end as bday
++          ) v
++          cross join lateral (
++            select jsonb_agg(jsonb_build_object('kind', k.kind, 'days', k.days) order by k.rank) as reasons, min(k.rank) as rank
++              from (
++                select 'due' as kind, v_today - c.next_contact as days, 0 as rank
++                 where c.next_contact <= v_today
++                union all
++                select 'quote', (v_today - c.quote_due) + s.quote_follow_days, 50
++                 where c.quote_due is not null
++                   and (c.last_contact_at is null or (c.last_contact_at at time zone 'Asia/Kuala_Lumpur')::date < c.quote_due)
++                union all
++                select 'birthday', v.bday, 100 + v.bday
++                 where v.bday is not null and v.bday <= s.birthday_days
++                   and not coalesce(v.contacted <= s.birthday_days - v.bday, false)
++                union all
++                select 'new', v.age, 200 + v.age - case when v.age >= 21 then 21 else 7 end
++                 where c.first_date is not null and c.doc_count >= 1 and (c.first_date = c.last_date or c.doc_count = 1)
++                   and c.member_id ~ '^[0-9]+$' and c.consent is distinct from 'no'
++                   and v.age between 7 and 45
++                   and not coalesce(c.next_contact > v_today, false)
++                   and (c.last_contact_at is null
++                        or (c.last_contact_at at time zone 'Asia/Kuala_Lumpur')::date
++                           < c.first_date + case when v.age >= 21 then 21 else 7 end)
++                union all
++                select 'stage', v_today - (c.reno_stage_at at time zone 'Asia/Kuala_Lumpur')::date, 500
++                 where c.reno_stage is not null and c.reno_stage <> 'done' and c.reno_stage_at is not null
++                   and v_today - (c.reno_stage_at at time zone 'Asia/Kuala_Lumpur')::date >= s.stage_follow_days
++                   and not coalesce(v.contacted < s.stage_follow_days, false)
++                union all
++                select 'lead', v_today - (c.profile_created_at at time zone 'Asia/Kuala_Lumpur')::date, 1000
++                 where c.last_date is null and c.profile_created_at is not null and c.last_contact_at is null
++                   and not coalesce(c.next_contact > v_today, false)
++                   and v_today - (c.profile_created_at at time zone 'Asia/Kuala_Lumpur')::date >= s.lead_follow_days
++              ) k
++          ) r
++         where r.reasons is not null
++      ) f
++     where v_store is null or f.stores is null or f.stores like '%' || v_store || '%'
++  ), '[]'::jsonb);
++end $$;
++revoke all on function public.bi_customer_followups(text) from public, anon;
++grant execute on function public.bi_customer_followups(text) to authenticated;
++
++-- ------------------------------------------------------------ ② 员工排行（「报告」分页）
++-- staff：这段期间各员工在顾客资料做的事（修改纪录 bi.customer_profile_log），都算「几位顾客」，同一位按很多次只算一次：
++--        联络、登记（名字 / 生日 / 同意 / 地址 / 电邮 / 保修 任一项从空白填上，不管是新建档还是补资料；只按「已联络」自动建的空档不算）、
++--        取得「同意收促销」。顾客自己扫码另列一行；合并重复顾客时搬过去的资料不算（by 后面有「（合并）」）。
++-- agents：业务员新客回头率（AutoCount 单上的业务员）：3～6 个月前第一次来买的新客，90 天内回来买第二次的比例（门市散客才算）
++-- 一笔修改纪录算不算「登记」：名字 / 生日 / 同意 / 地址 / 电邮 / 保修 任一项从空白变成有值（changes 每栏是 [旧, 新]）
++create or replace function bi.customer_log_registers(p_changes jsonb) returns boolean
++language sql immutable set search_path = '' as $$
++  select exists (select 1 from unnest(array['name', 'birth_month', 'consent', 'address', 'email', 'warranty_at']) k
++                  where p_changes ? k
++                    and coalesce(p_changes -> k -> 0, 'null'::jsonb) = 'null'::jsonb
++                    and coalesce(p_changes -> k -> 1, 'null'::jsonb) <> 'null'::jsonb)
++$$;
++revoke all on function bi.customer_log_registers(jsonb) from public, anon, authenticated;
++
++create or replace function public.bi_customer_staff_board(p_from date, p_to date) returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  v_today date := (now() at time zone 'Asia/Kuala_Lumpur')::date;
++begin
++  perform bi.crm_require(array['owner', 'manager', 'sales'], true);
++  return jsonb_build_object(
++    'staff', (
++      select coalesce(jsonb_agg(jsonb_build_object('by', x.by, 'name', x.name, 'contacts', x.contacts, 'registered', x.registered,
++                                                   'consents', x.consents)
++                                order by x.contacts + x.registered + x.consents desc, x.by), '[]'::jsonb)
++        from (
++          select l.by,
++                 coalesce((select st.name from ops.staff st where lower(st.email) = lower(l.by) limit 1),
++                          case when l.by ~ '^[^@\s（）]+@[^@\s（）]+$' then split_part(l.by, '@', 1) else l.by end) as name,
++                 count(distinct l.member_id) filter (where l.changes ? 'last_contact_at')::int as contacts,
++                 count(distinct l.member_id) filter (where bi.customer_log_registers(l.changes))::int as registered,
++                 count(distinct l.member_id) filter (where l.changes -> 'consent' ->> 1 = 'yes')::int as consents
++            from bi.customer_profile_log l
++           where (l.at at time zone 'Asia/Kuala_Lumpur')::date between p_from and p_to
++             and l.by is not null and l.by not like '%（合并）'
++           group by l.by
++        ) x
++       where x.contacts + x.registered + x.consents > 0),
++    'agents', (
++      with d as materialized (
++        select cd.member_id, cd.company, cd.doc_date, cd.amount, coalesce(nullif(trim(cd.sales_agent), ''), '(空白)') as agent
++          from bi.customer_doc cd where cd.member_id is not null and cd.amount > 0
++      ),
++      firsts as (
++        select distinct on (d.member_id) d.member_id, d.company, d.doc_date as first_date, d.agent
++          from d order by d.member_id, d.doc_date, d.amount desc
++      ),
++      seconds as (
++        select d.member_id, min(d.doc_date) as second_date
++          from d join firsts f on f.member_id = d.member_id and d.doc_date > f.first_date
++         group by d.member_id
++      )
++      select coalesce(jsonb_agg(jsonb_build_object('company', a.company, 'agent', a.agent, 'new_customers', a.n,
++                                                   'returned_90', a.r) order by a.company, a.n desc), '[]'::jsonb)
++        from (
++          select f.company, f.agent, count(*)::int as n,
++                 count(*) filter (where s2.second_date <= f.first_date + 90)::int as r
++            from firsts f left join seconds s2 on s2.member_id = f.member_id
++           where f.first_date between v_today - 180 and v_today - 90
++           group by f.company, f.agent
++        ) a
++       where a.n >= 5),
++    'cohort_from', v_today - 180, 'cohort_to', v_today - 90);
++end $$;
++revoke all on function public.bi_customer_staff_board(date, date) from public, anon;
++grant execute on function public.bi_customer_staff_board(date, date) to authenticated;
++
++-- ------------------------------------------------------------ ② 首页卡片：今天要跟进几位、这个月我做了多少
++-- 营运系统员工照自己的分店（全部分店 = 两边）；没有顾客资料权限 → null（首页不显示这张卡，不报错）
++create or replace function public.ops_cust_home() returns jsonb
++language plpgsql stable security definer set search_path = '' as $$
++declare
++  v_role text := public.ops_cust_role();
++  v_store text := case bi.crm_company() when 'HOMEWORKSSB' then 'HQ' when 'HOMEWORKSSOUTHERN' then 'JB' end;
++  v_me text := lower(coalesce(auth.jwt() ->> 'email', ''));
++  v_month date := date_trunc('month', (now() at time zone 'Asia/Kuala_Lumpur'))::date;
++  v_list jsonb;
++begin
++  if v_role is null then
++    return null;
++  end if;
++  v_list := public.bi_customer_followups(v_store);
++  return jsonb_build_object(
++    'store', v_store,
++    'total', jsonb_array_length(v_list),
++    'by_kind', (select coalesce(jsonb_object_agg(k.kind, k.n), '{}'::jsonb)
++                  from (select r ->> 'kind' as kind, count(distinct e ->> 'member_id')::int as n
++                          from jsonb_array_elements(v_list) e, jsonb_array_elements(e -> 'reasons') r group by 1) k),
++    'my_contacts', (select count(distinct l.member_id)::int from bi.customer_profile_log l
++                     where lower(l.by) = v_me and l.changes ? 'last_contact_at'
++                       and (l.at at time zone 'Asia/Kuala_Lumpur')::date >= v_month),
++    'my_registered', (select count(distinct l.member_id)::int from bi.customer_profile_log l
++                       where lower(l.by) = v_me and bi.customer_log_registers(l.changes)
++                         and (l.at at time zone 'Asia/Kuala_Lumpur')::date >= v_month));
++end $$;
++revoke all on function public.ops_cust_home() from public, anon;
++grant execute on function public.ops_cust_home() to authenticated;
+diff --git a/portal/supabase/tests/cust2_test.sql b/portal/supabase/tests/cust2_test.sql
+new file mode 100644
+index 0000000..047b656
+--- /dev/null
++++ b/portal/supabase/tests/cust2_test.sql
+@@ -0,0 +1,255 @@
++-- 顾客资料第二版测试（接在 cust_test.sql 之后跑）：跟进提醒（含新客回访）、首页人数、员工排行、延长保修。
++\set ON_ERROR_STOP 1
++create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
++begin
++  perform set_config('request.jwt.claims', json_build_object('email', p_email)::text, false);
++end $$;
++create or replace function pg_temp.expect_error(p_sql text, p_like text) returns void language plpgsql as $$
++begin
++  execute p_sql;
++  raise exception 'expected error "%" from: %', p_like, p_sql;
++exception when others then
++  if sqlerrm like 'expected error%' or sqlerrm not like '%' || p_like || '%' then
++    raise;
++  end if;
++end $$;
++grant execute on all functions in schema pg_temp to authenticated;
++
++-- 资料（今天 = 马来西亚日期）
++select set_config('t.today', ((now() at time zone 'Asia/Kuala_Lumpur')::date)::text, false);
++insert into bi.stub_customer_row (member_id, stores, first_date, last_date, doc_count, consent, last_contact_at, next_contact,
++                                  birth_month, birth_day) values
++  ('60120000001', 'HQ', current_setting('t.today')::date - 8, current_setting('t.today')::date - 8, 1, null, null, null, null, null),
++  -- 第 7 天联络过（第 15 天），到第 21 天要再联络一次
++  ('60120000002', 'HQ', current_setting('t.today')::date - 25, current_setting('t.today')::date - 25, 1, null,
++   (current_setting('t.today')::date - 10)::timestamp at time zone 'Asia/Kuala_Lumpur', null, null, null),
++  -- 第 23 天联络过：这一轮已联络
++  ('60120000003', 'HQ', current_setting('t.today')::date - 25, current_setting('t.today')::date - 25, 1, null,
++   (current_setting('t.today')::date - 2)::timestamp at time zone 'Asia/Kuala_Lumpur', null, null, null),
++  ('60120000004', 'HQ', current_setting('t.today')::date - 8, current_setting('t.today')::date - 8, 1, 'no', null, null, null, null),
++  ('A:HOMEWORKSSB:300-X01', 'HQ', current_setting('t.today')::date - 8, current_setting('t.today')::date - 8, 1, null, null, null, null, null),
++  ('60120000006', 'HQ', current_setting('t.today')::date - 30, current_setting('t.today')::date - 10, 2, null, null, null, null, null),
++  ('60120000007', 'HQ', current_setting('t.today')::date - 300, current_setting('t.today')::date - 200, 3, 'yes', null,
++   current_setting('t.today')::date - 1, null, null),
++  ('60120000009', 'JB', current_setting('t.today')::date - 10, current_setting('t.today')::date - 10, 1, null, null, null, null, null),
++  ('60120000010', 'HQ', current_setting('t.today')::date - 50, current_setting('t.today')::date - 50, 1, null, null, null, null, null),
++  ('60120000011', 'HQ', current_setting('t.today')::date - 8, current_setting('t.today')::date - 8, 1, null, null,
++   current_setting('t.today')::date + 3, null, null),
++  ('60120000012', 'HQ', current_setting('t.today')::date - 5, current_setting('t.today')::date - 5, 1, null, null, null, null, null);
++-- 3 天后生日（2/29 在平年也不会让整份清单出错：另放一位 2/29 生日、一位不合理的月份）
++insert into bi.stub_customer_row (member_id, stores, birth_month, birth_day, last_date)
++select '60120000008', 'JB', extract(month from d)::int, extract(day from d)::int, null
++  from (select current_setting('t.today')::date + 3 as d) x;
++insert into bi.stub_customer_row (member_id, stores, birth_month, birth_day) values ('60120000013', 'HQ', 2, 29), ('60120000014', 'HQ', 13, 1);
++-- 只买过一次、之后有退货（CN 让 last_date 往后）：还是新客
++insert into bi.stub_customer_row (member_id, stores, first_date, last_date, doc_count) values
++  ('60120000015', 'HQ', current_setting('t.today')::date - 9, current_setting('t.today')::date - 3, 1);
++-- 没买过、只有总部开的报价单：只在总部的清单
++insert into bi.stub_customer_row (member_id, stores, quote_due) values ('60120000016', null, current_setting('t.today')::date - 1);
++insert into bi.customer_quote (company, doc_no, doc_date, amount, member_id) values
++  ('HOMEWORKSSB', 'QT-1', current_setting('t.today')::date - 8, 500, '60120000016');
++
++-- 门市员工（总部）、JB 门市、仓库（看不到）
++set role authenticated;
++select pg_temp.as_user('boss@example.com');
++select public.ops_staff_save('{"email":"crm2@example.com","name":"门市阿丽","department":"sales","branch":"HOMEWORKSSB"}');
++select public.ops_staff_save('{"email":"crm2jb@example.com","name":"JB 阿强","department":"sales","branch":"HOMEWORKSSOUTHERN"}');
++
++-- 1. 跟进提醒：规则与分店
++select pg_temp.as_user('crm2@example.com');
++do $$ declare j jsonb := public.bi_customer_followups(null); m jsonb := '{}'; e jsonb; begin
++  for e in select * from jsonb_array_elements(j) loop m := m || jsonb_build_object(e ->> 'member_id', e -> 'reasons'); end loop;
++  assert m -> '60120000001' = '[{"kind": "new", "days": 8}]'::jsonb, 'new day 8: ' || coalesce(m ->> '60120000001', 'missing');
++  assert m -> '60120000002' -> 0 ->> 'kind' = 'new', 'second touch at day 21: ' || j::text;
++  assert not m ? '60120000003', 'contacted after day 21';
++  assert not m ? '60120000004', 'said no to promotions';
++  assert not m ? 'A:HOMEWORKSSB:300-X01', 'account customers have no phone';
++  assert not m ? '60120000006', 'came back already';
++  assert m -> '60120000007' -> 0 ->> 'kind' = 'due', 'due: ' || j::text;
++  assert m -> '60120000008' = '[{"kind": "birthday", "days": 3}]'::jsonb, 'birthday in 3 days';
++  assert m ? '60120000009', 'JB new in all';
++  assert not m ? '60120000010', 'after 45 days stop';
++  assert not m ? '60120000011', 'staff booked a later contact date';
++  assert not m ? '60120000012', 'not before day 7';
++  assert not m ? '60120000014', 'bad birthday ignored';
++  assert m -> '60120000015' = '[{"kind": "new", "days": 9}]'::jsonb, 'refund later is not a second purchase';
++  assert m -> '60120000016' -> 0 ->> 'kind' = 'quote', 'quote: ' || j::text;
++  -- 最急的在前：约好的联络日 > 生日 > 新客（刚到第 7 / 21 天的在前）
++  assert j -> 0 ->> 'member_id' = '60120000007', 'due first: ' || j::text;
++  assert (select array_agg(x ->> 'member_id' order by n) from jsonb_array_elements(j) with ordinality t(x, n)
++           where x ->> 'member_id' in ('60120000001', '60120000002', '60120000009'))
++         = array['60120000001', '60120000009', '60120000002'], 'new: just reached day 7 / 21 first: ' || j::text;
++  j := public.bi_customer_followups('HQ');
++  assert not exists (select 1 from jsonb_array_elements(j) x where x ->> 'member_id' in ('60120000009', '60120000008')), 'HQ only: ' || j::text;
++  assert exists (select 1 from jsonb_array_elements(j) x where x ->> 'member_id' = '60120000016'), 'HQ quote in HQ: ' || j::text;
++  j := public.bi_customer_followups('JB');
++  assert exists (select 1 from jsonb_array_elements(j) x where x ->> 'member_id' = '60120000009')
++     and not exists (select 1 from jsonb_array_elements(j) x where x ->> 'member_id' in ('60120000001', '60120000016')), 'JB only: ' || j::text;
++end $$;
++
++-- 2. 首页人数：照自己的分店；这个月我联络 / 登记了几位
++reset role;
++insert into bi.customer_profile_log (member_id, by, action, changes) values
++  ('60120000001', 'crm2@example.com', 'update', '{"last_contact_at": [null, "2026-10-15T03:00:00+00:00"]}'),
++  ('60120000099', 'crm2@example.com', 'insert', '{"name": [null, "陈先生"], "consent": [null, "yes"]}'),
++  ('60120000098', 'crm2@example.com', 'insert', '{"last_contact_at": [null, "2026-10-15T03:00:00+00:00"]}'),
++  ('60120000097', '顾客自己扫码登记（HQ）', 'insert', '{"name": [null, "A"], "consent": [null, "yes"]}'),
++  ('60120000096', '顾客自己登记（boss@example.com 确认）', 'update', '{"consent": [null, "yes"]}'),
++  -- 同一位按很多次只算一位
++  ('60120000001', 'crm2@example.com', 'update', '{"last_contact_at": ["2026-10-15T03:00:00+00:00", "2026-10-15T03:05:00+00:00"]}'),
++  ('60120000099', 'crm2@example.com', 'update', '{"consent": ["no", "yes"]}'),
++  -- 先按「已联络」建了空档，之后补名字：算登记
++  ('60120000098', 'crm2@example.com', 'update', '{"name": [null, "林小姐"]}'),
++  -- 改名字（原本就有）：不算登记
++  ('60120000097', 'crm2@example.com', 'update', '{"name": ["A", "B"]}'),
++  -- 合并重复顾客搬过去的资料：不算
++  ('60120000095', 'boss@example.com（合并）', 'update', '{"name": [null, "合并来的"]}');
++set role authenticated;
++select pg_temp.as_user('crm2@example.com');
++do $$ declare h jsonb := public.ops_cust_home(); begin
++  assert h ->> 'store' = 'HQ', 'store: ' || h::text;
++  assert (h -> 'by_kind' ->> 'new')::int = 3 and (h -> 'by_kind' ->> 'due')::int = 1 and (h -> 'by_kind' ->> 'quote')::int = 1
++     and not (h -> 'by_kind') ? 'birthday', 'HQ kinds: ' || h::text;
++  -- 联络 2 位（001 按了两次）；登记 2 位（099 新建档、098 先按已联络后补名字；只按已联络的空档、改名字都不算）
++  assert (h ->> 'my_contacts')::int = 2 and (h ->> 'my_registered')::int = 2, 'my month: ' || h::text;
++end $$;
++select pg_temp.as_user('crm2jb@example.com');
++do $$ declare h jsonb := public.ops_cust_home(); begin
++  assert h ->> 'store' = 'JB' and (h -> 'by_kind' ->> 'birthday')::int = 1 and (h -> 'by_kind' ->> 'new')::int = 1
++     and not (h -> 'by_kind') ? 'quote', 'JB: ' || h::text;
++end $$;
++select pg_temp.as_user('driver@example.com');
++do $$ begin assert public.ops_cust_home() is null, 'no module, no card'; end $$;
++select pg_temp.expect_error('select public.bi_customer_followups(null)', '查看权限');
++
++-- 3. 员工排行：名字照员工名单；顾客扫码、确认登记另列（名字不被 @ 切断）；业务员新客 90 天回头率
++reset role;
++insert into bi.customer_doc (company, doc_type, doc_date, sales_agent, amount, member_id)
++select 'HOMEWORKSSB', 'CS', current_setting('t.today')::date - 120, 'ZHI', 100, '6013000000' || g from generate_series(1, 6) g;
++insert into bi.customer_doc (company, doc_type, doc_date, sales_agent, amount, member_id)
++select 'HOMEWORKSSB', 'CS', current_setting('t.today')::date - 120 + 30, 'ZHI', 50, '6013000000' || g from generate_series(1, 3) g;
++insert into bi.customer_doc (company, doc_type, doc_date, sales_agent, amount, member_id) values
++  ('HOMEWORKSSB', 'CS', current_setting('t.today')::date - 5, 'ZHI', 80, '60130000004');   -- 第 115 天才回来：不算 90 天内
++set role authenticated;
++select pg_temp.as_user('crm2@example.com');
++do $$ declare b jsonb := public.bi_customer_staff_board(current_setting('t.today')::date - 30, current_setting('t.today')::date); begin
++  assert exists (select 1 from jsonb_array_elements(b -> 'staff') x where x ->> 'name' = '门市阿丽'
++                   and (x ->> 'contacts')::int = 2 and (x ->> 'registered')::int = 2 and (x ->> 'consents')::int = 1), 'staff: ' || b::text;
++  assert not exists (select 1 from jsonb_array_elements(b -> 'staff') x where x ->> 'by' like '%（合并）'), 'merge not counted: ' || b::text;
++  assert exists (select 1 from jsonb_array_elements(b -> 'staff') x where x ->> 'name' = '顾客自己扫码登记（HQ）'), 'qr row';
++  assert exists (select 1 from jsonb_array_elements(b -> 'staff') x where x ->> 'name' = '顾客自己登记（boss@example.com 确认）'),
++    'confirm row keeps full name: ' || b::text;
++  assert b -> 'agents' = '[{"agent": "ZHI", "company": "HOMEWORKSSB", "returned_90": 3, "new_customers": 6}]'::jsonb,
++    'agents: ' || (b -> 'agents')::text;
++end $$;
++
++-- 4. 延长保修：预设不送；只有管理员能开；登记以第一次为准；扫码登记送出即记
++do $$ begin
++  assert public.bi_customer_signup_offer() = '{"warranty_months": 0, "warranty_back_days": 90}'::jsonb, 'default off';
++end $$;
++select pg_temp.expect_error($q$select public.bi_customer_warranty_register('012-111 2222')$q$, '还没开延长保修');
++select pg_temp.expect_error('select public.bi_customer_set_warranty(12, 90)', '只有管理员');
++select pg_temp.as_user('boss@example.com');
++select pg_temp.expect_error('select public.bi_customer_set_warranty(99, 90)', '不合理');
++select public.bi_customer_set_warranty(12, 90) is not null;
++select pg_temp.as_user('crm2@example.com');
++do $$ declare p jsonb; begin
++  assert public.bi_customer_signup_offer() ->> 'warranty_months' = '12', 'offer on';
++  p := public.bi_customer_warranty_register('012-111 2222');
++  assert p ->> 'member_id' = '60121112222' and (p ->> 'warranty_months')::int = 12 and p ->> 'warranty_by' = 'crm2@example.com', 'reg: ' || p::text;
++  assert (p ->> 'warranty_from')::date = current_setting('t.today')::date - 90, 'from = today - 90: ' || p::text;
++end $$;
++select pg_temp.expect_error($q$select public.bi_customer_warranty_register('A:HOMEWORKSSB:300-X01')$q$, '手机号');
++select pg_temp.as_user('boss@example.com');
++select public.bi_customer_set_warranty(6, 30) is not null;
++select pg_temp.as_user('crm2@example.com');
++do $$ declare p jsonb := public.bi_customer_warranty_register('0121112222'); begin
++  assert (p ->> 'warranty_months')::int = 12 and p ->> 'warranty_by' = 'crm2@example.com'
++     and (p ->> 'warranty_from')::date = current_setting('t.today')::date - 90, 'first registration kept: ' || p::text;
++end $$;
++-- 只看的人不能登记
++select pg_temp.as_user('hqwh@example.com');
++select pg_temp.expect_error($q$select public.bi_customer_warranty_register('0121113333')$q$, '编辑权限');
++do $$ begin assert jsonb_typeof(public.bi_customer_followups(null)) = 'array', 'viewer reads followups'; end $$;
++reset role;
++-- 扫码登记（BI 的共用写入规则）：送保修期间第一次登记就记下来，已登记过的不改
++insert into bi.customer_signup (member_id, name, consent, store) values ('0121114444', '扫码新客', true, 'HQ'), ('0121112222', '已登记过', true, 'HQ');
++do $$ declare p bi.customer_profile; begin
++  perform bi.customer_signup_apply((select id from bi.customer_signup where member_id = '0121114444'), '顾客自己扫码登记（HQ）');
++  select * into p from bi.customer_profile where member_id = '60121114444';
++  assert p.warranty_months = 6 and p.warranty_by = '顾客自己扫码登记（HQ）' and p.warranty_at is not null and p.consent = 'yes'
++     and p.warranty_from = current_setting('t.today')::date - 30, 'qr signup warranty';
++  perform bi.customer_signup_apply((select id from bi.customer_signup where member_id = '0121112222'), '顾客自己扫码登记（HQ）');
++  select * into p from bi.customer_profile where member_id = '60121112222';
++  assert p.warranty_months = 12 and p.warranty_by = 'crm2@example.com' and p.warranty_from = current_setting('t.today')::date - 90,
++    'existing warranty kept';
++end $$;
++-- 顾客扫码登记（9 参数版，anon）：完成页照资料库实际记下的月数
++set role anon;
++do $$ begin
++  assert public.bi_customer_signup('012-111 6666', '扫码', null, null, null, true, 'HQ', null, null) ->> 'warranty_months' = '6', 'new: 6';
++  assert public.bi_customer_signup('0121112222', '再扫一次', null, null, null, true, 'HQ', null, null) ->> 'warranty_months' = '12',
++    'already registered: first months';
++end $$;
++reset role;
++-- 合并重复顾客：电邮、保修一起搬过来；两边都有保修就留比较早的
++insert into bi.customer_profile (member_id, name, email, warranty_at, warranty_months, warranty_by, warranty_from) values
++  ('60121117777', '旧号码', 'old@example.com', now() - interval '20 days', 6, 'crm2@example.com', current_date - 50),
++  ('60121118888', '新号码', null, null, null, null, null),
++  ('60121119991', '甲', null, now() - interval '5 days', 12, 'x@example.com', current_date - 95),
++  ('60121119992', '乙', null, now() - interval '30 days', 3, 'y@example.com', current_date - 60);
++set role authenticated;
++select pg_temp.as_user('boss@example.com');
++select public.bi_customer_merge('0121118888', '0121117777') is not null, public.bi_customer_merge('0121119991', '0121119992') is not null;
++select pg_temp.as_user('crm2@example.com');
++select pg_temp.expect_error($q$select public.bi_customer_merge('0121118888', '0121119991')$q$, '审批');
++reset role;
++do $$ declare p bi.customer_profile; begin
++  select * into p from bi.customer_profile where member_id = '60121118888';
++  assert p.email = 'old@example.com' and p.warranty_months = 6 and p.warranty_by = 'crm2@example.com'
++     and p.warranty_from = current_date - 50, 'merge carries warranty + email';
++  assert not exists (select 1 from bi.customer_profile where member_id = '60121117777'), 'dropped row gone';
++  select * into p from bi.customer_profile where member_id = '60121119991';
++  assert p.warranty_months = 3 and p.warranty_by = 'y@example.com' and p.warranty_from = current_date - 60, 'earlier registration wins';
++end $$;
++-- 一位顾客：购买明细每一行带品牌（只在有 Hemos 的单标保修用）。测试资料最后回滚，不影响后面的测试
++begin;
++insert into bi.dim_item (company, item_code, description, item_group, item_type, base_uom) values
++  ('HOMEWORKSSB', 'ZZCUST-H', 'Hemos 龙头', 'SANITARY', 'HEMOS', 'UNIT'), ('HOMEWORKSSB', 'ZZCUST-V', 'Vatti 炉', 'KITCHEN', 'VATTI', 'UNIT');
++insert into bi.customer_doc (company, doc_type, doc_key, doc_no, doc_date, amount, member_id) values
++  ('HOMEWORKSSB', 'CS', 990001, 'CS-990001', current_date - 3, 300, '60121112222');
++insert into bi.fact_sales (company, doc_type, doc_key, dtl_key, doc_no, doc_date, item_code, item_description, qty, uom, sub_total) values
++  ('HOMEWORKSSB', 'CS', 990001, 1, 'CS-990001', current_date - 3, 'ZZCUST-H', 'Hemos 龙头', 1, 'UNIT', 200),
++  ('HOMEWORKSSB', 'CS', 990001, 2, 'CS-990001', current_date - 3, 'ZZCUST-V', 'Vatti 炉', 1, 'UNIT', 100);
++set role authenticated;
++select pg_temp.as_user('crm2@example.com');
++do $$ declare c jsonb := public.bi_customer('0121112222'); begin
++  assert c -> 'docs' -> 0 -> 'items' = '[{"qty": 1, "uom": "UNIT", "brand": "HEMOS", "item_code": "ZZCUST-H", "sub_total": 200, "description": "Hemos 龙头"},
++                                         {"qty": 1, "uom": "UNIT", "brand": "VATTI", "item_code": "ZZCUST-V", "sub_total": 100, "description": "Vatti 炉"}]'::jsonb,
++    'items with brand: ' || c::text;
++  assert (c -> 'profile' ->> 'warranty_months')::int = 12, 'profile has warranty';
++end $$;
++reset role;
++rollback;
++update bi.customer_settings set warranty_months = 0 where id = 1;
++do $$ declare p bi.customer_profile; begin
++  insert into bi.customer_signup (member_id, name, consent, store) values ('0121115555', '不送的时候', true, 'HQ');
++  perform bi.customer_signup_apply((select id from bi.customer_signup where member_id = '0121115555'), '顾客自己扫码登记（HQ）');
++  select * into p from bi.customer_profile where member_id = '60121115555';
++  assert p.warranty_at is null and p.warranty_months is null and p.warranty_from is null, 'no warranty when off';
++end $$;
++set role anon;
++do $$ begin
++  assert public.bi_customer_signup('012-111 7676', '不送', null, null, null, true, 'JB', null, null) ->> 'warranty_months' is null, 'off: no months';
++end $$;
++reset role;
++do $$ begin
++  assert not has_function_privilege('anon', 'public.bi_customer_followups(text)', 'execute'), 'anon no followups';
++  assert has_function_privilege('anon', 'public.bi_customer_signup_offer()', 'execute'), 'anon offer';
++  assert not has_function_privilege('anon', 'public.bi_customer_warranty_register(text)', 'execute'), 'anon no register';
++  assert not has_function_privilege('anon', 'public.bi_customer_merge(text, text)', 'execute'), 'anon no merge';
++  assert not has_function_privilege('anon', 'public.bi_customer(text)', 'execute'), 'anon no customer';
++  assert not has_function_privilege('authenticated', 'bi.customer_signup_apply(bigint, text)', 'execute'), 'apply is internal';
++end $$;
++
++select 'cust2_test ok';
+diff --git a/portal/supabase/tests/run.sh b/portal/supabase/tests/run.sh
+index 30b658c..4c73ddc 100644
+--- a/portal/supabase/tests/run.sh
++++ b/portal/supabase/tests/run.sh
+@@ -21,6 +21,7 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/po_do_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/receive_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/sop_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/cust_test.sql"
++psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/cust2_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/rpl_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/bin_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/map_test.sql"
+diff --git a/portal/supabase/tests/stub_supabase.sql b/portal/supabase/tests/stub_supabase.sql
+index f2a6fc8..e58ab93 100644
+--- a/portal/supabase/tests/stub_supabase.sql
++++ b/portal/supabase/tests/stub_supabase.sql
+@@ -159,13 +159,49 @@ begin
+ end;
+ $$;
+ revoke all on function bi.customer_require(text[]) from public;
+-create function public.bi_customers() returns table (member_id text, name text)
++-- 顾客清单：正式环境从 bi.customer_doc 现算；这里顾客的购买 / 跟进栏位放在 bi.stub_customer_row，名字另外看 customer_profile
++-- （顾客资料第二版 2026-10-15：跟进提醒改在资料库算，要用到完整栏位）
++create table bi.stub_customer_row (member_id text primary key, name text, stores text, first_date date, last_date date,
++  doc_count int default 0, birth_month smallint, birth_day smallint, consent text, next_contact date, last_contact_at timestamptz,
++  profile_created_at timestamptz, reno_stage text, reno_stage_at timestamptz, quote_due date);
++create function public.bi_customers() returns table (member_id text, name text, stores text, first_date date, last_date date,
++  doc_count integer, doc_count_12m integer, spent numeric, spent_12m numeric, categories text[], birth_month smallint,
++  birth_day smallint, area text, address text, customer_type text, note text, consent text, next_contact date,
++  last_contact_at timestamptz, profile_created_at timestamptz, profile_updated_at timestamptz, reno_stage text,
++  reno_stage_at timestamptz, quote_open integer, quote_amount numeric, quote_due date)
+ language plpgsql stable security definer set search_path = '' as $$
+ begin
+   perform bi.customer_require(array['owner', 'manager', 'sales']);
+-  return query select p.member_id, p.name from bi.customer_profile p order by 1;
++  return query
++  select coalesce(r.member_id, p.member_id), coalesce(p.name, r.name), r.stores, r.first_date, r.last_date, coalesce(r.doc_count, 0),
++         0, 0::numeric, 0::numeric, '{}'::text[], r.birth_month, r.birth_day, null::text, p.address, null::text, p.note, r.consent,
++         r.next_contact, r.last_contact_at, r.profile_created_at, p.updated_at, r.reno_stage, r.reno_stage_at, 0, 0::numeric, r.quote_due
++    from bi.stub_customer_row r full join bi.customer_profile p on p.member_id = r.member_id
++   order by 1;
+ end;
+ $$;
++-- 修改纪录、购买单据、扫码登记（正式环境由 BI 的 migration customer_* 建立；这里只取用到的栏位）
++create table bi.customer_profile_log (id bigint generated always as identity primary key, member_id text,
++  at timestamptz default now(), by text, action text, changes jsonb default '{}'::jsonb);
++create table bi.customer_doc (company text, doc_type text, doc_key bigint, doc_no text, doc_date date, debtor_code text,
++  debtor_name text, customer_name text, sales_agent text, amount numeric, member_id text);
++create table bi.customer_signup (id bigint generated always as identity primary key, member_id text, name text,
++  birth_month smallint, birth_day smallint, area text, consent boolean, store text, created_at timestamptz default now(),
++  status text default 'pending', handled_at timestamptz, handled_by text, address text, email text);
++alter table bi.customer_profile add column birth_month smallint, add column birth_day smallint, add column area text,
++  add column email text, add column consent text, add column consent_at timestamptz, add column consent_by text,
++  add column created_at timestamptz default now();
++-- 第二版也重建了合并顾客 / 一位顾客 / 扫码登记（只多保修、电邮、品牌），用到的 BI 表与栏位
++alter table bi.customer_profile add column customer_type text, add column next_contact date, add column last_contact_at timestamptz,
++  add column reno_stage text, add column reno_stage_at timestamptz;
++create table bi.customer_alias (alias_id text primary key, member_id text, created_by text, created_at timestamptz default now());
++create table bi.customer_campaign_member (campaign_id bigint, member_id text, primary key (campaign_id, member_id));
++create table bi.customer_quote (company text, doc_no text, doc_date date, debtor_name text, sales_agent text, amount numeric,
++  transferred boolean default false, items jsonb, member_id text);
++alter table bi.customer_settings add column vip_min_12m numeric default 10000, add column regular_min_docs int default 2,
++  add column lapsed_days int default 365, add column lead_follow_days int default 7, add column birthday_days int default 7,
++  add column quote_follow_days int default 7, add column quote_max_days int default 60, add column stage_follow_days int default 30,
++  add column stage_reco jsonb default '{}'::jsonb;
+ create function public.bi_customer_save(p_member text, p_name text) returns jsonb
+ language plpgsql volatile security definer set search_path = '' as $$
+ declare
+-- 
+2.43.0
+

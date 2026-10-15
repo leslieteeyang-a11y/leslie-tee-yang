@@ -64,9 +64,9 @@ const TXT: Record<string, Record<L, string>> = {
     ms: '🛡️ Daftar untuk lanjutan waranti produk Hemos selama {m} bulan',
   },
   offerSub: {
-    zh: '登记前 {d} 天内与之后在 HomeWorks 买的都适用。',
-    en: 'Covers purchases at HomeWorks from {d} days before you register, and after.',
-    ms: 'Meliputi pembelian di HomeWorks dari {d} hari sebelum anda mendaftar, dan selepasnya.',
+    zh: '登记前 {d} 天内与之后在 HomeWorks 买的 Hemos 产品都适用。',
+    en: 'Covers Hemos products bought at HomeWorks from {d} days before you register, and after.',
+    ms: 'Meliputi produk Hemos yang dibeli di HomeWorks dari {d} hari sebelum anda mendaftar, dan selepasnya.',
   },
   offerDone: {
     zh: '已为你登记延长保修 {m} 个月。',
@@ -95,6 +95,8 @@ function Join() {
     supabase.rpc('bi_customer_signup_offer').then((r) => { if (!r.error && r.data) setOffer(r.data as { warranty_months: number; warranty_back_days: number }); });
   }, []);
   const months = Number(offer?.warranty_months ?? 0);
+  // 完成页照资料库实际记下的月数（以前登记过的以第一次为准；送出前刚关掉的就不显示）
+  const [doneMonths, setDoneMonths] = useState(0);
 
   // 登记成功后倒数,时间到就带到品牌网站
   useEffect(() => {
@@ -117,6 +119,7 @@ function Join() {
     });
     setBusy(false);
     if (r.error) { setErr(t('fail') + r.error.message); return; }
+    setDoneMonths(Number((r.data as { warranty_months?: number | null } | null)?.warranty_months ?? 0));
     setDone(true);
   }
 
@@ -138,7 +141,7 @@ function Join() {
             <div className="big">✓</div>
             <h2>{t('done')}</h2>
             <p>{t('doneSub')}</p>
-            {months > 0 && <p className="jn-offer-done">{t('offerDone').replace('{m}', String(months))}</p>}
+            {doneMonths > 0 && <p className="jn-offer-done">{t('offerDone').replace('{m}', String(doneMonths))}</p>}
             <a className="jn-go jn-link" href={SITE}>{t('goSite')}</a>
             <p className="jn-small">{t('goingSite').replace('{s}', String(left))}</p>
           </div>
