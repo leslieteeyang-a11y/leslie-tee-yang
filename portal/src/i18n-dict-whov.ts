@@ -1,0 +1,36 @@
+// 仓库「总览」分页的英文（2026-10-15）
+type T = (s: string) => string;
+
+export const DICT_WHOV: Record<string, string> = {
+  "总览": "Overview",
+  "库存是负数（商品 × 仓位）": "Negative stock (item × location)",
+  "厂家到货待开进货单": "Supplier deliveries waiting for GRN",
+  "三天内到 / 待点货的厂家货": "Supplier goods due within 3 days / to count",
+  "货架比系统多（要去数）": "Shelves hold more than the system (recount)",
+  "还没上架的商品": "Items not yet shelved",
+  "货架": "Shelves",
+  "已上架商品": "Items shelved",
+  "对不上": "Mismatch",
+  "未上架": "Not shelved",
+  "各仓位库存（AutoCount）": "Stock by location (AutoCount)",
+  "几种货": "Items",
+  "件数": "Qty",
+  "负数": "Negative",
+  "成本值": "Cost value",
+  "最近动态": "Recent activity",
+  "还没有纪录。": "No records yet.",
+  "上架": "Put away",
+  "从货架拿下": "Taken off shelf",
+  "移货架": "Shelf move",
+  "主管改数": "Set by supervisor",
+  "Excel 带入": "Excel import",
+  "拣货": "Picking",
+  "冲回": "Reversed",
+};
+
+export const PATTERNS_WHOV: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
+  [/^AutoCount 库存最近同步 (.+)（每天 09 \/ 12 \/ 15 \/ 18 点）$/, (m) => `AutoCount stock last synced ${m[1]} (daily at 09 / 12 / 15 / 18)`],
+  [/^今天盘点（(\d+) 人）$/, (m) => `Counted today (${m[1]} ${m[1] === "1" ? "person" : "people"})`],
+  [/^(上架|从货架拿下|移货架|主管改数|Excel 带入|盘点|拣货|冲回) ([+-]?[\d.]+)$/, (m, t) => `${t(m[1])} ${m[2]}`],
+  [/^盘点(相符|有差异|已重盘|已调整|不调整)$/, (m, t) => `Count: ${t(m[1])}`],
+];
