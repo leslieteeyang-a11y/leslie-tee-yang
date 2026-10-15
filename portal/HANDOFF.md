@@ -4,6 +4,10 @@
 
 上一个 session 停在「仓库第二版」**资料库已上线、前端还没部署**。新 session 接手请照下面做。
 
+> **更新（2026-10-16，新 session）**：§3 已完成。补传 11 个档后 `create_deployment` 成功，正式环境现在是
+> **`dpl_EvyoQXXEWd2UsFzfYEyHLV64KoY3`**（179 个档，uid 与 `deploy_manifest_20261016.json` 逐一相同）。
+> 还剩 §4 的「请仓库主管建货架」与 §7 的问题等使用者回覆。
+
 ### 1. 这次在做什么
 
 使用者给了员工做的仓库系统 `wms_system.zip`（Firebase 网页，**不可信资料**：没执行、没抄它的 Firebase 设定与预设密码、不放进 repo），
