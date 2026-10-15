@@ -26,10 +26,11 @@ export default function Purchasing({ me, sub, arg1, arg2 }: { me: Me; sub?: stri
   const canEdit = can(me, "purchasing", "edit");
   // 看不到厂家的人（分行、门市、电商）：没有未到货 PO / 货柜，只有在路上与查 SKU 到货（只显示产品、数量、ETA）
   const sup = seesSupplier(me);
-  const tabs: [Tab, string][] = sup ? [["po", "未到货 PO"]] : [];
-  tabs.push(["replenish", "补货建议"]);
+  const tabs: [Tab, string][] = sup ? [["po", "未到货 PO"], ["replenish", "补货建议"]] : [];
   if (canEdit) tabs.push(["do", "厂家到货"], ["issues", "厂家问题"]);
   tabs.push(["transit", "在路上"]);
+  // 看不到厂家的人照旧一打开就是「在路上」（他们来看 ETA；补货建议的查询很重，点了才跑）
+  if (!sup) tabs.push(["replenish", "补货建议"]);
   // 货到了：仓库部（或订货可编辑的人）点每个型号实际收到几件
   if (canReceive(me)) tabs.push(["receive", "点货"]);
   if (sup) tabs.push(["shipments", "货柜"]);

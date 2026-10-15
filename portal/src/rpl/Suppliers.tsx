@@ -52,12 +52,12 @@ export default function Suppliers({ company }: { company: string }) {
         <span className="muted small">{`${shown.length} 家`}</span>
       </div>
       <ErrorBox error={error} />
-      <div className="table-wrap">
+      <div className="table-wrap rpl-sup">
         <table>
           <thead><tr>
             <th>供应商</th><th>中国</th><th className="num hide-sm">24 月 PO</th><th className="hide-sm">最近 PO</th><th className="num hide-sm">历史交期</th>
             <th className="num hide-sm">短装率</th><th className="num">交期（天）</th><th className="num">安全（天）</th><th className="num">覆盖（天）</th>
-            <th className="num">订货周期（天）</th><th>备注</th>{canEdit && <th></th>}
+            <th className="num">订货周期（天）</th><th>备注</th>{canEdit && <th className="rpl-sticky"></th>}
           </tr></thead>
           <tbody>{shown.map((r) => {
             const e = edit[r.creditor_code] ?? {};
@@ -69,7 +69,7 @@ export default function Suppliers({ company }: { company: string }) {
                   ? <input type="checkbox" checked={e.china ?? r.is_china} onChange={(ev) => set(r.creditor_code, "china", ev.target.checked)} />
                   : (r.is_china ? "🇨🇳" : <span className="muted">—</span>)}</td>
                 <td className="num hide-sm">{r.po_24m ?? 0}</td>
-                <td className="muted hide-sm">{day(r.last_po)}</td>
+                <td className="muted hide-sm nowrap">{day(r.last_po)}</td>
                 <td className="num muted hide-sm">{r.hist_lead_days != null ? `${r.hist_lead_days} 天（${r.n_rcv ?? 0} 单）` : "—"}</td>
                 <td className={"num hide-sm" + (Number(r.short_pct) > 5 ? " rpl-neg" : " muted")} title="订了没到齐的比例（60 天前的旧单）">{r.short_pct != null ? `${r.short_pct}%` : "—"}</td>
                 {canEdit ? (
@@ -78,8 +78,8 @@ export default function Suppliers({ company }: { company: string }) {
                     <td className="num"><input type="number" className="rpl-qty" placeholder={String(r.safety_days)} value={e.safety ?? (r.safety_override ?? "")} onChange={(ev) => set(r.creditor_code, "safety", ev.target.value)} /></td>
                     <td className="num"><input type="number" className="rpl-qty" placeholder={String(r.cover_days)} value={e.cover ?? (r.cover_override ?? "")} onChange={(ev) => set(r.creditor_code, "cover", ev.target.value)} /></td>
                     <td className="num"><input type="number" className="rpl-qty" placeholder="不设" title="每隔几天下一次单；设了以后到期会在补货建议提醒" value={e.cycle ?? (r.order_cycle_days ?? "")} onChange={(ev) => set(r.creditor_code, "cycle", ev.target.value)} /></td>
-                    <td><input value={e.note ?? (r.note ?? "")} maxLength={500} onChange={(ev) => set(r.creditor_code, "note", ev.target.value)} /></td>
-                    <td>{dirty && <button className="small" disabled={saving === r.creditor_code} onClick={() => save(r)}>储存</button>}</td>
+                    <td className="rpl-sup-note"><input value={e.note ?? (r.note ?? "")} maxLength={500} onChange={(ev) => set(r.creditor_code, "note", ev.target.value)} /></td>
+                    <td className="rpl-sticky">{dirty && <button className="small" disabled={saving === r.creditor_code} onClick={() => save(r)}>储存</button>}</td>
                   </>
                 ) : (
                   <>

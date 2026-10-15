@@ -43,6 +43,7 @@ export interface Suppliers { company: string; can_edit: boolean; suppliers: Supp
 export interface StockRow {
   item_code: string; description: string; item_group: string | null; uom: string | null; location: string; qty: number;
   /** 仓库「可审批」才有 */ total_cost: number | null; price2: number | null; price3: number | null; price4: number | null;
+  /** 这个商品所有仓位的合计（20261016c 起） */ item_total?: number | null;
 }
 export interface StockPage { company: string; show_cost: boolean; page: number; page_size: number; total: number; neg_total: number; synced_at: string | null; rows: StockRow[] }
 export interface SlowRow {

@@ -24,7 +24,8 @@ export function StockTab({ company }: { company: string }) {
   if (data) {
     const m = new Map<string, StockRow[]>();
     for (const r of data.rows) { const l = m.get(r.item_code) ?? []; l.push(r); m.set(r.item_code, l); }
-    for (const locs of m.values()) grouped.push({ locs, total: locs.reduce((s, r) => s + Number(r.qty), 0) });
+    // 商品合计 = 资料库算的全部仓位合计（不受负库存筛选、分页影响）；旧版资料库没有 item_total 时退回本页加总
+    for (const locs of m.values()) grouped.push({ locs, total: locs[0].item_total != null ? Number(locs[0].item_total) : locs.reduce((s, r) => s + Number(r.qty), 0) });
   }
   return (
     <>
@@ -67,8 +68,7 @@ export function StockTab({ company }: { company: string }) {
           <button className="small ghost" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>下一页</button>
         </div>
       )}
-      <p className="rpl-foot">现存量按 AutoCount 库存流水汇总，随每日同步更新{data?.synced_at ? `（最近同步 ${data.synced_at.slice(0, 16).replace("T", " ")}）` : ""}；红色负数 = 负库存，请到「查货」盘点那个仓位，并检查调仓有没有输入。
-        {data?.show_cost && "成本值为流水成本净额估算。"}</p>
+      <p className="rpl-foot">{`现存量按 AutoCount 库存流水汇总，随每日同步更新${data?.synced_at ? `（最近同步 ${data.synced_at.slice(0, 16).replace("T", " ")}）` : ""}；红色负数 = 负库存，请到「查货」盘点那个仓位，并检查调仓有没有输入。${data?.show_cost ? "成本值为流水成本净额估算。" : ""}`}</p>
     </>
   );
 }

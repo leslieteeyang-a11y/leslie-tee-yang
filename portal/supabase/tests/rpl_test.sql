@@ -160,6 +160,8 @@ do $$ declare r jsonb := public.ops_wh_stock('{}'); n jsonb; begin
   assert (select (x->>'total_cost')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003' and x->>'location' = 'HQ') = 300, 'cost visible';
   n := public.ops_wh_stock('{"neg_only":true}');
   assert (n->>'total')::int = (r->>'neg_total')::int and (n->>'total')::int = 2, 'negatives: ' || n::text;
+  -- 商品合计 = 全部仓位（ST001：HQ 5 + SRGADING 3 + PRE (JB) −3 = 5），不是只算负库存那几行
+  assert (select (x->>'item_total')::numeric from jsonb_array_elements(n->'rows') x where x->>'item_code' = 'ST001') = 5, 'item_total: ' || n::text;
   n := public.ops_wh_stock('{"q":"basin"}');
   -- total 是「商品×仓库」行数（ST003 在 HQ 与 DEFECTS 各一行），与 BI 原页口径相同
   assert (n->>'total')::int = 2 and (select bool_and(x->>'item_code' = 'ST003') from jsonb_array_elements(n->'rows') x), 'search by name: ' || n::text;
@@ -190,5 +192,16 @@ select public.ops_staff_save('{"email":"jbwh@example.com","name":"JB 仓库","de
 select pg_temp.as_user('jbwh@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_stock('{"company":"HOMEWORKSSB"}')$q$, '分店');
 select pg_temp.expect_error($q$select public.ops_rpl_rows('{"company":"HOMEWORKSSB"}')$q$, '分店');
+-- 采购的留言只给看得到厂家的人（留言常写厂家名、PO 号）
+select pg_temp.as_user('buyer2@example.com');
+select public.ops_rpl_action('{"item_code":"ST003","action":"note","note":"PO 已发给 MAIDEN，等 PI"}');
+do $$ declare r jsonb := public.ops_rpl_rows('{"min_q":30}'); begin
+  assert (select x->>'action_note' from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003') = 'PO 已发给 MAIDEN，等 PI', 'buyer sees note';
+end $$;
+select pg_temp.as_user('shop@example.com');
+do $$ declare r jsonb := public.ops_rpl_rows('{"min_q":30}'); begin
+  assert (select x->'action_note' = 'null'::jsonb and x->'action_by' = 'null'::jsonb and x->'item_note' = 'null'::jsonb
+          from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003'), 'notes hidden from shop: ' || r::text;
+end $$;
 reset role;
 select 'rpl_test ok' as result;

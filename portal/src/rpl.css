@@ -1,8 +1,9 @@
 /* 补货建议 / 供应商交期 / 库存总表 / 滞销品（从 BI 搬进来，2026-10-16） */
 .rpl-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-.rpl-filters select, .rpl-filters input[type="search"], .rpl-filters input[type="text"] { width: auto; min-width: 0; }
+.rpl-filters select, .rpl-filters input[type="search"], .rpl-filters input[type="text"] { width: auto; min-width: 0; max-width: 100%; }
 .rpl-filters input.search { flex: 1; min-width: 160px; }
-.rpl-filters label.check { white-space: nowrap; }
+/* 全域 label 是 flex: 1 + min-width: 0，在这一列会被压到几 px、文字叠在一起 */
+.rpl-filters label { flex: 0 0 auto; white-space: nowrap; }
 .rpl-group { margin-bottom: 14px; }
 .rpl-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rpl-head h3 { margin: 0; font-size: 1.05rem; }
@@ -25,3 +26,17 @@ input.rpl-qty { width: 76px; text-align: right; }
 tr.rpl-done td { opacity: .55; }
 .rpl-foot { font-size: .8rem; color: var(--muted); margin-top: 12px; }
 .pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+/* 补货建议表：商品栏不要被挤到代号断行；操作按键上下排，整张表不超出卡片 */
+.rpl-group table th, .rpl-group table td { padding-left: 6px; padding-right: 6px; }  /* 10 栏：两边内距收窄，1280 宽不用横卷 */
+.rpl-item { min-width: 190px; }
+.rpl-group td.num > div { white-space: normal; }  /* 数字栏下面的小字（订货按 …/天、含在途、欠分行）可以换行，英文比较长 */
+.rpl-item > b { white-space: nowrap; }
+.rpl-ops { width: 1%; }
+.rpl-ops button { display: block; width: 100%; margin: 0 0 4px; white-space: nowrap; }
+/* 供应商交期：备注输入框要看得到字；储存按键钉在右边，表格横卷也看得到 */
+.rpl-sup-note { min-width: 140px; }
+.rpl-sup th, .rpl-sup td { padding-left: 6px; padding-right: 6px; }
+.rpl-sup input.rpl-qty { width: 60px; }
+.rpl-sup th, .rpl-sup td.num { white-space: normal; }  /* 英文标题（Order cycle (days)…）较长，可以换行 */
+.rpl-sticky { position: sticky; right: 0; }
+td.rpl-sticky { background: var(--card); }

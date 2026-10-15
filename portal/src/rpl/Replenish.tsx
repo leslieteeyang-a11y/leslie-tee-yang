@@ -1,24 +1,30 @@
 // 订货与 ETA · 补货建议（从 BI 的订货页搬进来，2026-10-16）。
 // 近 90 天卖 ≥ 门槛、或欠分行、或已经没货的商品，按品牌（或开单公司）分组，算还能卖几天、建议订量；可记已下单 / 暂不订、改商品设定。
 // 看不到厂家的人（分行、门市、电商、物流）：没有供应商 / 厂号 / PO 号，只能按品牌分组；看不到进货单价的人：没有上次单价与采购额。
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { BRANCH_LABEL, fmtQty, fmtRM } from "../api";
 import { Empty, ErrorBox } from "../ui";
+import { getLang, tr } from "../i18n";
 import { plusDays, rpl, RplMeta, RplRow, RplRows, SupplierRow, URGENCY_LABEL } from "../rpl-api";
 import "../rpl.css";
 
 const COMPANY_KEY = "hw-rpl-company";
 const day = (s: string | null | undefined) => (s ? s.slice(0, 10) : "—");
 const n1 = (v: number | string | null | undefined) => Number(v ?? 0).toFixed(1);
+/** alert 与下载的 CSV 不在画面上，DOM 翻译层翻不到：英文模式自己先翻 */
+const ui = (s: string) => (getLang() === "en" ? tr(s) : s);
 
 export default function Replenish({ branchAll }: { branchAll: boolean }) {
-  const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
+  // 只有分店 ALL 的人能换分店；其他人一律用自己的分店（同一台电脑别人留下的分店不能拿来用，会被资料库拒绝）
+  const [company, setCompany] = useState(() => { if (!branchAll) return ""; try { return localStorage.getItem(COMPANY_KEY) || ""; } catch { return ""; } });
   const [meta, setMeta] = useState<RplMeta | null>(null);
   const [minQ, setMinQ] = useState(30);
   const [cs, setCs] = useState("");
   const [data, setData] = useState<RplRows | null>(null);
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
+  const [reloading, setReloading] = useState(false);
+  const listKey = useRef("");
 
   // 页面设定（权限、厂号清单、该下单的供应商）：换公司或操作后重抓
   useEffect(() => {
@@ -30,15 +36,17 @@ export default function Replenish({ branchAll }: { branchAll: boolean }) {
     }).catch((e: Error) => alive && setError(e.message));
     return () => { alive = false; };
   }, [company, tick]);
-  // 清单：门槛 / 厂号 / 操作后重抓；先发后到的回应丢掉
+  // 清单：公司 / 门槛 / 厂号换了才清空重载；操作后（tick）在背景重抓，<Suggest> 留着（筛选、改过的数量、勾选都不丢）；先发后到的回应丢掉
   useEffect(() => {
     if (!company) return;
     let alive = true;
-    setData(null);
+    const k = `${company}|${minQ}|${cs}`;
+    if (listKey.current !== k) { listKey.current = k; setData(null); } else setReloading(true);
     setError("");
     rpl.rows({ company, min_q: minQ, cs_code: cs || undefined })
-      .then((d) => alive && setData(d))
-      .catch((e: Error) => alive && setError(e.message));
+      .then((d) => { if (alive) setData(d); })
+      .catch((e: Error) => { if (alive) setError(e.message); })
+      .finally(() => { if (alive) setReloading(false); });
     return () => { alive = false; };
   }, [company, minQ, cs, tick]);
 
@@ -68,9 +76,10 @@ export default function Replenish({ branchAll }: { branchAll: boolean }) {
           </select>
         )}
         {meta.synced_at && <span className="muted small">{`库存同步 ${day(meta.synced_at)} ${meta.synced_at.slice(11, 16)}`}</span>}
+        {reloading && <span className="muted small">更新中…</span>}
       </div>
       {meta.due_suppliers.length > 0 && (
-        <p className="muted small">🔔 按订货周期，这几家该下单了：{meta.due_suppliers.map((s) => `${s.name}（距上次 ${s.days_since_po ?? "?"} 天 / 周期 ${s.order_cycle_days ?? "?"} 天）`).join(" · ")}</p>
+        <p className="muted small">{`🔔 按订货周期，这几家该下单了：${meta.due_suppliers.map((s) => `${s.name}（距上次 ${s.days_since_po ?? "?"} 天 / 周期 ${s.order_cycle_days ?? "?"} 天）`).join(" · ")}`}</p>
       )}
       <ErrorBox error={error} />
       {data === null ? (!error && <p className="muted">载入中…（要几秒）</p>) : (
@@ -128,7 +137,7 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
     if (scope === "all" || owedOnly || oosOnly) return m;
     const k = q.trim().toLowerCase();
     for (const r of rows) {
-      if (!r.fill_candidate || r.action_status) continue;
+      if (!r.fill_candidate || r.action_status || r.urgency !== "ok") continue;  // 断货 / 来不及的已在上面的表
       if (supFilter && (r.supplier_code ?? "(none)") !== supFilter) continue;
       if (k && !r.item_code.toLowerCase().includes(k) && !r.description.toLowerCase().includes(k)) continue;
       const key = keyOf(r);
@@ -184,18 +193,18 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
     const head = `${groupName} 订货 ${d.getDate()}/${d.getMonth() + 1}:`;
     const lines = list.map((r, i) => `${i + 1}. ${r.description} (${r.item_code}) ×${fmtQty(qtyOf(r))}${r.base_uom ? " " + r.base_uom : ""}`);
     navigator.clipboard?.writeText([head, ...lines].join("\n")).then(
-      () => window.alert(`已复制 ${list.length} 行 WhatsApp 格式，直接贴给供应商。`),
-      () => window.alert("复制失败。"));
+      () => window.alert(ui(`已复制 ${list.length} 行 WhatsApp 格式，直接贴给供应商。`)),
+      () => window.alert(ui("复制失败。")));
   }
   function exportRows(list: RplRow[], groupName: string) {
-    const head = ["商品编码", "商品名称", "单位", "现存", "在途", "日均销量", "还能卖(天)", "建议订量", ...(prices ? ["上次单价"] : []), ...(sup ? ["供应商"] : [])];
+    const head = ["商品编码", "商品名称", "单位", "现存", "在途", "日均销量", "还能卖(天)", "建议订量", ...(prices ? ["上次单价"] : []), ...(sup ? ["供应商"] : [])].map(ui);
     const lines = list.map((r) => [r.item_code, r.description, r.base_uom ?? "", r.on_hand, r.transit_qty, r.daily_avg, r.days_left ?? "", qtyOf(r),
       ...(prices ? [r.last_price ?? ""] : []), ...(sup ? [r.supplier_name ?? ""] : [])]);
     const csv = String.fromCharCode(0xfeff) + [head, ...lines].map((a) => a.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `订货单-${groupName.replace(/[\\/:*?"<>|]/g, "_")}-${plusDays(0)}.csv`;
+    a.download = `${ui("订货单")}-${groupName.replace(/[\\/:*?"<>|]/g, "_")}-${plusDays(0)}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
@@ -226,8 +235,7 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
         <label className="check"><input type="checkbox" checked={oosOnly} onChange={(e) => setOosOnly(e.target.checked)} /> {`只看没货（${oosN}）`}</label>
       </div>
       <p className="muted small">
-        {`待处理 ${totalNeed} 项 · 当前显示 ${shown.length} 项`}{totalAmt != null && ` · 建议采购额约 ${fmtRM(totalAmt)}`}
-        {data.capped && " · 符合条件的超过 3000 项，只载入最急的 3000 项（请把门槛调高或先选厂号）"}
+        {`待处理 ${totalNeed} 项 · 当前显示 ${shown.length} 项${totalAmt != null ? ` · 建议采购额约 ${fmtRM(totalAmt)}` : ""}${data.capped ? " · 符合条件的超过 3000 项，只载入最急的 3000 项（请把门槛调高或先选厂号）" : ""}`}
       </p>
       {csSel && rows.length === 0 && (
         <p className="muted small">{`厂号 ${csSel.cs_code}：有 ${csSel.items} 个商品近 90 天有卖，但每个都不到门槛、也都还有货，所以没列出来。`}
@@ -248,9 +256,9 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
               <h3>{g.name}</h3>
               {g.css.size > 0 && <span className="tag">{[...g.css].join(" / ")}</span>}
               <span className="muted small">{g.china ? `中国厂 · 交期 ${g.rows[0].lead_days} 天` : `交期 ${g.rows[0].lead_days} 天 + 安全 ${g.rows[0].safety_days} 天`}</span>
-              {g.billers.size > 0 && <span className="muted small">开单：{[...g.billers].slice(0, 2).join("、")}{g.billers.size > 2 ? "…" : ""}</span>}
+              {g.billers.size > 0 && <span className="muted small">{`开单：${[...g.billers].slice(0, 2).join("、")}${g.billers.size > 2 ? "…" : ""}`}</span>}
               {urgent > 0 && <span className="urg late">{`${urgent} 项紧急`}</span>}
-              <span className="muted small">{`共 ${g.rows.length} 项`}{prices && ` · 约 ${fmtRM(g.rows.reduce((s, r) => s + qtyOf(r) * Number(r.last_price ?? 0), 0))}`}</span>
+              <span className="muted small">{`共 ${g.rows.length} 项${prices ? ` · 约 ${fmtRM(g.rows.reduce((s, r) => s + qtyOf(r) * Number(r.last_price ?? 0), 0))}` : ""}`}</span>
               <span className="spacer" />
               <button className="small ghost" onClick={() => whatsappRows(exportList, g.name)}>📱 WhatsApp</button>
               <button className="small ghost" onClick={() => exportRows(exportList, g.name)}>{sel.length ? `📋 导出订货单（已勾选 ${sel.length}）` : "📋 导出订货单（全部）"}</button>
@@ -269,14 +277,14 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
                           <td><input type="checkbox" checked={checked.has(r.item_code)} onChange={(e) => {
                             const s = new Set(checked); e.target.checked ? s.add(r.item_code) : s.delete(r.item_code); setChecked(s);
                           }} /></td>
-                          <td>
+                          <td className="rpl-item">
                             <b>{r.item_code}</b> <span className="muted small">{r.base_uom}</span>
                             <div className="small">{r.description}</div>
                             <div className="rpl-note">
-                              {r.item_group ?? ""}{r.by_loc ? ` · ${r.by_loc}` : ""}
-                              {Number(r.q90_branch_excl) > 0 ? ` · 分行预定 ${fmtQty(r.q90_branch_excl)} 件已剔除` : ""}
-                              {sup && r.last_po_name && r.last_po_name !== r.supplier_name ? ` · 上次 PO：${r.last_po_name}` : ""}
-                              {r.last_receipt_date ? ` · 最后进货 ${day(r.last_receipt_date)}` : ""}
+                              {[r.item_group, r.by_loc,
+                                Number(r.q90_branch_excl) > 0 ? `分行预定 ${fmtQty(r.q90_branch_excl)} 件已剔除` : "",
+                                sup && r.last_po_name && r.last_po_name !== r.supplier_name ? `上次 PO：${r.last_po_name}` : "",
+                                r.last_receipt_date ? `最后进货 ${day(r.last_receipt_date)}` : ""].filter(Boolean).join(" · ")}
                             </div>
                           </td>
                           <td className={"num" + (Number(r.on_hand) <= 0 ? " rpl-neg" : "")}>
@@ -306,7 +314,7 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
                           {prices && <td className="num hide-sm">{r.last_price != null ? fmtRM(r.last_price) : <span className="muted">—</span>}
                             {r.last_po_date && <div className="rpl-note">{day(r.last_po_date)}</div>}</td>}
                           {canEdit && (
-                            <td className="nowrap">
+                            <td className="rpl-ops">
                               {!r.action_status && (
                                 <>
                                   <button className="small" disabled={busy === r.item_code} onClick={() => act(r.item_code, "ordered", qtyOf(r), null)}>已下单</button>{" "}
@@ -329,7 +337,7 @@ function Suggest({ company, meta, data, cs, minQ, onMinQ, onChanged }: { company
                 </table>
                 {fill.length > 0 && (
                   <details className="rpl-fill">
-                    <summary>🚢 <b>凑柜建议</b>{`：还有 ${fill.length} 项 30 天内也要补`}{prices && <span className="muted">{`（约 ${fmtRM(fill.reduce((s, r) => s + qtyOf(r) * Number(r.last_price ?? 0), 0))} · 反正要订，顺这一柜省运费）`}</span>}</summary>
+                    <summary>🚢 <b>{`凑柜建议：还有 ${fill.length} 项 30 天内也要补`}</b>{prices && <span className="muted">{`（约 ${fmtRM(fill.reduce((s, r) => s + qtyOf(r) * Number(r.last_price ?? 0), 0))} · 反正要订，顺这一柜省运费）`}</span>}</summary>
                     <table>
                       <thead><tr><th></th><th>商品</th><th className="num">现存</th><th className="num">日均</th><th className="num">还能卖</th><th className="num">建议订量</th>{prices && <th className="num">上次单价</th>}</tr></thead>
                       <tbody>
@@ -385,8 +393,7 @@ function ItemSetting({ company, r, sup, onSaved }: { company: string; r: RplRow;
   return (
     <div className="rpl-setting">
       <div className="rpl-note" style={{ width: "100%" }}>
-        {`${r.item_code} · 近 90 天售 ${fmtQty(r.q90)}（近 30 天 ${fmtQty(r.q30)}）· 最后销售 ${day(r.last_sale)} · 24 个月采购 ${r.po_24m ?? 0} 次`}
-        {sup && r.transit_pos ? ` · 在途 PO：${r.transit_pos}` : ""}
+        {`${r.item_code} · 近 90 天售 ${fmtQty(r.q90)}（近 30 天 ${fmtQty(r.q30)}）· 最后销售 ${day(r.last_sale)} · 24 个月采购 ${r.po_24m ?? 0} 次${sup && r.transit_pos ? ` · 在途 PO：${r.transit_pos}` : ""}`}
       </div>
       {sup && (
         <label>供应商

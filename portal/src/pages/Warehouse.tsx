@@ -61,8 +61,8 @@ export default function Warehouse({ me, sub }: { me: Me; sub?: string }) {
       {tab === "grn" && <GrnTab company={co} multi={meta.companies.length > 1} canCancel={canCancelReceive(me)} />}
       {tab === "review" && <ReviewTab company={co} meta={meta} onMeta={setMeta} />}
       {tab === "aged" && <AgedTab company={co} />}
-      {tab === "stock" && <StockTab company={co} />}
-      {tab === "slow" && <SlowTab company={co} />}
+      {tab === "stock" && <StockTab key={co} company={co} />}
+      {tab === "slow" && <SlowTab key={co} company={co} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
     </>
   );
