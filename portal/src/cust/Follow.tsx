@@ -1,4 +1,5 @@
-// 顾客资料 · 跟进：跟进提醒（生日、约好的联络日、潜在客、报价没成交、装修进度）、柜台快速登记、最近扫码登记的顾客
+// 顾客资料 · 跟进：跟进提醒（约好的联络日、报价没成交、生日、新客回访、装修进度、潜在客；规则在资料库 bi_customer_followups）、
+// 柜台快速登记、最近扫码登记的顾客
 import { useEffect, useState } from "react";
 import {
   cleanName, errText, fmtMember, fmtNum, fmtTime, FollowUp, num, Reason, rpc, Settings, Signup, STAGE_LABEL, STAGES, stageNext,
@@ -6,8 +7,10 @@ import {
 } from "../cust-api";
 import { ConsentTag, MemberLink, WaButtons } from "./Common";
 
-export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTouched }: {
-  items: FollowUp[]; settings: Settings; templates: Template[]; canEdit: boolean; onOpen: (id: string) => void; onTouched: () => void;
+/** items = null：载入中。store：HQ / JB / "" = 两间门市 */
+export function FollowUpList({ items, error, store, onStore, settings, templates, canEdit, onOpen, onTouched, onRetry }: {
+  items: FollowUp[] | null; error: string; store: string; onStore: (s: string) => void; settings: Settings; templates: Template[];
+  canEdit: boolean; onOpen: (id: string) => void; onTouched: () => void; onRetry: () => void;
 }) {
   const [shown, setShown] = useState(20);
   const [busy, setBusy] = useState<string | null>(null);
@@ -24,18 +27,32 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
     if (r.kind === "birthday") return r.days === 0 ? t("今天生日 🎂") : t("{d} 天后生日 🎂", { d: r.days });
     if (r.kind === "quote") return t("报价 {d} 天还没成交", { d: r.days });
     if (r.kind === "stage") return t("装修进度 {d} 天没更新", { d: r.days });
+    if (r.kind === "new") return t("新客第 {d} 天,还没回来买第二次", { d: r.days });
     return t("潜在客,建档 {d} 天还没联络", { d: r.days });
   };
   return (
     <section className="card">
-      <h2>{t("跟进提醒({n} 位)", { n: fmtNum(items.length) })}</h2>
+      <h2>{items === null ? t("跟进提醒") : t("跟进提醒({n} 位)", { n: fmtNum(items.length) })}</h2>
+      <div className="toolbar">
+        <div className="tabs cu-wrap">
+          {[["", t("两间门市")], ["HQ", "HQ"], ["JB", "JB"]].map(([k, v]) => (
+            <button key={k} className={store === k ? "on" : ""} onClick={() => { onStore(k); setShown(20); }}>{v}</button>
+          ))}
+        </div>
+      </div>
       <p className="muted small">
         {t("{b} 天内生日、潜在客建档满 {l} 天没联络、约好的下次联络日到了、报价开出 {q} 天还没成交、装修进度 {s} 天没更新。按 WhatsApp 或「已联络」后就会从这里消失。", {
           b: settings.birthday_days, l: settings.lead_follow_days, q: settings.quote_follow_days, s: settings.stage_follow_days })}
+        {" "}{t("新客买完第 7 天、第 21 天各提醒一次(回头的顾客有一半在 22 天内买第二次,过了 90 天就很难回来)。")}
       </p>
-      {err && <div className="error">{err}</div>}
-      {items.length === 0 && <p className="muted">{t("目前没有要跟进的顾客 👍")}</p>}
-      {items.length > 0 && (
+      {(err || error) && (
+        <div className="error">{err || error}
+          {!err && <> <button className="ghost" onClick={onRetry}>{t("重试")}</button></>}
+        </div>
+      )}
+      {items === null && !error && <p className="muted">{t("载入中…")}</p>}
+      {items !== null && items.length === 0 && <p className="muted">{t("目前没有要跟进的顾客 👍")}</p>}
+      {items !== null && items.length > 0 && (
         <ul className="cu-fu">
           {items.slice(0, shown).map(({ c, reasons }) => (
             <li key={c.member_id}>
@@ -47,6 +64,9 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
                 {reasons.map((r) => <div key={r.kind}>{label(r)}</div>)}
                 {reasons.some((r) => r.kind === "quote") && (
                   <div className="muted small">{t("未成交报价 RM {a}", { a: fmtNum(c.quote_amount, 2) })}</div>
+                )}
+                {reasons.some((r) => r.kind === "new") && c.categories.length > 0 && (
+                  <div className="muted small">{t("买了:{c}", { c: c.categories.join(" / ") })}</div>
                 )}
                 {c.reno_stage && (
                   <div className="muted small">
@@ -67,7 +87,7 @@ export function FollowUpList({ items, settings, templates, canEdit, onOpen, onTo
           ))}
         </ul>
       )}
-      {items.length > shown && (
+      {items !== null && items.length > shown && (
         <div className="actions left"><button className="ghost" onClick={() => setShown(shown + 50)}>{t("显示更多")}</button></div>
       )}
     </section>

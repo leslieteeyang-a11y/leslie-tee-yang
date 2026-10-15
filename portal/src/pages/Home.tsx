@@ -4,6 +4,7 @@ import { missingText } from "./MyProfile";
 import { hhmm } from "../att-api";
 import { ErrorBox } from "../ui";
 import { DeliveryHomeCard } from "../dlv/HomeCard";
+import { CustomersHomeCard } from "../cust/HomeCard";
 import { whHome, WhHome } from "../wh-overview-api";
 import "../extra.css";
 import "../att.css";
@@ -131,6 +132,7 @@ export default function HomePage({ me }: { me: Me }) {
       <InstallHint />
       {home?.att && <AttCard a={home.att} />}
       <DeliveryHomeCard me={me} />
+      <CustomersHomeCard me={me} />
       {home && <Todo h={home} />}
       <a className="card att-home" href="#/mypay"><span><b>📄 我的工资单</b><br /><span className="muted">HR 发布后在这里看</span></span><span className="go">看 →</span></a>
       <a className={"card att-home" + (profileMissing.length ? " warn" : "")} href="#/profile">

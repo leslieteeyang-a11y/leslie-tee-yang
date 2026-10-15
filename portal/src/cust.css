@@ -82,3 +82,4 @@ a.cu-link { text-decoration: underline; text-decoration-color: var(--line-strong
   .toolbar input.cu-short:not([type]) { flex: 1 1 140px; max-width: none; }
   .toolbar .cu-new input:not([type]) { flex: 1 1 auto; width: auto; }
 }
+.cu-wrapbtn { white-space: normal; max-width: 100%; text-align: left; }

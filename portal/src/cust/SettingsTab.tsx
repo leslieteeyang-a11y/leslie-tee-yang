@@ -22,6 +22,16 @@ export function SettingsTab({ isOwner, loaded, settings, templates, onChanged }:
   const [busy, setBusy] = useState(false);
   const dirty = useRef(false);   // 门槛改了还没存：存范本后重新载入设定时不盖掉
   useEffect(() => { if (!dirty.current) setS(toForm(settings)); }, [settings]);
+  // 登记送延长保修（月数 0 = 不送）：跟上面的门槛分开存
+  const [w, setW] = useState({ months: String(settings.warranty_months ?? 0), back: String(settings.warranty_back_days ?? 90) });
+  const wDirty = useRef(false);
+  useEffect(() => {
+    if (!wDirty.current) setW({ months: String(settings.warranty_months ?? 0), back: String(settings.warranty_back_days ?? 90) });
+  }, [settings]);
+  const saveWarranty = () => run(async () => {
+    await rpc("bi_customer_set_warranty", { p_months: num(w.months), p_back_days: num(w.back) });
+    wDirty.current = false;
+  });
 
   async function run(f: () => Promise<unknown>): Promise<boolean> {
     setBusy(true); setMsg(null);
@@ -125,6 +135,23 @@ export function SettingsTab({ isOwner, loaded, settings, templates, onChanged }:
               </div>
             </div>
           )}
+        </section>
+
+        <section className="card cu-form">
+          <h2>{t("登记送延长保修")}</h2>
+          <div className="muted small">
+            {t("填 0 = 不送。填了月数,顾客扫码登记页会写「登记即享 Hemos 产品保修延长 N 个月」;顾客扫码(或店员在顾客页按「登记延长保修」)就记下来,登记前 N 天内与之后买的 Hemos 产品都算。已登记的顾客以登记当时的月数与起算日为准,之后改设定不影响。")}
+          </div>
+          <fieldset className="plain" disabled={!isOwner || busy || !loaded}>
+            <label>{t("延长几个月(0 = 不送)")}
+              <input value={w.months} inputMode="numeric" onChange={(e) => { wDirty.current = true; setW({ ...w, months: e.target.value }); }} />
+            </label>
+            <label>{t("登记前几天内的购买也算")}
+              <input value={w.back} inputMode="numeric" onChange={(e) => { wDirty.current = true; setW({ ...w, back: e.target.value }); }} />
+            </label>
+            {isOwner && <div className="actions left"><button onClick={saveWarranty}>{t("储存")}</button></div>}
+          </fieldset>
+          {!isOwner && <p className="muted small">{t("只有管理员可以改。")}</p>}
         </section>
 
         <section className="card cu-form">

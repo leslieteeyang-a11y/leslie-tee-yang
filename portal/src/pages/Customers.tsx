@@ -4,21 +4,23 @@
 // 只看 = 看；可编辑 = 改资料、登记、联络；可审批 = 汇出、合并、活动、范本；管理员 = 分级门槛、删活动。
 // 这一页自己带中英文（cust/dict.ts），所以整页 translate="no"。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Me } from "../api";
 import { go } from "../router";
 import { ErrorBox, Tabs } from "../ui";
 import {
-  custRole, CustRole, Customer, DEFAULT_SETTINGS, errText, fmtNum, followUps, rpc, Settings, t, Template, daysSince,
+  custRole, CustRole, Customer, DEFAULT_SETTINGS, errText, fmtNum, FollowUp, followRows, Reason, rpc, Settings, storeOf, t, Template,
+  daysSince,
 } from "../cust-api";
 import { CustomerList } from "../cust/List";
 import { CustomerPanel } from "../cust/Panel";
 import { FollowUpList, QuickRegister, Signups } from "../cust/Follow";
-import { Campaigns, MissingPhone, MonthlyReport } from "../cust/Reports";
+import { Campaigns, MissingPhone, MonthlyReport, StaffBoardBox } from "../cust/Reports";
 import { SettingsTab } from "../cust/SettingsTab";
 import "../cust.css";
 
 type Tab = "follow" | "list" | "campaigns" | "report" | "setup";
 
-export default function Customers({ sub, arg }: { sub?: string; arg?: string }) {
+export default function Customers({ me, sub, arg }: { me: Me; sub?: string; arg?: string }) {
   const [role, setRole] = useState<CustRole | null | undefined>(undefined);
   const [list, setList] = useState<Customer[] | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -27,6 +29,12 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
   const [roleErr, setRoleErr] = useState("");
   const [settingsErr, setSettingsErr] = useState("");
   const [settingsLoaded, setSettingsLoaded] = useState(false);   // 还没拿到真的设定前，设定分页不给存（免得把预设值存回去）
+  // 跟进提醒：资料库算好的（规则与首页同一套），预设只看自己门市（全部分店 = 两边）
+  const [fstore, setFstore] = useState(() => storeOf(me.staff.branch));
+  const [frows, setFrows] = useState<{ member_id: string; reasons: Reason[] }[] | null>(null);
+  const [ferr, setFerr] = useState("");
+  const fasked = useRef("");
+  const fseq = useRef(0);   // 跟进提醒：连续重新载入时只收最后一次的回应（旧的比较晚回来不会盖掉新的）
   const lastTab = useRef<Tab>("follow");
   const scrollAt = useRef(0);        // 打开顾客前名单卷到哪里，回来时卷回去
 
@@ -53,6 +61,19 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
     const bad = [s, w].find((x) => x.status === "rejected") as PromiseRejectedResult | undefined;
     setSettingsErr(bad ? errText(bad.reason) : "");
   }, []);
+  const loadFollow = useCallback(async (store: string) => {
+    fasked.current = store;
+    const n = ++fseq.current;
+    try {
+      const r = await followRows(store);
+      if (fseq.current === n) { setFrows(r ?? []); setFerr(""); }
+    } catch (e) {
+      if (fseq.current === n) setFerr(errText(e));
+    }
+  }, []);
+  useEffect(() => { setFrows(null); setFerr(""); loadFollow(fstore); }, [fstore, loadFollow]);
+  // 存了资料 / 联络过：名单与跟进提醒一起重新载入
+  const reload = useCallback(() => { load(); loadFollow(fasked.current); }, [load, loadFollow]);
   const loadAll = useCallback(() => {
     setRoleErr("");
     // 拿不到角色（断线等）不当成「没有权限」，给重试
@@ -75,7 +96,10 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
     }
   }, [memberId]);
 
-  const follow = useMemo(() => followUps(list ?? [], settings), [list, settings]);
+  const follow = useMemo<FollowUp[]>(() => {
+    const byId = new Map((list ?? []).map((c) => [c.member_id, c]));
+    return (frows ?? []).flatMap((r) => { const c = byId.get(r.member_id); return c ? [{ c, reasons: r.reasons }] : []; });
+  }, [list, frows]);
   const totals = useMemo(() => {
     const all = list ?? [];
     const month = new Date().getMonth() + 1;
@@ -146,7 +170,7 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
       {settingsErr && <ErrorBox error={t("查询失败:") + settingsErr} />}
       {memberId && (
         <CustomerPanel key={memberId} id={memberId} role={role} settings={settings} templates={templates}
-                       categoriesOf={categoriesOf} onBack={back} onSaved={load} onOpen={open} />
+                       categoriesOf={categoriesOf} onBack={back} onSaved={reload} onOpen={open} />
       )}
       <div hidden={!!memberId}>
         {/* 藏起来时量不到宽度，「右边还有分页」的淡出提示会算错：回来时重新挂上 */}
@@ -157,15 +181,17 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
               <span>{t("顾客人数")} · {t("近 12 个月有消费 {a} 位", { a: fmtNum(totals.active) })}</span></div>
             <div className="kpi"><b>{fmtNum(totals.profiled)}</b><span>{t("已补资料")} · {t("有填名字 / 生日 / 地区等")}</span></div>
             <div className="kpi"><b>{fmtNum(totals.consent)}</b><span>{t("同意收促销")} · {t("只有这些人会被汇出 / 放进活动")}</span></div>
-            <div className="kpi"><b>{fmtNum(follow.length)}</b>
+            <div className="kpi"><b>{frows === null ? "…" : fmtNum(follow.length)}</b>
               <span>{t("待跟进")} · {t("本月生日 {b} 位", { b: fmtNum(totals.birthday) })}</span></div>
           </div>
         )}
         {tab === "follow" && (
           <>
-            {canEdit && <QuickRegister onSaved={load} onOpen={open} />}
-            <FollowUpList items={follow} settings={settings} templates={templates} canEdit={canEdit} onOpen={open} onTouched={load} />
-            <Signups canEdit={canEdit} onDone={load} onOpen={open} />
+            {canEdit && <QuickRegister onSaved={reload} onOpen={open} />}
+            <FollowUpList items={frows === null ? null : follow} error={ferr} store={fstore} onStore={setFstore} settings={settings}
+                          templates={templates} canEdit={canEdit} onOpen={open} onTouched={reload}
+                          onRetry={() => { setFrows(null); setFerr(""); loadFollow(fasked.current); }} />
+            <Signups canEdit={canEdit} onDone={reload} onOpen={open} />
           </>
         )}
         {tab === "list" && (
@@ -174,6 +200,7 @@ export default function Customers({ sub, arg }: { sub?: string; arg?: string }) 
         {tab === "campaigns" && <Campaigns isOwner={isOwner} list={list} settings={settings} />}
         {tab === "report" && (
           <>
+            <StaffBoardBox />
             <MonthlyReport settings={settings} />
             <MissingPhone />
           </>

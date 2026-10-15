@@ -15,7 +15,12 @@ export interface Customer {
   last_contact_at: string | null; profile_created_at: string | null; profile_updated_at: string | null;
   reno_stage?: string | null; reno_stage_at?: string | null; quote_open?: number; quote_amount?: number; quote_due?: string | null;
 }
-export interface Item { item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number }
+export interface Item {
+  item_code: string | null; description: string | null; qty: number; uom: string | null; sub_total: number;
+  brand?: string | null;   // AutoCount 的 ItemType（HEMOS / HEMOSX / VATTI…）
+}
+/** 延长保修只算 Hemos 产品（「Hemos 保修登记」） */
+export const isHemos = (it: Item) => /^HEMOS/i.test(it.brand ?? "");
 export interface Doc {
   company: string; doc_type: string; doc_no: string; doc_date: string; debtor_code: string; debtor_name: string | null;
   sales_agent: string | null; amount: number; items: Item[];
@@ -25,6 +30,8 @@ export interface Profile {
   customer_type: string | null; note: string | null; consent: Consent; consent_at: string | null; consent_by: string | null;
   next_contact: string | null; last_contact_at: string | null; updated_at: string; updated_by: string | null;
   reno_stage?: string | null; reno_stage_at?: string | null; email?: string | null;
+  warranty_at?: string | null; warranty_months?: number | null; warranty_by?: string | null;   // 延长保修登记（第一次为准）
+  warranty_from?: string | null;   // 从哪天买的 Hemos 产品算（登记当时记下；旧资料没有就用设定推算）
 }
 export interface Quote {
   company: string; doc_no: string; doc_date: string; sales_agent: string | null; amount: number; transferred: boolean;
@@ -49,6 +56,7 @@ export interface Settings {
   vip_min_12m: number; regular_min_docs: number; lapsed_days: number; lead_follow_days: number; birthday_days: number;
   quote_follow_days: number; quote_max_days: number; stage_follow_days: number; stage_reco: Record<string, string[]>;
   updated_at?: string | null; updated_by?: string | null;
+  warranty_months?: number; warranty_back_days?: number;   // 登记送延长保修：月数（0 = 不送）、登记前几天内的购买也算
 }
 export interface Template { id: number; title: string; body: string; sort: number }
 export interface Campaign {
@@ -101,6 +109,21 @@ export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promis
   return data as T;
 }
 export const custRole = () => rpc<CustRole | null>("ops_cust_role");
+/** 跟进提醒（资料库算，顾客页与首页同一套规则；migration 20261018_ops_customers_v2.sql）。store：HQ / JB / "" = 全部 */
+export const followRows = (store: string) =>
+  rpc<{ member_id: string; reasons: Reason[] }[]>("bi_customer_followups", { p_store: store || null });
+export interface CustHome {
+  store: string | null; total: number; by_kind: Partial<Record<Reason["kind"], number>>; my_contacts: number; my_registered: number;
+}
+export interface StaffBoard {
+  staff: { by: string; name: string; contacts: number; registered: number; consents: number }[];
+  agents: { company: string; agent: string; new_customers: number; returned_90: number }[];
+  cohort_from: string; cohort_to: string;
+}
+/** 员工分店 → 门市代号（跟进提醒预设只看自己门市；全部分店 = 两边） */
+export function storeOf(branch: string | null | undefined): string {
+  return branch === "HOMEWORKSSB" ? "HQ" : branch === "HOMEWORKSSOUTHERN" ? "JB" : "";
+}
 /** 「已联络」：记下联络时间（跟进提醒就消失）；回传错误讯息（空字串 = 成功） */
 export async function touch(id: string): Promise<string> {
   const { error } = await supabase.rpc("bi_customer_touch", { p_member: id });
@@ -181,14 +204,6 @@ export function daysSince(d: string | null, today: Date = new Date()): number {
   return (midnight(today).getTime() - midnight(at).getTime()) / 86400000;
 }
 
-/** 离下一次生日还有几天（今天生日 = 0）；2/29 在平年算 3/1 */
-export function daysUntilBirthday(month: number, day: number, today: Date = new Date()): number {
-  const t0 = midnight(today);
-  let b = new Date(t0.getFullYear(), month - 1, day);
-  if (b < t0) b = new Date(t0.getFullYear() + 1, month - 1, day);
-  return Math.round((b.getTime() - t0.getTime()) / 86400000);
-}
-
 export type Tier = "vip" | "regular" | "normal" | "lapsed" | "lead";
 export const TIERS: Tier[] = ["vip", "regular", "normal", "lapsed", "lead"];
 export const TIER_LABEL: Record<Tier, string> = { vip: "VIP", regular: "常客", normal: "一般", lapsed: "流失", lead: "潜在客" };
@@ -202,40 +217,10 @@ export function tierOf(c: Pick<Customer, "last_date" | "spent_12m" | "doc_count_
   return "normal";
 }
 
-export interface Reason { kind: "due" | "birthday" | "lead" | "quote" | "stage"; days: number }
+export interface Reason { kind: "due" | "birthday" | "lead" | "quote" | "stage" | "new"; days: number }
 export interface FollowUp { c: Customer; reasons: Reason[] }
 
-/** 跟进提醒：约好的联络日到了、生日快到（这段期间还没联络过）、潜在客建档后 N 天都没联络、报价没成交、装修进度太久没更新 */
-export function followUps(list: Customer[], s: Settings, today: Date = new Date()): FollowUp[] {
-  const iso = localISO(today);
-  const out: FollowUp[] = [];
-  for (const c of list) {
-    const reasons: Reason[] = [];
-    const contacted = daysSince(c.last_contact_at, today);
-    if (c.next_contact && c.next_contact <= iso) reasons.push({ kind: "due", days: daysSince(c.next_contact, today) });
-    if (c.birth_month && c.birth_day) {
-      const d = daysUntilBirthday(c.birth_month, c.birth_day, today);
-      if (d <= s.birthday_days && !(contacted <= s.birthday_days - d)) reasons.push({ kind: "birthday", days: d });
-    }
-    if (!c.last_date && c.profile_created_at && !c.last_contact_at && !(c.next_contact && c.next_contact > iso)
-        && daysSince(c.profile_created_at, today) >= s.lead_follow_days) {
-      reasons.push({ kind: "lead", days: daysSince(c.profile_created_at, today) });
-    }
-    // 报价单开出 N 天还没成交（没转单、之后也没买），从该跟进的那天起还没联络过
-    if (c.quote_due && (!c.last_contact_at || localISO(new Date(c.last_contact_at)) < c.quote_due)) {
-      reasons.push({ kind: "quote", days: daysSince(c.quote_due, today) + s.quote_follow_days });
-    }
-    // 装修进度太久没更新（完工的不追）
-    if (c.reno_stage && c.reno_stage !== "done" && c.reno_stage_at && daysSince(c.reno_stage_at, today) >= s.stage_follow_days
-        && !(contacted < s.stage_follow_days)) {
-      reasons.push({ kind: "stage", days: daysSince(c.reno_stage_at, today) });
-    }
-    if (reasons.length) out.push({ c, reasons });
-  }
-  const order = { due: 0, quote: 50, birthday: 100, stage: 500, lead: 1000 };
-  const rank = (x: FollowUp) => Math.min(...x.reasons.map((r) => order[r.kind] + (r.kind === "birthday" ? r.days : 0)));
-  return out.sort((a, b) => rank(a) - rank(b));
-}
+// 跟进提醒的规则在资料库（public.bi_customer_followups，首页人数也用它）：这里不再自己算，免得两套规则对不上。
 
 export interface Filters {
   q: string; store: string; recency: string; minSpent: string; category: string; notCategory: string; ctype: string;

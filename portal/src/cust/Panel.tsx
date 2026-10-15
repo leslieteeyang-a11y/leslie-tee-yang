@@ -1,8 +1,8 @@
 // 顾客资料 · 一位顾客：基本资料（可编辑以上能改）、装修进度、报价单、购买历史、合并重复号码（可审批）、修改纪录
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
-  cleanName, CustRole, dbText, Detail, errText, fmtDay, fmtMember, fmtMoney, fmtNum, fmtTime, localISO, LogRow, num, rpc, Settings,
-  STAGE_LABEL, STAGES, STORE, t, Template, tierOf, TYPES,
+  cleanName, CustRole, dbText, Detail, Doc, errText, fmtDay, fmtMember, fmtMoney, fmtNum, fmtTime, localISO, LogRow, num, rpc, Settings,
+  isHemos, STAGE_LABEL, STAGES, STORE, t, Template, tierOf, TYPES,
 } from "../cust-api";
 import { TierTag, WaButtons } from "./Common";
 
@@ -83,6 +83,20 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
     }
   }
 
+  async function registerWarranty() {
+    setBusy(true);
+    try {
+      await rpc("bi_customer_warranty_register", { p_member: d?.member_id ?? id });
+      setMsg({ ok: true, text: t("已登记延长保修。") });
+      await load();
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: errText(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const key = d?.member_id ?? id;
   const categories = categoriesOf(key);
   const docs = d?.docs ?? [];
@@ -95,6 +109,10 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
     doc_count_12m: recent.filter((x) => num(x.amount) > 0).length,
   }, settings);
   const p = d?.profile;
+  // 延长保修：起算日（登记当时记下的「登记前 N 天」）以后买的 Hemos 产品都算；只在有 Hemos 产品的单标 🛡️
+  const wFrom = p?.warranty_from ?? (p?.warranty_at
+    ? localISO(new Date(new Date(p.warranty_at).getTime() - num(settings.warranty_back_days) * 86400000)) : null);
+  const wCovered = (x: Doc) => !!wFrom && x.doc_date >= wFrom && num(x.amount) > 0 && x.items.some(isHemos);
 
   return (
     <>
@@ -122,6 +140,19 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
               <div className="kpi"><b>{docs.length ? fmtDay(docs[0].doc_date) : "–"}</b>
                 <span>{t("最后消费")}{docs[0]?.sales_agent ? ` · ${t("业务员 {a}", { a: docs[0].sales_agent })}` : ""}</span></div>
             </div>
+            {p?.warranty_at ? (
+              <div className="ok">
+                {t("🛡️ 已登记延长保修 +{m} 个月({d},{w}):{f} 以后买的 Hemos 产品都算(购买历史标 🛡️ 的单)。", {
+                  m: num(p.warranty_months), d: fmtDay(localISO(new Date(p.warranty_at))), w: dbText(p.warranty_by), f: fmtDay(wFrom) })}
+              </div>
+            ) : num(settings.warranty_months) > 0 && /^[0-9]+$/.test(key) && canEdit ? (
+              <div className="toolbar">
+                <button className="ghost cu-wrapbtn" disabled={busy} onClick={registerWarranty}>
+                  {t("登记延长保修(+{m} 个月)", { m: num(settings.warranty_months) })}
+                </button>
+                <span className="muted small">{t("顾客没扫码时,店员可以在这里帮他登记。")}</span>
+              </div>
+            ) : null}
             {!canEdit && <p className="muted small">{t("你的权限是「只看」:可以看,不能改。")}</p>}
             <fieldset className="plain cu-forms" disabled={!canEdit || busy}>
               <div className="form cu-form">
@@ -214,7 +245,8 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
                         <tr className="click" onClick={() => setOpen(open === k ? null : k)}>
                           <td className="nowrap">{fmtDay(x.doc_date)}</td>
                           <td>{STORE[x.company] ?? x.company}</td>
-                          <td className="nowrap">{open === k ? "▾ " : "▸ "}{x.doc_no}{x.doc_type === "CN" ? ` (${t("退货")})` : ""}</td>
+                          <td className="nowrap">{open === k ? "▾ " : "▸ "}{x.doc_no}{x.doc_type === "CN" ? ` (${t("退货")})` : ""}
+                            {wCovered(x) && <div><span className="cu-tag cu-yes">{t("🛡️ +{m} 个月", { m: num(p?.warranty_months) })}</span></div>}</td>
                           <td>{x.sales_agent}</td>
                           <td className={"num" + (num(x.amount) < 0 ? " cu-neg" : "")}>{fmtNum(x.amount, 2)}</td>
                         </tr>
@@ -226,7 +258,7 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
                                   {x.items.map((it, i) => (
                                     <tr key={i}>
                                       <td className="nowrap">{it.item_code ?? ""}</td>
-                                      <td>{it.description}</td>
+                                      <td>{it.description}{wCovered(x) && isHemos(it) ? " 🛡️" : ""}</td>
                                       <td className="num">{fmtNum(it.qty)} {it.uom ?? ""}</td>
                                       <td className="num">{fmtNum(it.sub_total, 2)}</td>
                                     </tr>
@@ -256,13 +288,15 @@ export function CustomerPanel({ id, role, settings, templates, categoriesOf, onB
 const FIELD_LABEL: Record<string, string> = {
   name: "名字", birth_month: "生日月", birth_day: "生日日", area: "地区", address: "地址", customer_type: "类型",
   note: "备注", consent: "同意收促销", next_contact: "下次联络", last_contact_at: "联络", reno_stage: "装修阶段", email: "电邮",
+  warranty_at: "延长保修登记", warranty_months: "延长保修月数", warranty_by: "保修登记人", warranty_from: "保修起算日",
 };
 
 function fmtVal(k: string, v: unknown): string {
   if (v == null || v === "") return "–";
   if (k === "consent") return v === "yes" ? t("同意") : v === "no" ? t("不同意") : String(v);
   if (k === "reno_stage") return t(STAGE_LABEL[String(v)] ?? String(v));
-  if (k === "last_contact_at") return fmtTime(String(v));
+  if (k === "last_contact_at" || k === "warranty_at") return fmtTime(String(v));
+  if (k === "warranty_by") return dbText(String(v));
   if (k === "customer_type") return t(String(v));
   return String(v);
 }

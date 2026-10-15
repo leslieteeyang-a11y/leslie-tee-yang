@@ -159,13 +159,49 @@ begin
 end;
 $$;
 revoke all on function bi.customer_require(text[]) from public;
-create function public.bi_customers() returns table (member_id text, name text)
+-- 顾客清单：正式环境从 bi.customer_doc 现算；这里顾客的购买 / 跟进栏位放在 bi.stub_customer_row，名字另外看 customer_profile
+-- （顾客资料第二版 2026-10-15：跟进提醒改在资料库算，要用到完整栏位）
+create table bi.stub_customer_row (member_id text primary key, name text, stores text, first_date date, last_date date,
+  doc_count int default 0, birth_month smallint, birth_day smallint, consent text, next_contact date, last_contact_at timestamptz,
+  profile_created_at timestamptz, reno_stage text, reno_stage_at timestamptz, quote_due date);
+create function public.bi_customers() returns table (member_id text, name text, stores text, first_date date, last_date date,
+  doc_count integer, doc_count_12m integer, spent numeric, spent_12m numeric, categories text[], birth_month smallint,
+  birth_day smallint, area text, address text, customer_type text, note text, consent text, next_contact date,
+  last_contact_at timestamptz, profile_created_at timestamptz, profile_updated_at timestamptz, reno_stage text,
+  reno_stage_at timestamptz, quote_open integer, quote_amount numeric, quote_due date)
 language plpgsql stable security definer set search_path = '' as $$
 begin
   perform bi.customer_require(array['owner', 'manager', 'sales']);
-  return query select p.member_id, p.name from bi.customer_profile p order by 1;
+  return query
+  select coalesce(r.member_id, p.member_id), coalesce(p.name, r.name), r.stores, r.first_date, r.last_date, coalesce(r.doc_count, 0),
+         0, 0::numeric, 0::numeric, '{}'::text[], r.birth_month, r.birth_day, null::text, p.address, null::text, p.note, r.consent,
+         r.next_contact, r.last_contact_at, r.profile_created_at, p.updated_at, r.reno_stage, r.reno_stage_at, 0, 0::numeric, r.quote_due
+    from bi.stub_customer_row r full join bi.customer_profile p on p.member_id = r.member_id
+   order by 1;
 end;
 $$;
+-- 修改纪录、购买单据、扫码登记（正式环境由 BI 的 migration customer_* 建立；这里只取用到的栏位）
+create table bi.customer_profile_log (id bigint generated always as identity primary key, member_id text,
+  at timestamptz default now(), by text, action text, changes jsonb default '{}'::jsonb);
+create table bi.customer_doc (company text, doc_type text, doc_key bigint, doc_no text, doc_date date, debtor_code text,
+  debtor_name text, customer_name text, sales_agent text, amount numeric, member_id text);
+create table bi.customer_signup (id bigint generated always as identity primary key, member_id text, name text,
+  birth_month smallint, birth_day smallint, area text, consent boolean, store text, created_at timestamptz default now(),
+  status text default 'pending', handled_at timestamptz, handled_by text, address text, email text);
+alter table bi.customer_profile add column birth_month smallint, add column birth_day smallint, add column area text,
+  add column email text, add column consent text, add column consent_at timestamptz, add column consent_by text,
+  add column created_at timestamptz default now();
+-- 第二版也重建了合并顾客 / 一位顾客 / 扫码登记（只多保修、电邮、品牌），用到的 BI 表与栏位
+alter table bi.customer_profile add column customer_type text, add column next_contact date, add column last_contact_at timestamptz,
+  add column reno_stage text, add column reno_stage_at timestamptz;
+create table bi.customer_alias (alias_id text primary key, member_id text, created_by text, created_at timestamptz default now());
+create table bi.customer_campaign_member (campaign_id bigint, member_id text, primary key (campaign_id, member_id));
+create table bi.customer_quote (company text, doc_no text, doc_date date, debtor_name text, sales_agent text, amount numeric,
+  transferred boolean default false, items jsonb, member_id text);
+alter table bi.customer_settings add column vip_min_12m numeric default 10000, add column regular_min_docs int default 2,
+  add column lapsed_days int default 365, add column lead_follow_days int default 7, add column birthday_days int default 7,
+  add column quote_follow_days int default 7, add column quote_max_days int default 60, add column stage_follow_days int default 30,
+  add column stage_reco jsonb default '{}'::jsonb;
 create function public.bi_customer_save(p_member text, p_name text) returns jsonb
 language plpgsql volatile security definer set search_path = '' as $$
 declare

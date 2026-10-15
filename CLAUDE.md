@@ -208,6 +208,15 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   合并后另外审查（模拟资料截图 + 程式 / 安全审查）修了：**CSV 公式注入**（`cust-api.ts` `csvCell`：= + - @ Tab CR 开头的格子前面加 '，纯数字照原样；
   地址可由公开扫码登记页写入）、汇出的生日拆成生日月 / 生日日（Excel 会把 3/12 转成日期）、英文模式业务员「(空白)」、名单类型栏 / 门市 / 买过类别栏宽、
   报告选中月份加左边粗线。没修（之后再说）：手机 / 平板上表格要横向卷、英文的长标题与下拉选单被截、数字栏标题靠左。
+  **第二版（2026-10-15，BI 分支 `docs/ops_customers/HANDOFF_v2.md`）**：使用者问「还可以怎么让我更能锁住老顾客？」→ 选新客 30 天回访、首页「今天要跟进」
+  + 员工排行、登记送延长保修。migration `20261018_ops_customers_v2.sql`（正式环境已套 = `ops_customers_v2` + `_new_order` + `_registers_no_address`；里面
+  `bi_customer_merge` 那段含删除语句，连接器会卡在确认，由使用者在 Supabase SQL Editor 套）：跟进提醒改在资料库算 `bi_customer_followups(p_store)`
+  （顾客页「跟进」与首页卡片 `ops_cust_home()` 共用；新客只买过一次、第 7 / 21 天各一次、45 天后不追，刚到第 7 / 21 天的排前面；HQ / JB 照买过的门市，
+  没买过的看报价单在哪间开，都没有的两边都列）；员工排行 `bi_customer_staff_board`（联络 / 补资料 / 取得同意都算「几位顾客」，合并搬过去的、只补送货地址的不算）+ 业务员
+  新客 90 天回头率；延长保修（「Hemos 保修登记」）：`bi.customer_profile.warranty_at / _months / _by / _from` 在第一次登记时记下（之后改设定不影响），
+  设定 `bi.customer_settings.warranty_months`（**0 = 不送，预设 0**）/ `warranty_back_days` 只有 admin 改（`bi_customer_set_warranty`）；只算 Hemos 产品：
+  `bi_customer` 的购买明细多 `brand`（dim_item.item_type），顾客页只在有 HEMOS / HEMOSX 的单标 🛡️。BI 的扫码登记页 `/join.html` 读
+  `bi_customer_signup_offer()`（anon），送出后照 `bi_customer_signup` 回传的实际月数显示。前端多 `src/cust/HomeCard.tsx`（首页）；测试 `tests/cust2_test.sql`。
 - **BI 的订货 / 库存 / 滞销品四页（2026-10-15 上线）**：老板 2026-10-14 决定「把订货、滞销品、库存这三个移到员工多部门功能那边，BI 那边去掉」；
   另一个 Claude 对话在 `claude/monthly-data-prep-vtcnct` 做好，以 patch（`docs/ops_handoff/0001-bi-pages-to-ops.patch`）交过来，`git am` 成 b9f9819。
   订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。

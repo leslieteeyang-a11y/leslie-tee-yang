@@ -1,7 +1,7 @@
-// 顾客资料 · 促销活动（可审批：成效、汇出名单；管理员可删）、每月顾客报告、没抓到电话的门市单据
+// 顾客资料 · 促销活动（可审批：成效、汇出名单；管理员可删）、员工排行、每月顾客报告、没抓到电话的门市单据
 import { useEffect, useRef, useState } from "react";
 import {
-  Agent, Campaign, cleanName, Customer, downloadCsv, errText, fmtDay, fmtMember, fmtNum, localISO, Missing, Monthly, num, pct,
+  Agent, Campaign, cleanName, dbText, StaffBoard, Customer, downloadCsv, errText, fmtDay, fmtMember, fmtNum, localISO, Missing, Monthly, num, pct,
   rpc, Settings, STORE, t, TIER_LABEL, tierOf, waNumber,
 } from "../cust-api";
 
@@ -242,5 +242,83 @@ export function MissingPhone() {
         </div>
       )}
     </details>
+  );
+}
+
+/** 员工排行：这个月 / 上个月各员工联络、补资料、取得同意几位（修改纪录算的，同一位只算一次）；业务员新客 90 天回头率（AutoCount 单上的业务员） */
+export function StaffBoardBox() {
+  const [month, setMonth] = useState<"this" | "last">("this");
+  const [b, setB] = useState<StaffBoard | null>(null);
+  const [err, setErr] = useState("");
+  const asked = useRef("");
+  useEffect(() => {
+    const now = new Date();
+    const from = month === "this" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = month === "this" ? now : new Date(now.getFullYear(), now.getMonth(), 0);
+    asked.current = month;
+    setB(null); setErr("");
+    rpc<StaffBoard>("bi_customer_staff_board", { p_from: localISO(from), p_to: localISO(to) })
+      .then((r) => { if (asked.current === month) setB(r); })
+      .catch((e) => { if (asked.current === month) setErr(errText(e)); });
+  }, [month]);
+  const STORE_NAME: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB" };
+  return (
+    <section className="card">
+      <h2>{t("员工排行")}</h2>
+      <div className="toolbar">
+        <div className="tabs cu-wrap">
+          <button className={month === "this" ? "on" : ""} onClick={() => setMonth("this")}>{t("这个月")}</button>
+          <button className={month === "last" ? "on" : ""} onClick={() => setMonth("last")}>{t("上个月")}</button>
+        </div>
+      </div>
+      <p className="muted small">{t("每个人在顾客资料做了多少(都是几位顾客,同一位按很多次只算一次):按 WhatsApp / 已联络、补资料(名字、生日、同意、电邮或保修从空白填上,新建档或补旧顾客都算)、取得「同意收促销」。")}</p>
+      {err && <div className="error">{t("查询失败:")}{err}</div>}
+      {b === null && !err && <p className="muted">{t("载入中…")}</p>}
+      {b && (
+        <div className="cu-scroll">
+          <table>
+            <thead><tr><th>{t("员工")}</th><th className="num">{t("联络")}</th><th className="num">{t("补资料")}</th>
+              <th className="num">{t("取得同意")}</th></tr></thead>
+            <tbody>
+              {b.staff.length === 0 && <tr><td colSpan={4} className="muted">{t("这段时间还没有人用")}</td></tr>}
+              {b.staff.map((x) => (
+                <tr key={x.by}>
+                  <td>{dbText(x.name)}</td>
+                  <td className="num">{fmtNum(x.contacts)}</td>
+                  <td className="num">{fmtNum(x.registered)}</td>
+                  <td className="num">{fmtNum(x.consents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {b && (
+        <>
+          <h3>{t("业务员新客回头率")}</h3>
+          <p className="muted small">
+            {t("{f} ~ {to} 第一次来买的门市新客,90 天内回来买第二次的比例(业务员照第一张单)。", { f: b.cohort_from, to: b.cohort_to })}
+          </p>
+          <div className="cu-scroll">
+            <table>
+              <thead><tr><th>{t("门市")}</th><th>{t("业务员")}</th><th className="num">{t("新客")}</th>
+                <th className="num">{t("90 天内回来")}</th><th className="num">{t("回头率")}</th></tr></thead>
+              <tbody>
+                {b.agents.length === 0 && <tr><td colSpan={5} className="muted">{t("没有资料")}</td></tr>}
+                {b.agents.map((a) => (
+                  <tr key={`${a.company}|${a.agent}`}>
+                    <td>{STORE_NAME[a.company] ?? a.company}</td>
+                    <td>{a.agent === "(空白)" ? t("(空白)") : a.agent}</td>
+                    <td className="num">{fmtNum(a.new_customers)}</td>
+                    <td className="num">{fmtNum(a.returned_90)}</td>
+                    <td className="num"><b>{pct(a.returned_90, a.new_customers)}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

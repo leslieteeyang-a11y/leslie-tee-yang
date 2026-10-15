@@ -110,7 +110,7 @@ export default function App() {
       page = can(me, "delivery", "view") ? <Delivery me={me} sub={arg} /> : <NoAccess />;
       break;
     case "customers":
-      page = can(me, "customers", "view") ? <Customers sub={arg} arg={arg2} /> : <NoAccess />;
+      page = can(me, "customers", "view") ? <Customers me={me} sub={arg} arg={arg2} /> : <NoAccess />;
       break;
     case "payroll":
       page = can(me, "payroll", "view") ? <Payroll me={me} sub={arg} /> : <NoAccess />;
