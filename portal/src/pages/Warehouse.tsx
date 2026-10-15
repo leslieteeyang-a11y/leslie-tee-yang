@@ -7,6 +7,7 @@ import { ErrorBox, Tabs } from "../ui";
 import "../att.css";
 import "../wh.css";
 import Labels from "../wh/Labels";
+import LotView from "../wh/LotView";
 import { Lookup } from "../wh/Lookup";
 import { MovesTab } from "../wh/Moves";
 import { CountTab } from "../wh/Count";
@@ -21,7 +22,8 @@ import { PickTab } from "../wh/Pick";
 import { OverviewTab } from "../wh/Overview";
 import { wh, WhMeta } from "../wh-api";
 
-type Tab = "overview" | "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick";
+
+type Tab = "overview" | "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick" | "lot";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
@@ -49,7 +51,8 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   tabs.push(["aged", "旧货"]);
   tabs.push(["slow", "滞销品"]);     // 从 BI 搬进来（2026-10-16）
   tabs.push(["labels", "印条码"]);
-  const tab: Tab = tabs.some(([k]) => k === sub) ? (sub as Tab) : "overview";
+  // lot = 批次画面（扫箱贴 QR），不在分页列
+  const tab: Tab = sub === "lot" ? "lot" : tabs.some(([k]) => k === sub) ? (sub as Tab) : "overview";
   const locs = meta.locations.filter((l) => l.company === co);
   const pick = (c: string) => { setCompany(c); try { localStorage.setItem(COMPANY_KEY, c); } catch { /* 忽略 */ } };
 
@@ -76,8 +79,9 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
       {tab === "slow" && <SlowTab key={co} company={co} />}
       {tab === "bins" && <BinsTab key={co} company={co} level={meta.level} arg={arg} locs={locs.map((l) => l.code)} />}
       {tab === "map" && <MapLazy key={co} company={co} loc={arg} />}
-      {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} />}
       {tab === "pick" && <PickTab company={co} canEdit={canEdit} doc={arg} />}
+      {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} arg={arg} />}
+      {tab === "lot" && <LotView key={arg} lotNo={arg ?? ""} canEdit={canEdit} />}
     </>
   );
 }
