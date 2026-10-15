@@ -206,6 +206,19 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   合并后另外审查（模拟资料截图 + 程式 / 安全审查）修了：**CSV 公式注入**（`cust-api.ts` `csvCell`：= + - @ Tab CR 开头的格子前面加 '，纯数字照原样；
   地址可由公开扫码登记页写入）、汇出的生日拆成生日月 / 生日日（Excel 会把 3/12 转成日期）、英文模式业务员「(空白)」、名单类型栏 / 门市 / 买过类别栏宽、
   报告选中月份加左边粗线。没修（之后再说）：手机 / 平板上表格要横向卷、英文的长标题与下拉选单被截、数字栏标题靠左。
+- **BI 的订货 / 库存 / 滞销品四页（2026-10-15 上线）**：老板 2026-10-14 决定「把订货、滞销品、库存这三个移到员工多部门功能那边，BI 那边去掉」；
+  另一个 Claude 对话在 `claude/monthly-data-prep-vtcnct` 做好，以 patch（`docs/ops_handoff/0001-bi-pages-to-ops.patch`）交过来，`git am` 成 b9f9819。
+  订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。
+  **资料不搬家**：读 BI 同步进来的 `bi.*`，算法沿用 BI 视图（拆出 `bi.v_purchase_suggest` 只做计算，BI 原视图改读它、栏位不变）；已下单 / 暂不订 / 留言 / 商品设定写
+  `bi.buyer_*`（与 BI 共用；撤销是软撤销 `undone_at`，因为 MCP 挡 delete）。权限照营运系统：看不到厂家（`ops.sees_supplier`）拿不到供应商 / 厂号 / 在途 PO 号 /
+  **留言 / 商品备注 / 记录人**；看不到单价（`ops.sees_prices`）拿不到上次单价；库存成本只给仓库「可审批」。前端 `src/rpl/*`、`src/rpl-api.ts`、`src/rpl.css`、
+  `src/wh/Stock.tsx`、`src/wh/Slow.tsx`、`src/i18n-dict-rpl.ts`。Migration `20261016_ops_bi_pages.sql`（正式环境 `ops_bi_pages_1_views`～`6_grants`，对方套的）
+  + 合并后审查修正 `20261016c_ops_bi_pages_fix.sql`（= `ops_bi_pages_7_fix`，已套，两个函数 md5 与本机一致）：留言三栏给看不到厂家的人回 null、
+  `ops_wh_stock` 每行多回 `item_total`（商品全部仓位合计；原本是本页加总，分页切开或勾「只看负库存」时错）。测试 `tests/rpl_test.sql`。
+  前端修正：动作（已下单等）后在背景重载、不清空清单与卷动位置（只有换公司 / 门槛 / CS 编号才清空）；「一键填建议」不碰急迫的行；公司下拉只有分店 ALL 的人才从
+  localStorage 带入；换分店分页回第 1 页；看得到厂家的人订货页仍先开「未到货 PO」；英文模式拆开的句子合成一段、CSV 表头与提示也翻；表格 1280px 不横卷（英文补货建议差几 px）。
+  前端部署 `dpl_3HCvdKv6P5eJw1k8kBYRKAdjfgwf`（129 个档）。正式环境核对（admin、交易回滚）：补货建议门槛 30 = 853 项、10 = 1,140、CS 编号 51 个；供应商 111 家；
+  库存总表搜 HM-UB001 = 36 行、看得到成本；滞销品 6 个月以上 1,437 项。BI 网页那边的旧页由 BI 分支处理，不在这里动。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。
