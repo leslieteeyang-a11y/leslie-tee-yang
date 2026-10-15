@@ -3,9 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Empty, ErrorBox, Modal, Tabs } from "../ui";
 import { Count, COUNT_STATUS_LABEL, qtyLabel, whenLabel, wh, WhMeta } from "../wh-api";
 
+// 盘点单名称、按货架盘的每一格（migration 20261017c；bins 的 code 空 = 其他地方 / 地上）
+type Row = Count & { sheet_id?: number | null; sheet_title?: string | null; bins?: { code: string | null; qty: number }[] | null };
+const binsText = (r: Row) => (r.bins || []).map((b) => `${b.code || "其他地方"} × ${qtyLabel(b.qty)}`).join("、");
+
 export function ReviewTab({ company, meta, onMeta }: { company: string; meta: WhMeta; onMeta: (m: WhMeta) => void }) {
   const [status, setStatus] = useState<"variance" | "adjusted" | "ignored" | "all">("variance");
-  const [rows, setRows] = useState<Count[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [doc, setDoc] = useState("");
@@ -32,9 +36,9 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
 
   function csv() {
     if (!rows) return;
-    const head = ["日期", "仓位", "商品代号", "品名", "单位", "AutoCount", "未输入搬动", "应有", "实盘", "差额", ...(showCost ? ["成本差额"] : []), "盘点人", "备注"];
+    const head = ["日期", "仓位", "商品代号", "品名", "单位", "AutoCount", "未输入搬动", "应有", "实盘", "差额", ...(showCost ? ["成本差额"] : []), "盘点人", "备注", "盘点单", "各货架"];
     const lines = rows.map((r) => [r.count_date, r.location, r.item_code, r.description, r.uom, r.system_qty, r.pending_qty,
-      r.expected_qty, r.qty, r.diff, ...(showCost ? [r.diff_value] : []), r.counted_by_name, r.note]);
+      r.expected_qty, r.qty, r.diff, ...(showCost ? [r.diff_value] : []), r.counted_by_name, r.note, r.sheet_title || "", binsText(r)]);
     const text = [head, ...lines].map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
@@ -59,6 +63,8 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
                 <tr key={r.id}>
                   {status === "variance" && <td><input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} /></td>}
                   <td><b>{r.item_code}</b><div className="muted small">{r.description}</div>{r.note && <div className="small">{r.note}</div>}
+                    {r.sheet_title && <div className="small"><a className="small" href={`#/warehouse/count/${r.sheet_id}`}>{`盘点单：${r.sheet_title}`}</a></div>}
+                    {r.bins && r.bins.length > 0 && <div className="muted small">{`各货架：${binsText(r)}`}</div>}
                     {r.status !== "variance" && <div className="muted small">{`${COUNT_STATUS_LABEL[r.status]}${r.ac_doc ? ` · ${r.ac_doc}` : ""}${r.review_note ? ` · ${r.review_note}` : ""}`}</div>}</td>
                   <td>{r.location}</td>
                   <td className="num">{qtyLabel(r.expected_qty)}{Number(r.pending_qty) !== 0 && <div className="muted small">{`AC ${qtyLabel(r.system_qty)}`}</div>}</td>
