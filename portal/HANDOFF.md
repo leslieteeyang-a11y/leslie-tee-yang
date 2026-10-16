@@ -6,7 +6,8 @@
 
 > **更新（2026-10-16，新 session）**：§3 已完成。补传 11 个档后 `create_deployment` 成功，正式环境现在是
 > **`dpl_EvyoQXXEWd2UsFzfYEyHLV64KoY3`**（179 个档，uid 与 `deploy_manifest_20261016.json` 逐一相同）。
-> 还剩 §4 的「请仓库主管建货架」与 §7 的问题等使用者回覆。
+> §7 使用者已回覆（2026-10-16）：1 保留；2 不用细分到每一格（层可空）；3 DO 通常明天送 → 已改成「今天 / 明天要送」（migration `ops_wh_pick_tomorrow`、前端 `dpl_459N6AYQphA5jKHTCm6CML8ARLKT`）；4 同意，等使用者把 SERVER 上的 `quote_push.py` 传过来再改。
+> 另外发现 DO 同步停在 2026-10-14 13:00 UTC（SERVER 的 quote_push 可能没在跑）。
 
 ### 1. 这次在做什么
 

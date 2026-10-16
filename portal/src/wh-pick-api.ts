@@ -9,7 +9,7 @@ export type PickWhen = "today" | "week" | "all";
 export type PickFilter = "todo" | "done" | "all";
 export type PickMatch = "code" | "desc" | "manual" | "none";
 
-export interface PickRun { run_id: number; run_date: string; driver_name: string | null; seq: number; today?: boolean; delivered?: boolean }
+export interface PickRun { run_id: number; run_date: string; driver_name: string | null; seq: number; today?: boolean; tomorrow?: boolean; delivered?: boolean }
 export interface PickRow {
   doc_no: string; doc_date: string; debtor_name: string | null; cancelled: boolean;
   /** DO 明细几行 */ lines: number;
@@ -127,8 +127,8 @@ export function buzz(ok: boolean): void {
 export function openPick(docNo: string): void {
   go(`/warehouse/pick/${encodeURIComponent(docNo)}`);
 }
-/** 「今天第 2 站」/「10-16 第 2 站」 */
-export function runLabel(r: { run_date: string; seq: number; today?: boolean } | null): string {
+/** 「今天第 2 站」/「明天第 2 站」/「10-16 第 2 站」 */
+export function runLabel(r: { run_date: string; seq: number; today?: boolean; tomorrow?: boolean } | null): string {
   if (!r) return "";
-  return r.today ? `今天第 ${r.seq} 站` : `${r.run_date.slice(5)} 第 ${r.seq} 站`;
+  return r.today ? `今天第 ${r.seq} 站` : r.tomorrow ? `明天第 ${r.seq} 站` : `${r.run_date.slice(5)} 第 ${r.seq} 站`;
 }

@@ -1,6 +1,7 @@
 // 仓库 · 拣货清单（照 DO 拣货 + 扫码核对，2026-10-15）。#/warehouse/pick = 清单；#/warehouse/pick/<DO 号> = 拣货画面（PickDo）；
-// #/warehouse/pick/today = 清单，固定从「今天要送 · 待拣」开始（首页 / 总览的「今天要拣的 DO」用，不改记住的筛选）。
-// DO 每 15 分钟从 AutoCount 同步；今天的排单（送货 → 排单）里的 DO 排最前面。只看的人看进度，可编辑的人拣货。
+// #/warehouse/pick/today = 清单，固定从「今天 / 明天要送 · 待拣」开始（首页 / 总览的「要拣的 DO」用，不改记住的筛选）。
+// 「今天 / 明天要送」= 昨天或今天开的 DO + 今天或明天的排单（DO 通常隔天送，2026-10-16）。
+// DO 每 15 分钟从 AutoCount 同步；今天的排单排最前面，再来明天的排单。只看的人看进度，可编辑的人拣货。
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Empty, ErrorBox, Tabs } from "../ui";
 import { qtyLabel, whenLabel } from "../wh-api";
@@ -64,7 +65,7 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
   return (
     <>
       <div className="pick-filters">
-        <Tabs value={when} options={[["today", "今天要送"], ["week", "这星期"], ["all", "全部"]]}
+        <Tabs value={when} options={[["today", "今天 / 明天要送"], ["week", "这星期"], ["all", "全部"]]}
               onChange={(v) => { setWhen(v); keep(WHEN_KEY, v); }} />
         <Tabs value={status} options={[["todo", "待拣"], ["done", "已拣好"], ["all", "全部"]]}
               onChange={(v) => { setStatus(v); keep(STATUS_KEY, v); }} />
@@ -77,8 +78,8 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
       </form>
       {s && (
         <p className="pick-sum">
-          <span>{`今天要送 ${s.today} 张`}</span>
-          <span>{`今天已拣好 ${s.today_done} 张`}</span>
+          <span>{`今天 / 明天要送 ${s.today} 张`}</span>
+          <span>{`其中已拣好 ${s.today_done} 张`}</span>
           <span>{`拣货中 ${s.picking} 张`}</span>
           {data?.synced && <span>{`DO 同步：${whenLabel(data.synced)}`}</span>}
         </p>
@@ -87,7 +88,7 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
       <ErrorBox error={error} />
       {!data ? (!error && <p className="muted">载入中…</p>) : data.rows.length === 0 ? (
         <Empty>{status === "done" ? "还没有拣好的 DO。" : "没有要拣的 DO。"}<br />
-          <span className="small">DO 每 15 分钟从 AutoCount 同步一次；今天要送的排单在「送货 → 排单」。</span></Empty>
+          <span className="small">DO 每 15 分钟从 AutoCount 同步一次；今天 / 明天的排单在「送货 → 排单」。</span></Empty>
       ) : (
         <ul className="list card pick-list">
           {data.rows.map((r) => <Row key={r.doc_no} r={r} />)}
@@ -109,7 +110,7 @@ function Row({ r }: { r: PickRow }) {
           {r.cancelled ? <span className="pk cancelled">DO 已取消</span>
             : r.status ? <span className={"pk " + r.status}>{PICK_STATUS_LABEL[r.status]}</span>
             : <span className="pk">待拣</span>}
-          {r.run && <span className={"pk " + (r.run.today ? "today" : "run")}>{runLabel(r.run)}</span>}
+          {r.run && <span className={"pk " + (r.run.today || r.run.tomorrow ? "today" : "run")}>{runLabel(r.run)}</span>}
           {r.delivered && <span className="pk done">已送达</span>}
         </div>
         <span className="sub">{`${r.debtor_name || "—"} · ${r.doc_date} · ${r.lines} 行`}</span>

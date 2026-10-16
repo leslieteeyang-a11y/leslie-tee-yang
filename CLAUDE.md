@@ -260,7 +260,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
     蓝牙扫描枪（键盘模式）在拣货页不用先点输入框。
   · 审查（多人 + 浏览器 e2e，9 个身分 × 31 个网址 × 手机 / 电脑 × 中英）修了：两人同时上架丢数、已开 DO 被列成「货架比系统多」、停用货架、撤销改由服务器照纪录冲回、
     DO 单位不同、已拣好取消权限、批次 QR 在上架 / 拣货 / 盘点也认得、Excel 带入 5,000 行超时（索引 + jsonb[]，不用 truncate）、连结带仓位 / 筛选 / 模式、英文用词等。
-  · **前端已上线（2026-10-16）**：部署 `dpl_EvyoQXXEWd2UsFzfYEyHLV64KoY3`（179 个档，清单 `portal/deploy_manifest_20261016.json` = commit 91dfc0f；新 session 补传 11 个档后部署，`list_deployment_files` 核对 uid 与清单 SHA1 一致）。**待使用者决定**：物流部首页现在会看到「今天要拣的 DO」（他们的盘点提醒 2026-10-09 拿掉过），要不要也拿掉。
+  · **前端已上线（2026-10-16）**：部署 `dpl_EvyoQXXEWd2UsFzfYEyHLV64KoY3`（179 个档，清单 `portal/deploy_manifest_20261016.json` = commit 91dfc0f；新 session 补传 11 个档后部署，`list_deployment_files` 核对 uid 与清单 SHA1 一致）。使用者 2026-10-16 回覆：① 物流部首页的「要拣的 DO」**保留**；② 建货架**不用细分到每一格**（层可以空着，只建 区-货架 就好；英文用词照旧）；③ **DO 通常隔天送** → 拣货的「今天要送」改成「今天 / 明天要送」= 昨天或今天开的 DO + 今天或明天的排单，排序今天的排单 → 明天的排单 → 其他（migration `20261018_ops_wh_pick_tomorrow.sql` = `ops_wh_pick_tomorrow`，已套，两个函数 md5 与本机一致；测试 `tests/pick_tomorrow_test.sql`；前端部署 `dpl_459N6AYQphA5jKHTCm6CML8ARLKT`，清单 `portal/deploy_manifest_20261016b.json`）；④ 同意让 SERVER 的 `quote_push.py` 在 DO 明细 lines 加商品代号 `c`（那支程式不在 repo，要使用者把档案传过来才能改；资料库那边已经认得 `c`）。**2026-10-16 发现**：`bi.delivery_doc` 最后同步是 2026-10-14 13:00 UTC，SERVER 的 quote_push 可能停了。
 - 物流部（2026-10-08，migration `20261008d_ops_logistics.sql` = `ops_logistics`，正式环境已套）：新部门 `logistics`「物流部」
   （送货可编辑 = 排单 / 当司机、仓库可编辑、订货只看 + 首页 / 任务 / 审批 / 打卡 / 请假）；「送货安装」部门改名「送货部」（代号仍是 `delivery`，
   模块名称改成「送货」）。员工司机改认送货部或物流部（`ops.dlv_driver_dept`，改了 `ops.dlv_drivers` 与 `ops_dlv_run_save`）。

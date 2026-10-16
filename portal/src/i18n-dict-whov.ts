@@ -27,10 +27,10 @@ export const DICT_WHOV: Record<string, string> = {
   "Excel 带入": "Excel import",
   "拣货": "Picking",
   "冲回": "Reversed",
-  "今天的 DO 已拣好": "Today's DOs picked",
+  "今天 / 明天的 DO 已拣好": "DOs for today / tomorrow picked",
   "开着的盘点单": "Open count sheets",
   "已过期限": "Past due",
-  "今天要拣的 DO": "DOs to pick today",
+  "要拣的 DO（今天 / 明天送）": "DOs to pick (today / tomorrow)",
   "货架比系统多": "More on bins than system",
 };
 
@@ -39,7 +39,7 @@ export const PATTERNS_WHOV: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^今天盘点（(\d+) 人）$/, (m) => `Counted today (${m[1]} ${m[1] === "1" ? "person" : "people"})`],
   [/^(上架|从货架拿下|移货架|主管改数|Excel 带入|盘点|拣货|冲回) ([+-]?[\d.]+)$/, (m, t) => `${t(m[1])} ${m[2]}`],
   [/^盘点(相符|有差异|已重盘|已调整|不调整)$/, (m, t) => `Count: ${t(m[1])}`],
-  [/^今天的 DO 已拣好（(\d+) 张拣到一半）$/, (m) => `Today's DOs picked (${m[1]} half done)`],
+  [/^今天 \/ 明天的 DO 已拣好（(\d+) 张拣到一半）$/, (m) => `DOs for today / tomorrow picked (${m[1]} half done)`],
   [/^期限 (\S+)$/, (m) => `Due ${m[1]}`],
   [/^已盘 (\d+) \/ (\d+)(?:，要再数 (\d+))?$/, (m) => `Counted ${m[1]} / ${m[2]}${m[3] ? `, ${m[3]} to recount` : ""}`],
   [/^盘点单：(.+)（还有 (\d+) 项）$/, (m) => `Count sheet: ${m[1]} (${m[2]} left)`],

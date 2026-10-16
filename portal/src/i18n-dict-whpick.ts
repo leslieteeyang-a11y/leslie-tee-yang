@@ -5,7 +5,7 @@ const ALL_PICKED = " — all picked, tap “Picked” to finish.";
 export const DICT_WHPICK: Record<string, string> = {
   // 分页、清单
   "拣货": "Picking",
-  "今天要送": "Today",
+  "今天 / 明天要送": "Today / tomorrow",
   "这星期": "This week",
   "待拣": "To pick",
   "已拣好": "Picked",
@@ -13,8 +13,8 @@ export const DICT_WHPICK: Record<string, string> = {
   "找 DO 号或顾客名": "Find DO no. or customer",
   "还没有拣好的 DO。": "No picked DOs yet.",
   "没有要拣的 DO。": "No DOs to pick.",
-  "DO 每 15 分钟从 AutoCount 同步一次；今天要送的排单在「送货 → 排单」。":
-    "DOs sync from AutoCount every 15 minutes; today's delivery runs are in Delivery → Plan.",
+  "DO 每 15 分钟从 AutoCount 同步一次；今天 / 明天的排单在「送货 → 排单」。":
+    "DOs sync from AutoCount every 15 minutes; today's / tomorrow's delivery runs are in Delivery → Plan.",
   "只列前 300 张，请用搜寻找。": "Only the first 300 are listed — use search.",
   "你是「只看」：可以看进度，拣货要仓库「可编辑」。": "You have view access: you can see progress; picking needs Warehouse “Edit”.",
   "DO 已取消": "DO cancelled",
@@ -120,9 +120,10 @@ export const DICT_WHPICK: Record<string, string> = {
 
 export const PATTERNS_WHPICK: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^今天第 (\d+) 站$/, (m) => `Today, stop ${m[1]}`],
+  [/^明天第 (\d+) 站$/, (m) => `Tomorrow, stop ${m[1]}`],
   [/^(\d\d-\d\d) 第 (\d+) 站$/, (m) => `${m[1]}, stop ${m[2]}`],
-  [/^今天要送 (\d+) 张$/, (m) => `To deliver today: ${m[1]}`],
-  [/^今天已拣好 (\d+) 张$/, (m) => `Picked today: ${m[1]}`],
+  [/^今天 \/ 明天要送 (\d+) 张$/, (m) => `To deliver today / tomorrow: ${m[1]}`],
+  [/^其中已拣好 (\d+) 张$/, (m) => `Picked: ${m[1]}`],
   [/^拣货中 (\d+) 张$/, (m) => `Picking: ${m[1]}`],
   [/^DO 同步：(.+)$/, (m) => `DO sync: ${m[1]}`],
   [/^搜寻「(.+)」（近 60 天）$/, (m) => `Search “${m[1]}” (last 60 days)`],

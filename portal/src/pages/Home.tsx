@@ -161,7 +161,7 @@ export default function HomePage({ me }: { me: Me }) {
             <a className="kpi warn" href="#/warehouse/moves"><b>{home.wh_moves_pending}</b><span>搬动待输入 AutoCount</span></a>
           )}
           {!!wh?.picks_left && (
-            <a className="kpi warn" href="#/warehouse/pick/today"><b>{wh.picks_left}</b><span>今天要拣的 DO</span></a>
+            <a className="kpi warn" href="#/warehouse/pick/today"><b>{wh.picks_left}</b><span>要拣的 DO（今天 / 明天送）</span></a>
           )}
           {wh?.sheets.map((sh) => (
             <a key={sh.id} className={"kpi" + (sh.overdue ? " warn" : "")} href={`#/warehouse/count/${sh.id}`}>
