@@ -1,4 +1,4 @@
-From 5d1821aaccb0763066e95fed50241792974727e4 Mon Sep 17 00:00:00 2001
+From b74e81ebbca7975f872de7f8344e540912414eb0 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Thu, 15 Oct 2026 17:45:25 +0000
 Subject: [PATCH] =?UTF-8?q?=E9=A1=BE=E5=AE=A2=E8=B5=84=E6=96=99=E7=AC=AC?=
@@ -46,7 +46,7 @@ Claude-Session: https://claude.ai/code/session_01FukrbyV1LJiGqNzUs29hwZ
  create mode 100644 portal/supabase/tests/cust2_test.sql
 
 diff --git a/CLAUDE.md b/CLAUDE.md
-index e2b4a5b..f5795f8 100644
+index 95a64c2..09f69d7 100644
 --- a/CLAUDE.md
 +++ b/CLAUDE.md
 @@ -208,6 +208,15 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
@@ -737,7 +737,7 @@ index 6d7ebbf..e067bf6 100644
              <MissingPhone />
            </>
 diff --git a/portal/src/pages/Home.tsx b/portal/src/pages/Home.tsx
-index 17391e0..6c207a9 100644
+index eb16000..5d8d5cf 100644
 --- a/portal/src/pages/Home.tsx
 +++ b/portal/src/pages/Home.tsx
 @@ -4,6 +4,7 @@ import { missingText } from "./MyProfile";
@@ -1498,7 +1498,7 @@ index 0000000..f1861c7
 +
 +select 'cust2_test ok';
 diff --git a/portal/supabase/tests/run.sh b/portal/supabase/tests/run.sh
-index 30b658c..4c73ddc 100644
+index 32b2926..e758247 100644
 --- a/portal/supabase/tests/run.sh
 +++ b/portal/supabase/tests/run.sh
 @@ -21,6 +21,7 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/po_do_test.sql"
