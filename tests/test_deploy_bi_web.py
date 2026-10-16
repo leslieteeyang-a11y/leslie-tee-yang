@@ -234,6 +234,24 @@ LIVE_V4 = {
     "tsconfig.json": "14e9d5e9e0c89c7bfd84bf5068ef8d3b06612bac",
     "vite.config.ts": "ed0e7a144cf351d9c44e6d518855ced2708d843b",
 }
+# 2026-10-15 另一个对话部署的 dpl_6GPMnuXZydBAVmJwxNTyc983obGN：订货 / 库存 / 滞销品三页搬去营运系统，拿掉那几页与字典，
+# 改了 src/i18n/index.ts（没有 purchasing / cscode 了）。之后的改版以它为底（overlay 的 index.ts 已同步成这一版）
+_GONE_V5 = {"src/i18n/cscode.ts", "src/i18n/purchasing.ts", "src/pages/Purchasing.tsx", "src/pages/SlowMovers.tsx",
+            "src/pages/StockPage.tsx"}
+LIVE_V5 = {**{k: v for k, v in LIVE_V4.items() if k not in _GONE_V5},
+           "src/App.tsx": "a340cd9d6758ccebd17e53171473493188c84632",
+           "src/i18n/core.ts": "50549662c9e42424d14fca6e96f5d6e7ee81c42e",
+           "src/i18n/finance.ts": "5bf623ee1af4b9e9ea5cc0ca126cd988127edbdc",
+           "src/i18n/index.ts": "d95dbdbf30a5d44cd75dce3cb77cb59c693c0f27",
+           "src/pages/Alerts.tsx": "47f5753d6af84be4c28ed0f1a84c066590d30343",
+           "src/pages/BranchActual.tsx": "48c3e7b8ebb9babd3157664a4175bc37967c94c2",
+           "src/pages/EcomReport.tsx": "89712f1b710b7674c2a77041ef5e8c1900e3e6ad",
+           "src/pages/Manager.tsx": "649a2dbbed07a939f4f845d196a7099ca0301211",
+           "src/pages/Payables.tsx": "7c39e50b36b00945d8285017410e29561f06d9b3",
+           "src/pages/PriceEffect.tsx": "905278df2cc526d019b5dee968316900c218b928",
+           "src/pages/Receivables.tsx": "ac5d49dd8a38aea8d4341fa98ba499d39aea9148",
+           "src/pages/Targets.tsx": "8d82802f450b2d31052f88748957c3e7297d0f4e",
+           "src/styles.css": "1326dffab77c961afc8dadace911991bf4d07293"}
 CHANGED = ["delivery.html", "driver.html", "src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
            "src/pages/Loyalty.tsx"]
 NEW_FILES: list[str] = []
@@ -242,19 +260,19 @@ NEW_FILES: list[str] = []
 def test_repo_overlay_replaces_only_the_changed_customer_files():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
     assert "overlay.json" not in overlay                   # 说明档本身不上传
-    plan = d.plan_files(LIVE_V4, overlay, replaces)
+    plan = d.plan_files(LIVE_V5, overlay, replaces)
     assert plan["added"] == NEW_FILES
     assert sorted(plan["replaced"]) == CHANGED
     assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/delivery/main.tsx", "src/driver/driver.css",
                                     "src/driver/main.tsx", "src/i18n/index.ts", "src/loyalty/loyalty.css", "src/pages/Delivery.tsx",
                                     "vite.config.ts"]
     sent = {f["file"]: f for f in plan["files"]}
-    assert set(sent) == set(LIVE_V4) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
-    for path, sha in LIVE_V4.items():
+    assert set(sent) == set(LIVE_V5) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
+    for path, sha in LIVE_V5.items():
         if path not in overlay:
             assert sent[path] == {"file": path, "sha": sha}  # 没改的档原样引用线上那一版
     assert set(plan["upload"]) == set(plan["replaced"]) | set(plan["added"])
-    assert "src/loyalty/loyalty.css" in LIVE_V4              # 被换掉的档线上都有
+    assert "src/loyalty/loyalty.css" in LIVE_V5              # 被换掉的档线上都有
 
 
 def test_overlay_refuses_a_site_it_was_not_based_on():
@@ -268,14 +286,14 @@ def test_overlay_refuses_a_site_it_was_not_based_on():
 
 def test_rerun_after_deploy_is_a_no_op():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    after = {**LIVE_V4, **{p: d.sha1(b) for p, b in overlay.items()}}
+    after = {**LIVE_V5, **{p: d.sha1(b) for p, b in overlay.items()}}
     plan = d.plan_files(after, overlay, replaces)
     assert plan["upload"] == {} and sorted(plan["same"]) == sorted(overlay)
 
 
 def test_stops_when_someone_changed_a_replaced_file_online():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = {**LIVE_V4, "src/pages/Loyalty.tsx": "f" * 40}
+    changed = {**LIVE_V5, "src/pages/Loyalty.tsx": "f" * 40}
     with pytest.raises(d.DeployError, match="Loyalty.tsx.*被改过"):
         d.plan_files(changed, overlay, replaces)
 
@@ -325,7 +343,7 @@ class FakeVercel:
 
     def live_files(self, deployment_id):
         if deployment_id == "dpl_old":
-            return dict(LIVE_V4)
+            return dict(LIVE_V5)
         return {f["file"]: f["sha"] for f in self.created}
 
     def upload(self, data):
@@ -355,10 +373,10 @@ def run(monkeypatch, check_only=False, final_state="READY"):
 def test_deploy_uploads_only_changed_files_and_prints_new_page(monkeypatch, capsys):
     fake = run(monkeypatch)
     overlay, _ = d.read_overlay(d.DEFAULT_OVERLAY)
-    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_V4.get(p)]  # 跟线上一样的不重传
+    changed = [p for p in overlay if d.sha1(overlay[p]) != LIVE_V5.get(p)]  # 跟线上一样的不重传
     assert sorted(changed) == sorted(CHANGED + NEW_FILES)
     assert sorted(fake.uploaded) == sorted(d.sha1(overlay[p]) for p in changed)
-    assert len(fake.created) == len(LIVE_V4) + len(NEW_FILES)
+    assert len(fake.created) == len(LIVE_V5) + len(NEW_FILES)
     out = capsys.readouterr().out
     assert "https://homeworks-bi.vercel.app/" in out and "完成" in out
 
