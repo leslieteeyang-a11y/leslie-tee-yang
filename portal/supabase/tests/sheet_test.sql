@@ -189,6 +189,11 @@ do $$ begin
 end $$;
 
 -- 6. 差异审核看得到盘点单名称与每一格；主管「请重盘」→ 盘点单那一行回到未盘
+-- 成本差额只给老板（20261019b）
+select pg_temp.as_user('boss@example.com');
+do $$ begin
+  assert (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff_value')::numeric = -60, 'owner sees cost diff';
+end $$;
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare v jsonb; n int; g jsonb; begin
   v := (select x from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) x where x->>'item_code' = 'SH002');
@@ -196,7 +201,7 @@ do $$ declare v jsonb; n int; g jsonb; begin
      and v->'bins' = '[{"qty": 0, "code": "T-R1"}, {"qty": 2, "code": null}]'::jsonb, 'review row: ' || v::text;
   g := public.ops_wh_sheet_get(jsonb_build_object('id', pg_temp.sid('items')));
   assert (g->>'can_manage')::boolean and (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff')::numeric = -1
-     and (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff_value')::numeric = -60, 'manager sees diff: ' || g::text;
+     and pg_temp.line(pg_temp.sid('items'), 'SH002')->'diff_value' = 'null'::jsonb, 'manager sees diff, not cost: ' || g::text;
   n := public.ops_wh_count_review(array[(v->>'id')::bigint], 'recount');
   assert n = 1 and pg_temp.line(pg_temp.sid('items'), 'SH002')->>'status' = 'todo', 'recount → todo';
 end $$;
@@ -258,10 +263,16 @@ do $$ begin
   perform public.ops_wh_count_save_bins('{"location":"HQ","item_code":"SH004","loose":1}');
   perform public.ops_wh_count_save_bins('{"location":"HQ","item_code":"SH004","loose":1}');
 end $$;
+select pg_temp.as_user('boss@example.com');
+do $$ declare s jsonb := public.ops_wh_count_stats('{"days":30}'); begin
+  assert (s->>'show_cost')::boolean and (s->'summary'->>'value_net')::numeric = -10
+     and (s->'summary'->>'value_abs')::numeric = 10, 'owner value: ' || (s->'summary')::text;
+end $$;
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare s jsonb := public.ops_wh_count_stats('{"days":30}'); begin
-  assert (s->'summary'->>'variance')::int = 1 and (s->'summary'->>'value_net')::numeric = -10
-     and (s->'summary'->>'value_abs')::numeric = 10, 'value: ' || (s->'summary')::text;
+  -- 成本只给老板（20261019b）：主管的差异金额都是 0、show_cost = false（画面藏起金额）
+  assert not (s->>'show_cost')::boolean and (s->'summary'->>'variance')::int = 1 and (s->'summary'->>'value_net')::numeric = 0
+     and (s->'summary'->>'value_abs')::numeric = 0 and s->'top'->0->'value' = 'null'::jsonb, 'manager: no value: ' || s::text;
   assert s->'top'->0->>'item_code' = 'SH004' and (s->'top'->0->>'units')::numeric = -1, 'top: ' || (s->'top')::text;
   assert (select (x->>'variance')::int from jsonb_array_elements(s->'people') x where x->>'name' = '仓库阿强') = 1, 'person variance';
 end $$;

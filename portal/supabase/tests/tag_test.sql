@@ -144,10 +144,15 @@ do $$ declare s jsonb; e jsonb; begin
   assert exists (select 1 from jsonb_array_elements(e->'rows') x where x->>'item_code' = 'ST004'), 'ST004 exported';
   assert (select x->>'item_total' from jsonb_array_elements(e->'rows') x limit 1) is not null, 'export item_total';
 end $$;
+-- 成本只给老板（20261019b）
+select pg_temp.as_user('boss@example.com');
+do $$ declare e jsonb := public.ops_wh_stock_export('{"tag":"滞销"}'); begin
+  assert (e->>'show_cost')::boolean and (select bool_and(x->>'total_cost' is not null) from jsonb_array_elements(e->'rows') x), 'owner sees cost';
+end $$;
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare e jsonb; begin
   e := public.ops_wh_stock_export('{"tag":"滞销"}');
-  assert (e->>'show_cost')::boolean and (select bool_and(x->>'total_cost' is not null) from jsonb_array_elements(e->'rows') x), 'approve sees cost';
+  assert not (e->>'show_cost')::boolean and (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(e->'rows') x), 'manager: no cost';
   e := public.ops_wh_stock_export('{}');
   assert (e->>'total')::int = jsonb_array_length(e->'rows') and (e->>'total')::int = (public.ops_wh_stock('{}')->>'total')::int, 'export all rows';
 end $$;

@@ -21,8 +21,8 @@ export interface SheetLine {
   item_code: string; description: string | null; uom: string | null;
   /** 这个商品在这个仓位的货架（走一圈的顺序） */ bins: string[];
   status: LineStatus; count_id: number | null; counted_at: string | null; counted_by_name: string | null;
-  /** 只有仓库「可审批」才有：盘到几件、应有、差额、成本差额 */
-  qty?: number; expected?: number; diff?: number; diff_value?: number;
+  /** 只有仓库「可审批」才有：盘到几件、应有、差额；成本差额只给老板（20261019b） */
+  qty?: number; expected?: number; diff?: number; diff_value?: number | null;
 }
 export interface SheetDetail extends Sheet { can_manage: boolean; lines: SheetLine[] }
 
@@ -43,12 +43,13 @@ export interface SheetStaff { id: number; name: string; department: string; depa
 export interface SheetHome { id: number; company: string; title: string; location: string; due_date: string | null; overdue: boolean; total: number; left: number }
 
 export interface CountStats {
-  company: string; days: number; location: string | null; today: string;
+  /** 看得到差异金额（成本）= 老板（20261019b）；其他人金额都是 0 / null，画面不显示 */
+  company: string; days: number; location: string | null; today: string; show_cost?: boolean;
   summary: {
     counts: number; items: number; match: number; variance: number; waiting: number; adjusted: number; ignored: number;
     /** 差异金额（成本）：净额（负 = 少了）与绝对值合计 */ value_net: number; value_abs: number; sheets: number;
   };
-  top: { item_code: string; description: string | null; uom: string | null; times: number; units: number; abs_units: number; value: number; abs_value: number; last: string }[];
+  top: { item_code: string; description: string | null; uom: string | null; times: number; units: number; abs_units: number; value: number | null; abs_value: number | null; last: string }[];
   people: { id: number; name: string; counts: number; variance: number; value_abs: number }[];
   months: { month: string; counts: number; variance: number; value_net: number; value_abs: number }[];
 }

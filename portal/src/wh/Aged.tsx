@@ -1,5 +1,5 @@
 // 仓库 · 旧货：① 入货超过 12 个月 ② 12 个月没卖出 ③ 两者都是。每天随 BI 同步更新（bi.fact_item_aging + 月销量）。
-// 仓库「可查看」看清单；「可审批」看成本、选商品标处理方式（清货 / 促销 / 退供应商 / 报废 / 保留）与负责人。
+// 仓库「可查看」看清单；「可审批」选商品标处理方式（清货 / 促销 / 退供应商 / 报废 / 保留）与负责人；成本只给老板（20261019b）。
 import { useCallback, useEffect, useState } from "react";
 import { api, DirectoryEntry } from "../api";
 import { supabase } from "../supabase";
@@ -103,7 +103,9 @@ export function AgedTab({ company }: { company: string }) {
           )}
         </>
       )}
-      <p className="muted small">资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。</p>
+      <p className="muted small">{data?.show_cost
+        ? "资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。"
+        : "资料每天跟 AutoCount 同步一次。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。"}</p>
       {marking && <MarkForm company={company} codes={sel} onClose={() => setMarking(false)} onSaved={() => { setMarking(false); load(); }} />}
     </>
   );

@@ -16,12 +16,18 @@ end $$;
 grant execute on all functions in schema pg_temp to authenticated;
 set role authenticated;
 
+-- 成本只给老板（20261019b）
+select pg_temp.as_user('boss@example.com');
+do $$ declare o jsonb := public.ops_wh_overview('{}'); begin
+  assert (o->>'show_cost')::boolean and (select x->>'value' from jsonb_array_elements(o->'locations') x where x->>'location' = 'HQ') is not null,
+    'owner sees cost';
+end $$;
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare o jsonb; hq jsonb; begin
   o := public.ops_wh_overview('{}');
-  assert o->>'company' = 'HOMEWORKSSB' and (o->>'show_cost')::boolean, 'approve sees cost';
+  assert o->>'company' = 'HOMEWORKSSB' and not (o->>'show_cost')::boolean, 'manager: no cost';
   hq := (select x from jsonb_array_elements(o->'locations') x where x->>'location' = 'HQ');
-  assert (hq->>'value') is not null and (hq->>'neg')::int >= 1, 'HQ row: ' || hq::text;
+  assert hq->'value' = 'null'::jsonb and (hq->>'neg')::int >= 1, 'HQ row: ' || hq::text;
   assert (o->>'neg_rows')::int >= 1, 'negative rows';
   assert jsonb_array_length(o->'bins') >= 1 and jsonb_array_length(o->'recent') between 1 and 15, 'bins + recent';
   assert o->'names' ? (o->'recent'->0->>'item_code'), 'names for recent items';

@@ -115,21 +115,30 @@ do $$ declare s ops.staff; begin
   select * into s from ops.staff where email = 'helper@example.com';
   assert not ops.sees_supplier(s) and not ops.sees_prices(s), 'helper: neither';
   assert not ops.sees_prices(null::ops.staff), 'null staff';
-  assert to_regprocedure('ops.sees_cost(ops.staff)') is null, 'sees_cost removed (warehouse approve = cost, as before)';
+  -- 20261019b：库存成本改成只给老板（BI owner）；物流主管、仓库主管都看不到
+  assert not ops.sees_cost(s) and not ops.sees_cost(null::ops.staff), 'helper: no cost';
 end $$;
 set role authenticated;
 
--- 0b. 库存成本照原本规则：仓库「可审批」就看得到（物流部主管也是）；物流部主管打不开未到货 PO（没有厂家权限）
+-- 0b. 库存成本只给老板（20261019b）：物流部主管（仓库「可审批」）看不到成本，但照旧看得到应有 / 差额、可以标旧货处理方式；
+--     物流部主管打不开未到货 PO（没有厂家权限）
 select pg_temp.as_user('logi.boss@example.com');
 do $$ declare w jsonb; c jsonb; begin
   w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
-  assert (select (x ->> 'unit_cost')::numeric from jsonb_array_elements(w -> 'stock') x where x ->> 'location' = 'HQ') = 10,
-    'logistics manager unit cost: ' || (w -> 'stock')::text;
+  assert not exists (select 1 from jsonb_array_elements(w -> 'stock') x where x -> 'unit_cost' <> 'null'::jsonb),
+    'logistics manager: no unit cost: ' || (w -> 'stock')::text;
   c := public.ops_wh_counts('{"status":"all"}');
-  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'unit_cost' and x ? 'diff_value') from jsonb_array_elements(c) x),
-    'logistics manager counts cost';
-  assert (public.ops_wh_aged('{}') ->> 'show_cost')::boolean and (public.ops_wh_aged('{}') ->> 'can_edit')::boolean, 'aged cost';
+  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'diff' and not (x ? 'unit_cost') and not (x ? 'diff_value')) from jsonb_array_elements(c) x),
+    'logistics manager counts: diff but no cost';
+  assert not (public.ops_wh_aged('{}') ->> 'show_cost')::boolean and (public.ops_wh_aged('{}') ->> 'can_edit')::boolean, 'aged: no cost, can edit';
 end $$;
+select pg_temp.as_user('boss@example.com');
+do $$ declare w jsonb; begin
+  w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
+  assert (select (x ->> 'unit_cost')::numeric from jsonb_array_elements(w -> 'stock') x where x ->> 'location' = 'HQ') = 10,
+    'owner unit cost: ' || (w -> 'stock')::text;
+end $$;
+select pg_temp.as_user('logi.boss@example.com');
 select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '只有采购、管理层与仓库部看得到');
 select pg_temp.as_user('picker@example.com');
 do $$ declare w jsonb; begin

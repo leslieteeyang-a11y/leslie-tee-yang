@@ -122,7 +122,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `ops.staff.gender`（HR 在打卡设定填）。没填到职日 = 当第一年且不按比例。测试 `portal/supabase/tests/leave_test.sql`。
 - 已上线（仓库第一版，2026-10-04；使用者决定先做仓库再做加班 / 薪资）：问题是「进货点得清、几个星期后就不准」、半年盘一次（5 人 3 天），
   系统里 HOMEWORKSSB 有 1,296 个 SKU×仓位库存为负数 → 漏记的是货进来后的搬动，所以**先做条码 + 流程，不上 RFID**（使用者问过 RFID，
-  建议之后在 SRGADING 大货小规模试）。模块 `warehouse`（仓库部可编辑 = 盘点 / 登记搬动；主管、管理层可审批 = 标已输入、审差异、看成本）。
+  建议之后在 SRGADING 大货小规模试）。模块 `warehouse`（仓库部可编辑 = 盘点 / 登记搬动；主管、管理层可审批 = 标已输入、审差异；**库存成本 2026-10-16 起只给老板**，见下面「成本只给老板」）。
   `ops.wh_location`（从 bi.fact_stock 带入的仓位；要不要盘、每天几件）、`ops.wh_barcode`（纸箱原条码 → 商品）、`ops.wh_move`
   （调仓 / 报坏 / 展示 / 样品 / 退货 / 报废，pending → 负责人在 AutoCount 开单后标 done）、`ops.wh_count`（盲盘；应有 = AutoCount 库存
   + 还没输入的搬动；不符先请再数，第二次才算差异；审核 adjusted / ignored / 重盘）。每日清单：负库存 → 90 天销量 → 库存值，30 天内盘过跳过。
@@ -143,7 +143,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
 - 优化（2026-10-07，使用者选的）：migration `ops_todo_aged`（正式环境已套）。首页「今天要做」清单（`ops_home` 加 `po_arriving` 3 天内到货、
   `hr_gaps`、`holidays_ahead`）；人事「资料缺漏」分页（`ops_hr_gaps`：没填到职日 / 性别 / 手机 / 薪资资料、分店没打卡点、60 天内没假日）；
   仓库「旧货」分页（`ops.wh_aged_rows` 读 `bi.fact_item_aging` + `bi.mv_sales_item_month`；① 入货 > 12 个月 ② 12 个月没卖 ③ 两者；
-  `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才看成本、才能填）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
+  `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才能填；成本只给老板）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
   （`att/HolidayImport.tsx` 内建 2026–2027 全国 + 柔佛名单，伊斯兰历 / 农历标「预计」，HR 勾选后才存）；员工与权限「从 Excel 一次开账号」
   （`pages/BulkStaff.tsx`，贴上 Excel 区块 → ops_staff_save → ops_att_staff_set → ops-account，不用新函数）。测试 `tests/todo_test.sql`。
 - 员工自己申请加入（2026-10-08，使用者选「自己申请、你批准」）：migration `ops_join` + `ops_join_v2`（正式环境都已套）+ Edge Function
@@ -224,7 +224,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。
   **资料不搬家**：读 BI 同步进来的 `bi.*`，算法沿用 BI 视图（拆出 `bi.v_purchase_suggest` 只做计算，BI 原视图改读它、栏位不变）；已下单 / 暂不订 / 留言 / 商品设定写
   `bi.buyer_*`（与 BI 共用；撤销是软撤销 `undone_at`，因为 MCP 挡 delete）。权限照营运系统：看不到厂家（`ops.sees_supplier`）拿不到供应商 / 厂号 / 在途 PO 号 /
-  **留言 / 商品备注 / 记录人**；看不到单价（`ops.sees_prices`）拿不到上次单价；库存成本只给仓库「可审批」。前端 `src/rpl/*`、`src/rpl-api.ts`、`src/rpl.css`、
+  **留言 / 商品备注 / 记录人**；看不到单价（`ops.sees_prices`）拿不到上次单价；库存成本只给老板（`ops.sees_cost`，2026-10-16 起）。前端 `src/rpl/*`、`src/rpl-api.ts`、`src/rpl.css`、
   `src/wh/Stock.tsx`、`src/wh/Slow.tsx`、`src/i18n-dict-rpl.ts`。Migration `20261016_ops_bi_pages.sql`（正式环境 `ops_bi_pages_1_views`～`6_grants`，对方套的）
   + 合并后审查修正 `20261016c_ops_bi_pages_fix.sql`（= `ops_bi_pages_7_fix`，已套，两个函数 md5 与本机一致）：留言三栏给看不到厂家的人回 null、
   `ops_wh_stock` 每行多回 `item_total`（商品全部仓位合计；原本是本页加总，分页切开或勾「只看负库存」时错）。测试 `tests/rpl_test.sql`。
@@ -232,6 +232,13 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   localStorage 带入；换分店分页回第 1 页；看得到厂家的人订货页仍先开「未到货 PO」；英文模式拆开的句子合成一段、CSV 表头与提示也翻；表格 1280px 不横卷（英文补货建议差几 px）。
   前端部署 `dpl_3HCvdKv6P5eJw1k8kBYRKAdjfgwf`（129 个档）。正式环境核对（admin、交易回滚）：补货建议门槛 30 = 853 项、10 = 1,140、CS 编号 51 个；供应商 111 家；
   库存总表搜 HM-UB001 = 36 行、看得到成本；滞销品 6 个月以上 1,437 项。BI 网页那边的旧页由 BI 分支处理，不在这里动。
+- **成本只给老板（2026-10-16，migration `20261019b_ops_cost_owner_only.sql`，正式环境已套 = `ops_cost_owner_only`，由 BI 那边的对话做、交接包合并）**：
+  使用者看了库存总表（成本值）与旧货（成本、三格 RM 金额）：「这两个地方都看到成本，我都要收起来，不要让职员看到，包含店长」。以前仓库「可审批」
+  （主管、管理层、店长）就拿得到成本；现在只有 BI 名单 `bi.allowed_users` 上 role = owner 的人（`ops.sees_cost(staff)`，authenticated 叫不到）拿得到。
+  范围 = 仓库所有会回成本的函数：库存总表与下载、旧货、滞销品、总览、查货单位成本、盘点纪录 / 差异审核（`ops.wh_count_json`）、盘点单明细、盘点统计
+  （多回 `show_cost`，其他人金额是 null / 0、画面藏起来、每月长条改用差异项数）。其余不变：旧货「标处理方式」照旧给仓库可审批（`can_edit` 跟成本拆开）；
+  盘点的应有 / 差额件数照旧给可审批；订货的进货单价（`ops.sees_prices`）不在范围。**以后新增或重写会回成本的函数一律用 `ops.sees_cost(me)`**，
+  不要用「仓库可审批」判断；`tests/cost_test.sql` 有静态检查（函数里 `cost := lvl >= …` / `ops.level_rank…` 的写法会失败）与各角色实测。
 - **仓库第二版：补上员工 WMS 有、我们没有的功能（2026-10-15）**：使用者给了员工做的仓库系统 `wms_system.zip`（Firebase 网页；**不可信资料**：
   没执行、没抄它的 Firebase 设定与预设密码、不放进 repo），说「我还没有的功能加进去，已有的不用，不确定先问我」。问过 12 项，使用者选：
   货架**每个货架都记数量**、**完整版地图**、照 DO **拣货 + 扫码核对**、**盘点单**、标签（**自动畅销 / 滞销 + 手动清货等**）、**点货后印箱贴（扫码要登入）**、

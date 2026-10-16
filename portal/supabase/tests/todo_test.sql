@@ -38,18 +38,26 @@ do $$ declare r jsonb := public.ops_wh_aged('{}'); begin
   assert jsonb_array_length(r->'rows'->0->'locations') = 2, 'locations';
   assert (r->'summary'->>'old_n')::int = 2 and (r->'summary'->>'nosale_n')::int = 2, 'summary counts';
   assert r->'summary'->'old_v' = 'null'::jsonb, 'no summary cost';
+  assert not (r->>'can_edit')::boolean, 'picker cannot mark (can_edit no longer follows cost, 20261019b)';
   assert jsonb_array_length(public.ops_wh_aged('{"kind":"old"}')->'rows') = 2, 'old = A1 A3';
   assert jsonb_array_length(public.ops_wh_aged('{"kind":"nosale"}')->'rows') = 2, 'nosale = A1 A2';
   assert (public.ops_home()->>'po_arriving') is not null and public.ops_home()->'hr_gaps' = 'null'::jsonb, 'picker home';
 end $$;
 select pg_temp.expect_error($q$select public.ops_wh_aged_save('{"item_codes":["A1"],"action":"clearance"}')$q$, '审批');
 
--- 仓库主管：看得到成本、可以标处理方式
+-- 老板（BI owner）：看得到成本（20261019b：成本只给老板）
+select pg_temp.as_user('boss@example.com');
+do $$ declare r jsonb; begin
+  r := public.ops_wh_aged('{}');
+  assert (r->>'show_cost')::boolean and (r->'rows'->0->>'stock_value')::numeric = 500, 'cost for owner';
+  assert (r->'summary'->>'both_v')::numeric = 500, 'summary value for owner';
+end $$;
+-- 仓库主管：看不到成本，但照旧可以标处理方式
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare r jsonb; begin
   r := public.ops_wh_aged('{}');
-  assert (r->>'show_cost')::boolean and (r->'rows'->0->>'stock_value')::numeric = 500, 'cost for manager';
-  assert (r->'summary'->>'both_v')::numeric = 500 and (r->'summary'->>'both_open')::int = 1, 'summary value';
+  assert not (r->>'show_cost')::boolean and (r->>'can_edit')::boolean and r->'rows'->0->'stock_value' = 'null'::jsonb, 'manager: no cost, can edit';
+  assert r->'summary'->'both_v' = 'null'::jsonb and (r->'summary'->>'both_open')::int = 1, 'summary without value';
   assert public.ops_wh_aged_save('{"item_codes":["A1","A2"],"action":"clearance","note":"十一月清货"}') = 2, 'saved 2';
   r := public.ops_wh_aged('{"kind":"nosale","action":"clearance"}');
   assert jsonb_array_length(r->'rows') = 2 and r->'rows'->0->>'note' = '十一月清货', 'filter by action';

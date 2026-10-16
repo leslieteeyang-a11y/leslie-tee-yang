@@ -153,11 +153,20 @@ do $$ declare s jsonb := public.ops_rpl_suppliers(''); begin
 end $$;
 select pg_temp.expect_error($q$select public.ops_rpl_supplier_save('{"creditor_code":"4000-M002","lead_days":10}')$q$, '编辑');
 
--- 4. 库存总表：仓库主管看成本；门市看不到成本、看得到售价；负库存筛选；搜寻
+-- 4. 库存总表：成本只给老板（20261019b），仓库主管、门市都看不到成本、看得到售价；负库存筛选；搜寻
+select pg_temp.as_user('boss@example.com');
+do $$ declare r jsonb := public.ops_wh_stock('{}'); x jsonb := public.ops_wh_stock_export('{}'); begin
+  assert (r->>'show_cost')::boolean and (select (e->>'total_cost')::numeric from jsonb_array_elements(r->'rows') e
+                                           where e->>'item_code' = 'ST003' and e->>'location' = 'HQ') = 300, 'owner sees cost';
+  assert (x->>'show_cost')::boolean and (select (e->>'total_cost')::numeric from jsonb_array_elements(x->'rows') e
+                                           where e->>'item_code' = 'ST003' and e->>'location' = 'HQ') = 300, 'owner export has cost';
+end $$;
 select pg_temp.as_user('whboss@example.com');
 do $$ declare r jsonb := public.ops_wh_stock('{}'); n jsonb; begin
-  assert (r->>'show_cost')::boolean and (r->>'total')::int >= 6, 'stock: ' || r::text;
-  assert (select (x->>'total_cost')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003' and x->>'location' = 'HQ') = 300, 'cost visible';
+  assert not (r->>'show_cost')::boolean and (r->>'total')::int >= 6, 'stock: ' || r::text;
+  assert (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(r->'rows') x), 'manager: cost hidden';
+  n := public.ops_wh_stock_export('{}');
+  assert not (n->>'show_cost')::boolean and (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(n->'rows') x), 'manager export: no cost';
   n := public.ops_wh_stock('{"neg_only":true}');
   assert (n->>'total')::int = (r->>'neg_total')::int and (n->>'total')::int = 2, 'negatives: ' || n::text;
   -- 商品合计 = 全部仓位（ST001：HQ 5 + SRGADING 3 + PRE (JB) −3 = 5），不是只算负库存那几行
@@ -172,11 +181,16 @@ do $$ declare r jsonb := public.ops_wh_stock('{"q":"ST003"}'); begin
   assert (r->'rows'->0->>'price2')::numeric = 99, 'selling price visible';
 end $$;
 
--- 5. 滞销品：6 个月以上 = ST004（200 天）；3–6 个月 = ST003（100 天）；成本只给可审批
+-- 5. 滞销品：6 个月以上 = ST004（200 天）；3–6 个月 = ST003（100 天）；成本只给老板（20261019b）
+select pg_temp.as_user('boss@example.com');
+do $$ declare r jsonb := public.ops_wh_slow('{"min_months":6}'); begin
+  -- 其他测试档也塞了账龄资料（A1 / A3），只检查 ST004 的成本
+  assert (select (x->>'stock_value')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004') = 1200, 'slow 6m owner: ' || r::text;
+end $$;
 select pg_temp.as_user('whboss@example.com');
 do $$ declare r jsonb := public.ops_wh_slow('{"min_months":6}'); begin
-  -- 其他测试档也塞了账龄资料（A1 / A3），只检查 ST004 在列、成本正确、ST003 不在列
-  assert (select (x->>'stock_value')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004') = 1200, 'slow 6m: ' || r::text;
+  assert not (r->>'show_cost')::boolean and exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004' and x->'stock_value' = 'null'::jsonb),
+    'slow 6m manager: no cost: ' || r::text;
   assert not exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003'), 'slow 6m excludes 3-6m item';
   r := public.ops_wh_slow('{"min_months":3,"max_months":6}');
   assert exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003')

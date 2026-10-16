@@ -1,4 +1,4 @@
-// 仓库「总览」的资料层（2026-10-15）。金额（成本）只给仓库「可审批」（show_cost）。
+// 仓库「总览」的资料层（2026-10-15）。金额（成本）只给老板（show_cost，20261019b）。
 import { supabase } from "./supabase";
 import { BinSummary } from "./wh-bin-api";
 

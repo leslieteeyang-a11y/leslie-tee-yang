@@ -94,8 +94,11 @@ export const DICT_WHSHEET: Record<string, string> = {
   "盘了几项": "Counted",
   "差异率": "Variance rate",
   "每月差异金额（近 12 个月）": "Variance value by month (last 12 months)",
+  "每月差异（近 12 个月）": "Variances by month (last 12 months)",
   "净额": "Net",
   "多的少的加起来": "Over + short",
+  "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）。要再数、主管按「请重盘」的那次不算。":
+    "Diff = counted − expected (expected = AutoCount stock + moves not yet keyed in). First counts that needed a recount, and counts a manager sent back for recount, are left out.",
   "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）；金额用盘点当下的单位成本算，负数 = 少了。要再数、主管按「请重盘」的那次不算。":
     "Diff = counted − expected (expected = AutoCount stock + moves not yet keyed in); value uses the unit cost at the time of the count, negative = short. First counts that needed a recount, and counts a manager sent back for recount, are left out.",
   // 资料库错误讯息

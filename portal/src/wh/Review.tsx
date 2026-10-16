@@ -31,7 +31,7 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
   }
   const toggle = (id: number) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const sum = (rows || []).reduce((a, r) => a + Number(r.diff_value || 0), 0);
-  // 成本（成本差额）只给资料库回了的人（仓库「可审批」）：没回就把栏位藏起来
+  // 成本（成本差额）只给资料库回了的人（老板，20261019b）：没回就把栏位藏起来
   const showCost = (rows || []).some((r) => r.diff_value != null);
 
   function csv() {

@@ -100,9 +100,16 @@ select pg_temp.as_user('whmgr@example.com');
 do $$ declare v jsonb := public.ops_wh_counts('{"status":"variance"}'); h jsonb := public.ops_home(); x jsonb; begin
   assert jsonb_array_length(v) = 2, 'variances: ' || v::text;
   x := (select e from jsonb_array_elements(v) e where e->>'item_code' = 'ST004');
-  assert (x->>'diff')::numeric = -1 and (x->>'diff_value')::numeric = -300 and (x->>'system_qty')::numeric = 4, 'diff: ' || x::text;
+  -- 成本只给老板（20261019b）：主管看得到应有 / 差额，看不到单位成本、成本差额
+  assert (x->>'diff')::numeric = -1 and not (x ? 'diff_value') and not (x ? 'unit_cost') and (x->>'system_qty')::numeric = 4, 'diff: ' || x::text;
   assert (h->>'wh_variances')::int = 2 and (h->>'wh_moves_pending')::int = 1, 'home: ' || h::text;
 end $$;
+select pg_temp.as_user('boss@example.com');
+do $$ declare x jsonb; begin
+  x := (select e from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) e where e->>'item_code' = 'ST004');
+  assert (x->>'diff_value')::numeric = -300, 'owner sees cost diff: ' || x::text;
+end $$;
+select pg_temp.as_user('whmgr@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_count_review(array[1::bigint], 'ignored')$q$, '写原因');
 do $$ declare ids bigint[]; n int; begin
   select array_agg((e->>'id')::bigint) into ids from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) e;

@@ -145,6 +145,8 @@ export const DICT_MORE: Record<string, string> = {
   "全选这页": "Select all on page",
   "资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。":
     "Synced from AutoCount daily. Cost = AutoCount stock cost; many China items (CSxxx) have no unit price, so cost is 0. Packaging and shipping-fee items also show as \"no sales\"; mark them \"Keep\".",
+  "资料每天跟 AutoCount 同步一次。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。":
+    "Synced from AutoCount daily. Packaging and shipping-fee items also show as \"no sales\"; mark them \"Keep\".",
   "怎么处理": "Action",
   "负责人（选填）": "Person in charge (optional)",
   "备注（选填）": "Note (optional)",

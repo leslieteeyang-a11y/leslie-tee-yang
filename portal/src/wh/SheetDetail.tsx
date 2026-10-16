@@ -143,7 +143,7 @@ export default function SheetDetail({ id }: { id: number; company?: string }) {
                     {`${qtyLabel(l.qty)} / ${qtyLabel(l.expected)} · 差 ${Number(l.diff) > 0 ? "+" : ""}${qtyLabel(l.diff)}`}
                   </span>
                 )}
-                {full && l.diff != null && Number(l.diff_value) !== 0 && <span className="small muted nowrap">{rm(l.diff_value)}</span>}
+                {full && l.diff != null && l.diff_value != null && Number(l.diff_value) !== 0 && <span className="small muted nowrap">{rm(l.diff_value)}</span>}
                 {canCount(l) && <span className="go nowrap">{l.status === "todo" ? "盘 →" : l.status === "recount" ? "再数 →" : "重盘 →"}</span>}
               </div>
             </li>
