@@ -30,7 +30,7 @@
 
 - `portal/supabase/migrations/20261018_ops_customers_v2.sql` —— **已套用**（Supabase migration `ops_customers_v2` + `ops_customers_v2_new_order`
   + `ops_customers_v2_registers_no_address`，后两个是审查后的小修正，内容已并进这个档；
-  里面 `bi_customer_merge` 那段含删除语句，Supabase 连接器会卡在确认，由使用者在 Supabase SQL Editor 贴上执行）。可重复套用；资料仍在 BI 的
+  里面 `bi_customer_merge` 那段含删除语句，Supabase 连接器会卡在确认，由使用者在 Supabase SQL Editor 贴上执行，2026-10-16 已套、核对过）。可重复套用；资料仍在 BI 的
   `bi.customer_*`（不搬家）。**营运系统这边不用再套任何 migration。**
   - `bi.customer_profile` 加 `warranty_at / warranty_months / warranty_by / warranty_from`（第一次登记时记下；之后改设定不影响）；
     `bi.customer_settings` 加 `warranty_months`（0 = 不送）/ `warranty_back_days`。
