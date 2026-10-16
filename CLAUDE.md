@@ -217,6 +217,8 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   设定 `bi.customer_settings.warranty_months`（**0 = 不送，预设 0**）/ `warranty_back_days` 只有 admin 改（`bi_customer_set_warranty`）；只算 Hemos 产品：
   `bi_customer` 的购买明细多 `brand`（dim_item.item_type），顾客页只在有 HEMOS / HEMOSX 的单标 🛡️。BI 的扫码登记页 `/join.html` 读
   `bi_customer_signup_offer()`（anon），送出后照 `bi_customer_signup` 回传的实际月数显示。前端多 `src/cust/HomeCard.tsx`（首页）；测试 `tests/cust2_test.sql`。
+  **营运系统前端已上线（2026-10-16）**：部署 `dpl_7ZLKpy1qZs416vabQ4LEqsQqbpiB`（180 个档，清单 `portal/deploy_manifest_20261016d.json`）；合并前核对正式环境
+  这个 migration 的 11 个函数 md5 与本机一致（`bi_customer_merge` 只差 CRLF 换行，是 SQL Editor 贴上的），不用再套。
 - **BI 的订货 / 库存 / 滞销品四页（2026-10-15 上线）**：老板 2026-10-14 决定「把订货、滞销品、库存这三个移到员工多部门功能那边，BI 那边去掉」；
   另一个 Claude 对话在 `claude/monthly-data-prep-vtcnct` 做好，以 patch（`docs/ops_handoff/0001-bi-pages-to-ops.patch`）交过来，`git am` 成 b9f9819。
   订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。
