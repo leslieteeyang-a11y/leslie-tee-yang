@@ -252,27 +252,42 @@ LIVE_V5 = {**{k: v for k, v in LIVE_V4.items() if k not in _GONE_V5},
            "src/pages/Receivables.tsx": "ac5d49dd8a38aea8d4341fa98ba499d39aea9148",
            "src/pages/Targets.tsx": "8d82802f450b2d31052f88748957c3e7297d0f4e",
            "src/styles.css": "1326dffab77c961afc8dadace911991bf4d07293"}
-CHANGED = ["delivery.html", "driver.html", "src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
+CHANGED = ["delivery.html", "driver.html", "loyalty.html", "src/i18n/loyalty.ts", "src/join/join.css", "src/join/main.tsx", "src/loyalty/main.tsx",
            "src/pages/Loyalty.tsx"]
 NEW_FILES: list[str] = []
+# 2026-10-16 使用者在 SERVER 部署的 dpl_5xZ6ramrok7FBATAXWM7UJvNjgnX：上面 CHANGED 除了 loyalty.html 都已经是这边的版本。
+# 同日晚上「关掉 BI 顾客资料页」只再换 loyalty.html（改成转到营运系统）
+LIVE_V6 = {**LIVE_V5,
+           "delivery.html": "4fd5453f40576ed57c2747a7c5db1f52411157e0",
+           "driver.html": "b1ba793e81c50c3b15f1a77087f46e02cd131d24",
+           "src/i18n/loyalty.ts": "112af5b96b5bc154a703adc004bc61ef7a0e6a0e",
+           "src/join/join.css": "f6fd52d9a7653850dfc33210d84ee115053131ea",
+           "src/join/main.tsx": "2275660f89bfdded362d99760a5944973b93e850",
+           "src/loyalty/main.tsx": "d7e72ab4c0ff07f68688b1fbe915a02ac3e61cee",
+           "src/pages/Loyalty.tsx": "3734b7a844b4ae93137c45c0a6efe41e99fd837e"}
 
 
 def test_repo_overlay_replaces_only_the_changed_customer_files():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
     assert "overlay.json" not in overlay                   # 说明档本身不上传
-    plan = d.plan_files(LIVE_V5, overlay, replaces)
+    plan = d.plan_files(LIVE_V6, overlay, replaces)
     assert plan["added"] == NEW_FILES
-    assert sorted(plan["replaced"]) == CHANGED
-    assert sorted(plan["same"]) == ["join.html", "loyalty.html", "src/delivery/main.tsx", "src/driver/driver.css",
-                                    "src/driver/main.tsx", "src/i18n/index.ts", "src/loyalty/loyalty.css", "src/pages/Delivery.tsx",
-                                    "vite.config.ts"]
+    assert plan["replaced"] == ["loyalty.html"]            # 10/16 上线后只剩顾客资料页要换（改成转到营运系统）
+    assert sorted(plan["same"]) == sorted(p for p in overlay if p != "loyalty.html")
     sent = {f["file"]: f for f in plan["files"]}
-    assert set(sent) == set(LIVE_V5) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
-    for path, sha in LIVE_V5.items():
+    assert set(sent) == set(LIVE_V6) | set(NEW_FILES)      # 线上每个档都还在，没有漏掉任何一页
+    for path, sha in LIVE_V6.items():
         if path not in overlay:
             assert sent[path] == {"file": path, "sha": sha}  # 没改的档原样引用线上那一版
-    assert set(plan["upload"]) == set(plan["replaced"]) | set(plan["added"])
-    assert "src/loyalty/loyalty.css" in LIVE_V5              # 被换掉的档线上都有
+    assert set(plan["upload"]) == {"loyalty.html"}
+    assert b"homeworks-ops.vercel.app/#/customers" in overlay["loyalty.html"]
+
+
+def test_overlay_still_applies_on_the_site_before_the_10_16_deploy():
+    """10/16 那版若被退回 10/15 的线上版，这份改版照样能一次换上全部 8 个档。"""
+    overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
+    plan = d.plan_files(LIVE_V5, overlay, replaces)
+    assert sorted(plan["replaced"]) == CHANGED and plan["added"] == NEW_FILES
 
 
 def test_overlay_refuses_a_site_it_was_not_based_on():
@@ -286,7 +301,7 @@ def test_overlay_refuses_a_site_it_was_not_based_on():
 
 def test_rerun_after_deploy_is_a_no_op():
     overlay, replaces = d.read_overlay(d.DEFAULT_OVERLAY)
-    after = {**LIVE_V5, **{p: d.sha1(b) for p, b in overlay.items()}}
+    after = {**LIVE_V6, **{p: d.sha1(b) for p, b in overlay.items()}}
     plan = d.plan_files(after, overlay, replaces)
     assert plan["upload"] == {} and sorted(plan["same"]) == sorted(overlay)
 

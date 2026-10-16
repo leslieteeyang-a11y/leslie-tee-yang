@@ -1,7 +1,8 @@
 {
-  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都必须与线上相同。2026-10-14：使用者决定送货只用营运系统（homeworks-ops）→ delivery.html 转到营运系统的「送货」、driver.html 带着签收代码转到营运系统的签收页（旧的 WhatsApp 连结照样能签收）、顾客资料页拿掉内嵌的送货排单改成连结。底是另一个对话 2026-10-14 部署的 dpl_7TSztDz3UXC1owtoGsebyrqKa1gu（加了 Health / Margin / Targets 等页，改了 src/i18n/index.ts，这里已同步成线上那一版）。顾客资料页本身等营运系统的顾客资料上线、试用后再关（loyalty.html 那时再改）。 2026-10-15 再加：顾客扫码登记页（join）显示「登记即享 Hemos 产品保修延长 N 个月」（月数在营运系统设定，0 = 不显示）。 2026-10-16：底换成另一个对话 2026-10-15 部署的 dpl_6GPMnuXZydBAVmJwxNTyc983obGN（订货 / 库存 / 滞销品搬去营运系统，src/i18n/index.ts 拿掉 purchasing / cscode，这里已同步成线上那一版）；要换掉的 7 个档线上没变。",
-  "based_on_deployment": "dpl_6GPMnuXZydBAVmJwxNTyc983obGN",
+  "_说明": "scripts/deploy_bi_web.py 用：replaces = 这份改版要换掉的线上档，以及当初是以哪一版（线上档的 SHA1）为底改的。线上若已不是那一版，部署会停下来。其余档都必须与线上相同。2026-10-14：使用者决定送货只用营运系统（homeworks-ops）→ delivery.html 转到营运系统的「送货」、driver.html 带着签收代码转到营运系统的签收页（旧的 WhatsApp 连结照样能签收）、顾客资料页拿掉内嵌的送货排单改成连结。底是另一个对话 2026-10-14 部署的 dpl_7TSztDz3UXC1owtoGsebyrqKa1gu（加了 Health / Margin / Targets 等页，改了 src/i18n/index.ts，这里已同步成线上那一版）。顾客资料页本身等营运系统的顾客资料上线、试用后再关（loyalty.html 那时再改）。 2026-10-15 再加：顾客扫码登记页（join）显示「登记即享 Hemos 产品保修延长 N 个月」（月数在营运系统设定，0 = 不显示）。 2026-10-16：底换成另一个对话 2026-10-15 部署的 dpl_6GPMnuXZydBAVmJwxNTyc983obGN（订货 / 库存 / 滞销品搬去营运系统，src/i18n/index.ts 拿掉 purchasing / cscode，这里已同步成线上那一版）；要换掉的 7 个档线上没变。 2026-10-16 晚：使用者「关掉 BI 顾客资料页」→ loyalty.html 改成转到营运系统的「顾客资料」（#m=<顾客编号> 直接开那位顾客）；底是同日上线的 dpl_5xZ6ramrok7FBATAXWM7UJvNjgnX（其余 7 个档就是那一版的线上内容）。",
+  "based_on_deployment": "dpl_5xZ6ramrok7FBATAXWM7UJvNjgnX",
   "replaces": {
+    "loyalty.html": "997523778355146e1492fdc53dafb7dd799c6ac6",
     "delivery.html": "a0350088b26053b2efe2b955b729b20bba377f46",
     "driver.html": "bee7bb6fd5d21b3f2e6b5e70e7c2204f63bfe33f",
     "src/i18n/loyalty.ts": "d97a8b0c8788b3167a45c303ad028bd37bfb9311",

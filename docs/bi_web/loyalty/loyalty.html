@@ -6,10 +6,22 @@
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#283060" />
+    <meta name="robots" content="noindex" />
     <title>顾客资料 · Homeworks</title>
+    <!-- 2026-10-16 使用者：「关掉 BI 顾客资料页」→ 顾客资料只用「HomeWorks 营运系统」的「顾客资料」（资料本来就是同一份）。
+         旧连结 loyalty.html#m=<顾客编号> 直接打开那位顾客；其他都到顾客资料首页。顾客扫码登记 join.html 不受影响 -->
+    <script>
+      (function () {
+        var ops = 'https://homeworks-ops.vercel.app/#/customers';
+        var m = location.hash.match(/^#m=(.+)$/);
+        var id = '';
+        if (m) { try { id = decodeURIComponent(m[1]); } catch (e) { id = m[1]; } }
+        location.replace(id ? ops + '/c/' + encodeURIComponent(id) : ops);
+      })();
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/loyalty/main.tsx"></script>
+  <body style="margin:0;padding:24px;font-family:system-ui,sans-serif;background:#111721;color:#fff">
+    <p>顾客资料已经搬到「HomeWorks 营运系统」，正在打开…<br />Customers has moved to HomeWorks Operations. Opening…</p>
+    <p><a style="color:#dbe8fa" href="https://homeworks-ops.vercel.app/#/customers">https://homeworks-ops.vercel.app/#/customers</a></p>
   </body>
 </html>
