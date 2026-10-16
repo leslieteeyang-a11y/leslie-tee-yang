@@ -5,6 +5,7 @@ import { go, setLeaveGuard } from "../router";
 import { Modal } from "../ui";
 import { IssueRequest, joinList, num, podo, RecvFull, RecvItem, requestLabel, ui } from "../podo-api";
 import { ErrorLines, NOT_PICKED, OurItemPicker, Picked, RequestSelect } from "./common";
+import { RecvScan } from "./RecvScan";
 
 export const r3 = (n: number) => Math.round(n * 1000) / 1000;
 export const sumOf = (xs: number[]) => r3(xs.reduce((s, x) => s + x, 0));
@@ -176,6 +177,8 @@ export function RecvForm({ d, onDone, onRace }: {
   const [onlyIssues, setOnlyIssues] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const [onlyLeft, setOnlyLeft] = useState(false);
 
   // 有改没送出：关分页 / 换页前先问
   useEffect(() => {
@@ -201,6 +204,7 @@ export function RecvForm({ d, onDone, onRace }: {
   const shown = d.items.filter((it) => {
     const k = q.trim().toLowerCase();
     if (k && !it.item_code.toLowerCase().includes(k) && !(it.description ?? "").toLowerCase().includes(k)) return false;
+    if (scanMode && onlyLeft && lines[it.item_code].received.trim() !== "") return false;
     if (!onlyIssues) return true;
     return !rowOk(calc(it, lines[it.item_code])) || splitChanged(lines[it.item_code], it);
   });
@@ -264,8 +268,24 @@ export function RecvForm({ d, onDone, onRace }: {
         <p className="muted small">每行的「＋ 备注」会带进厂家问题（到货少 / 坏货 / 多到），印在给厂家的清单与 WhatsApp 讯息上；只给自己人看的写在最下面的「整张备注」。</p>
         <p className="muted small">好货改少了，没动过分配的型号会自动从总部先扣（多了放总部）；要别的分法直接改分店的数字。</p>
         {hasPrior && <p className="small amber">有型号点货前已经记了坏货 / 到货少：已先填进好货、坏货，实际不同请改。</p>}
+        <RecvScan company={d.company} items={d.items} scanMode={scanMode}
+                  received={Object.fromEntries(d.items.map((it) => [it.item_code, lines[it.item_code].received]))}
+                  onStart={() => {
+                    setLines(Object.fromEntries(d.items.map((it) => [it.item_code, { ...lines[it.item_code], received: "", damaged: "0", alloc: {}, touched: false }])));
+                    setScanMode(true); setOnlyLeft(false); touch();
+                  }}
+                  onCount={(code, good, dmg) => {
+                    const it = d.items.find((x) => x.item_code === code)!;
+                    setLine(code, (x) => ({ ...withReceived(x, it, good, order), damaged: dmg }));
+                    window.setTimeout(() => document.getElementById(`recv-row-${code}`)?.scrollIntoView({ block: "nearest" }), 50);
+                  }}
+                  onWrong={(code, desc, qty) => {
+                    setWrong((prev) => [...prev.filter((w) => !isBlankWrong(w)), { ...blankWrong(mainLoc), pick: { own: true, code, desc }, qty }]);
+                    touch();
+                  }} />
         <div className="toolbar">
           {d.items.length > 8 && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="找型号 / 品名…" />}
+          {scanMode && <label className="check"><input type="checkbox" checked={onlyLeft} onChange={(e) => setOnlyLeft(e.target.checked)} /> 只看还没点的</label>}
           <label className="check"><input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} /> 只看有改的</label>
           <button type="button" className="small ghost" onClick={allAsShipped}>全部照应到</button>
         </div>
@@ -289,7 +309,7 @@ export function RecvForm({ d, onDone, onRace }: {
                 const reset = () => setLine(code, (x) => ({ ...x, alloc: autoAlloc(it, num(x.received) || 0, order), touched: false }));
                 const allocParts = outlets.map((o) => ({ o, n: num(l.alloc[o.code]) || 0 })).filter((x) => x.n > 0);
                 return (
-                  <tr key={code} className={rowOk(c) ? "" : "recv-diff"}>
+                  <tr key={code} id={`recv-row-${code}`} className={rowOk(c) ? "" : "recv-diff"}>
                     <td className="sticky">
                       <b>{code}</b> <small className="muted">{it.uom}</small><br />
                       <small>{it.description}</small>
