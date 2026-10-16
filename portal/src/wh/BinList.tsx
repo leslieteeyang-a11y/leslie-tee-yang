@@ -6,7 +6,7 @@ import { Empty, ErrorBox, Modal } from "../ui";
 import { qtyLabel, whenLabel } from "../wh-api";
 import { BIN_LOG_LABEL, BinDetail, BinList, BinRow, bins } from "../wh-bin-api";
 import { BinLabelBar } from "./BinLabels";
-import { rememberLoc } from "./binLoc";
+import { rememberLoc, rememberOpenZones } from "./binLoc";
 
 /** 「R1-R10, R12」→ R1…R10、R12；「1-4」→ 1…4；「A-D」→ A…D；逗号、顿号、换行分开 */
 export function expandList(s: string): string[] {
@@ -47,6 +47,10 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
   const [detail, setDetail] = useState<number | null>(null);
   const [creating, setCreating] = useState<"one" | "bulk" | null>(null);
   const [notice, setNotice] = useState("");
+  // 区预设收起，按区名才展开（使用者 2026-10-16：区多了一眼看不完）；有打字找货架时全部展开
+  const [open, setOpen] = useState<string[]>(() => rememberOpenZones(company));
+  const setOpenSaved = (keys: string[]) => { setOpen(keys); rememberOpenZones(company, keys); };
+  const zoneKey = (loc: string, zone: string) => `${loc}|${zone}`;
 
   const Q = q.trim().toUpperCase();
   const rows = data.bins.filter((b) => (!locF || b.location === locF) && (!Q || b.code.includes(Q) || b.note.toUpperCase().includes(Q)));
@@ -63,6 +67,9 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
       s.get(b.shelf)!.push(b);
     }
   }
+  const allKeys = [...groups.entries()].flatMap(([loc, zones]) => [...zones.keys()].map((z) => zoneKey(loc, z)));
+  const isOpen = (k: string) => Q !== "" || open.includes(k);
+  const toggleZone = (k: string) => setOpenSaved(open.includes(k) ? open.filter((x) => x !== k) : [...open, k]);
   const toggle = (id: number) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const selBins = data.bins.filter((b) => sel.includes(b.id));
 
@@ -92,6 +99,12 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
           <BinLabelBar bins={selBins} company={company} />
         </div>
       )}
+      {rows.length > 0 && Q === "" && (
+        <div className="bin-zone-all">
+          <button className="ghost small" onClick={() => setOpenSaved([...new Set([...open, ...allKeys])])}>全部展开</button>
+          <button className="ghost small" onClick={() => setOpenSaved(open.filter((k) => !allKeys.includes(k)))}>全部收起</button>
+        </div>
+      )}
       {data.bins.length === 0 ? (
         <Empty>{canApprove ? "还没有货架。按「建货架」或「一次建很多」开始；已经有员工 WMS 的资料可以用「Excel 带入」。" : "还没有货架。请主管先建货架。"}</Empty>
       ) : rows.length === 0 ? <Empty>没有符合的货架。</Empty> : (
@@ -106,10 +119,23 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
                 {s && s.items_over > 0 && <a className="bin-flag late" href={`#/warehouse/bins/recon?loc=${encodeURIComponent(loc)}&f=over`}>{`货架比系统多 ${s.items_over} 项`}</a>}
                 {s && s.items_unshelved > 0 && <a className="bin-flag amber" href={`#/warehouse/bins/recon?loc=${encodeURIComponent(loc)}&f=unshelved`}>{`未上架 ${s.items_unshelved} 项`}</a>}
               </div>
-              {[...zones.entries()].map(([zone, shelves]) => (
-                <div key={zone} className="bin-zone">
-                  <h3>{zone ? `${zone} 区` : "（没分区）"}</h3>
-                  {[...shelves.entries()].map(([shelf, cells]) => (
+              {[...zones.entries()].map(([zone, shelves]) => {
+                const k = zoneKey(loc, zone);
+                const on = isOpen(k);
+                const zb = [...shelves.values()].flat().filter((b) => b.active);
+                return (
+                <div key={zone} className={"bin-zone" + (on ? " open" : "")}>
+                  <button type="button" className="bin-zone-head" aria-expanded={on} onClick={() => toggleZone(k)} disabled={Q !== ""}>
+                    <span className="bin-zone-arrow" aria-hidden>{on ? "▾" : "▸"}</span>
+                    <b>{zone ? `${zone} 区` : "（没分区）"}</b>
+                    <span className="muted small">{`${shelves.size} 排`}</span>
+                    <span className="bin-zone-stats muted small">
+                      <span>{`${zb.length} 个货架`}</span>{" · "}
+                      <span>{`${zb.filter((b) => Number(b.qty) > 0).length} 个有货`}</span>{" · "}
+                      <span>{`${qtyLabel(zb.reduce((a, b) => a + Number(b.qty), 0))} 件`}</span>
+                    </span>
+                  </button>
+                  {on && [...shelves.entries()].map(([shelf, cells]) => (
                     <div key={shelf} className="bin-shelf">
                       <div className="bin-shelf-name">{shelf}</div>
                       <div className="bin-cells">
@@ -127,7 +153,8 @@ export function BinListView({ company, data, locs, canEdit, canApprove, inactive
                     </div>
                   ))}
                 </div>
-              ))}
+                );
+              })}
             </section>
           );
         })

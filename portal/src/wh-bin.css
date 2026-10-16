@@ -63,6 +63,16 @@ button.bin-submit { padding: 12px 22px; font-size: 1.05rem; font-weight: 700; }
 .bin-group-head { display: flex; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 6px; }
 a.bin-flag { font-size: .85rem; font-weight: 600; text-decoration: none; }
 .bin-zone h3 { margin: 12px 0 6px; font-size: .95rem; color: var(--muted); }
+.bin-zone-all { display: flex; gap: 8px; margin: 0 0 10px; }
+.bin-zone { border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; }
+.bin-zone.open { padding: 0 10px 6px; }
+button.bin-zone-head { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; width: 100%; padding: 10px 12px;
+  background: transparent; color: var(--text); border: 0; border-radius: 10px; text-align: left; font-size: 1rem; white-space: normal; }
+button.bin-zone-head:hover:not(:disabled) { background: var(--hover); }
+button.bin-zone-head:disabled { opacity: 1; cursor: default; }
+.bin-zone.open button.bin-zone-head { padding-left: 2px; padding-right: 2px; }
+.bin-zone-arrow { width: 1em; color: var(--muted); }
+.bin-zone-stats { margin-left: auto; }
 .bin-shelf { display: flex; gap: 10px; align-items: stretch; padding: 6px 0; border-top: 1px solid var(--line); }
 .bin-shelf-name { width: 56px; flex-shrink: 0; font-weight: 700; padding-top: 8px; overflow-wrap: anywhere; }
 .bin-cells { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
