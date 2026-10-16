@@ -190,7 +190,7 @@ AutoCount 同步的、扫码登记 / 报价提醒 / 送货地址都读同一份�
 `bi_customer_staff_board`；延长保修 = 「Hemos 保修登记」：`customer_profile.warranty_at / _months / _by / _from`（第一次登记时记下）、设定
 `customer_settings.warranty_months`（**0 = 不送，预设 0**，营运系统「顾客资料 → 设定」由 admin 改）/ `warranty_back_days`；`bi_customer` 明细多 `brand`；
 `bi_customer_signup`（9 参数版）回传实际记下的 `warranty_months`；BI 扫码登记页 `/join.html` 读 `bi_customer_signup_offer()`（anon），月数 > 0 才显示保修那行
-（overlay 改 `src/join/main.tsx`、`join.css`）。**以后在这边改 `bi.customer_signup_apply` / `bi_customer_merge` / `bi_customer` 要保留保修栏位**。
+（overlay 改 `src/join/main.tsx`、`join.css`）。**2026-10-16 全部上线**：营运系统前端 dpl_7ZLKpy1qZs416vabQ4LEqsQqbpiB（那边合并成 702c4a7）；BI 网页 dpl_5xZ6ramrok7FBATAXWM7UJvNjgnX（含 10-14 的送货页转走 + 扫码页保修那行；10/15 另一个对话把订货 / 库存 / 滞销品搬走、改了 `src/i18n/index.ts`，overlay 已改以 dpl_6GPMnu… 为底，测试清单 `LIVE_V5`）。延长保修月数仍是 0，等使用者在营运系统设定。**以后在这边改 `bi.customer_signup_apply` / `bi_customer_merge` / `bi_customer` 要保留保修栏位**。
 
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
