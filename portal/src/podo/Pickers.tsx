@@ -49,6 +49,7 @@ export function SupplierPicker({ me, company, onCompany, onPick }: {
           <select value={company} onChange={(e) => onCompany(e.target.value)}>
             <option value="HOMEWORKSSB">{BRANCH_LABEL.HOMEWORKSSB}</option>
             <option value="HOMEWORKSSOUTHERN">{BRANCH_LABEL.HOMEWORKSSOUTHERN}</option>
+            <option value="HOMEWORKSPUCHONG">{BRANCH_LABEL.HOMEWORKSPUCHONG}</option>
           </select>
         )}
       </div>

@@ -265,7 +265,7 @@ export const KIND_LABEL: Record<ApprovalKind, string> = {
 export const APPROVAL_STATUS_LABEL: Record<ApprovalStatus, string> = {
   pending: "待审批", approved: "已批准", rejected: "已驳回", cancelled: "已撤回",
 };
-export const BRANCH_LABEL: Record<string, string> = { HOMEWORKSSB: "总部", HOMEWORKSSOUTHERN: "JB 分店", ALL: "全部分店" };
+export const BRANCH_LABEL: Record<string, string> = { HOMEWORKSSB: "总部", HOMEWORKSSOUTHERN: "JB 分店", HOMEWORKSPUCHONG: "Puchong 分店", ALL: "全部分店" };
 export const ROLE_LABEL: Record<string, string> = { admin: "管理员", manager: "主管", staff: "员工" };
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {

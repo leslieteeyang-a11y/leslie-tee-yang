@@ -158,6 +158,7 @@ function Decide({ me, r, onClose, onDone }: { me: Me; r: Req; onClose: () => voi
             <select value={branch} onChange={(e) => setBranch(e.target.value)}>
               <option value="HOMEWORKSSB">{BRANCH_LABEL.HOMEWORKSSB}</option>
               <option value="HOMEWORKSSOUTHERN">{BRANCH_LABEL.HOMEWORKSSOUTHERN}</option>
+              <option value="HOMEWORKSPUCHONG">{BRANCH_LABEL.HOMEWORKSPUCHONG}</option>
             </select>
           </label>
         </div>

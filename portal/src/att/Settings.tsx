@@ -20,7 +20,7 @@ export default function Settings({ me }: { me: Me }) {
 
   const shiftName = (code: string) => s.shifts.find((x) => x.code === code)?.name || code;
   const nameOf = (id: number | null) => s.staff.find((x) => x.id === id)?.name || "";
-  const branches = me.staff.branch === "ALL" ? ["HOMEWORKSSB", "HOMEWORKSSOUTHERN"] : [me.staff.branch];
+  const branches = me.staff.branch === "ALL" ? ["HOMEWORKSSB", "HOMEWORKSSOUTHERN", "HOMEWORKSPUCHONG"] : [me.staff.branch];
 
   return (
     <>

@@ -31,6 +31,7 @@ export const DICT_A: Record<string, string> = {
     ") is not on the staff list, or has been deactivated. Ask an admin to add you under \"Staff & Access\".",
   "总部": "HQ",
   "JB 分店": "JB branch",
+  "Puchong 分店": "Puchong branch",
   "全部分店": "All branches",
   "管理员": "Admin",
   "主管": "Manager",

@@ -45,6 +45,7 @@ export default function DoList({ me }: { me: Me }) {
             <option value="">全部分店</option>
             <option value="HOMEWORKSSB">{BRANCH_LABEL.HOMEWORKSSB}</option>
             <option value="HOMEWORKSSOUTHERN">{BRANCH_LABEL.HOMEWORKSSOUTHERN}</option>
+            <option value="HOMEWORKSPUCHONG">{BRANCH_LABEL.HOMEWORKSPUCHONG}</option>
           </select>
         )}
       </form>

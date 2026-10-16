@@ -109,7 +109,7 @@ export default function Join({ sessionEmail }: { sessionEmail?: string }) {
           <label>到职日（开始上班那天）<input type="date" value={f.join_date} onChange={(e) => set("join_date", e.target.value)} /></label>
           <label>在哪里上班
             <select value={f.branch} onChange={(e) => set("branch", e.target.value)}>
-              <option value="">—</option><option value="HOMEWORKSSB">总行</option><option value="HOMEWORKSSOUTHERN">JB 分店</option>
+              <option value="">—</option><option value="HOMEWORKSSB">总行</option><option value="HOMEWORKSSOUTHERN">JB 分店</option><option value="HOMEWORKSPUCHONG">Puchong 分店</option>
             </select>
           </label>
         </div>

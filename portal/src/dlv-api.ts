@@ -35,7 +35,7 @@ export interface Run {
 }
 
 /** 分店 ↔ 门市代号（排单与出发点用 HQ / JB） */
-export const STORE: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB" };
+export const STORE: Record<string, string> = { HOMEWORKSSB: "HQ", HOMEWORKSSOUTHERN: "JB", HOMEWORKSPUCHONG: "PUCHONG" };
 
 async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
