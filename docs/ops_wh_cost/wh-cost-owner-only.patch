@@ -1,0 +1,797 @@
+From f36a052381a5b44b59ad76dea9d0544732f327ef Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 16 Oct 2026 11:31:52 +0000
+Subject: [PATCH] =?UTF-8?q?=E4=BB=93=E5=BA=93=E6=88=90=E6=9C=AC=E5=8F=AA?=
+ =?UTF-8?q?=E7=BB=99=E8=80=81=E6=9D=BF=EF=BC=9A=E5=BA=93=E5=AD=98=E6=80=BB?=
+ =?UTF-8?q?=E8=A1=A8=E3=80=81=E6=97=A7=E8=B4=A7=E3=80=81=E6=BB=9E=E9=94=80?=
+ =?UTF-8?q?=E5=93=81=E3=80=81=E6=80=BB=E8=A7=88=E3=80=81=E6=9F=A5=E8=B4=A7?=
+ =?UTF-8?q?=E3=80=81=E7=9B=98=E7=82=B9=E9=83=BD=E8=97=8F=E8=B5=B7=E6=88=90?=
+ =?UTF-8?q?=E6=9C=AC?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+使用者看了库存总表（成本值）与旧货（成本、三格 RM 金额）：「这两个地方都看到成本，我都要收起来，
+不要让职员看到，包含店长」。以前仓库「可审批」（主管、管理层、店长）就拿得到成本，现在只有 BI
+名单上 role = owner 的人（ops.sees_cost）拿得到；资料库就不回，旧前端也看不到。
+
+其余权限不变：旧货「标处理方式」照旧给仓库可审批（以前跟成本绑在同一个变数，拆开）；盘点的
+应有 / 差额件数照旧给可审批。盘点统计以前一律显示金额，改成照 show_cost 显示，店长看到的每月长条
+改用差异项数。migration 用读出现行定义、只换判断成本那几个字的做法，可重复套用；cost_test.sql
+挡住以后又用「可审批」判断成本的函数。正式环境 2026-10-16 已套（ops_cost_owner_only）。
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FukrbyV1LJiGqNzUs29hwZ
+---
+ CLAUDE.md                                     | 13 ++-
+ portal/src/i18n-dict-more.ts                  |  2 +
+ portal/src/i18n-dict-whsheet.ts               |  3 +
+ portal/src/wh-overview-api.ts                 |  2 +-
+ portal/src/wh-sheet-api.ts                    |  9 +-
+ portal/src/wh-tag-api.ts                      |  2 +-
+ portal/src/wh/Aged.tsx                        |  6 +-
+ portal/src/wh/CountStats.tsx                  | 37 +++++---
+ portal/src/wh/Review.tsx                      |  2 +-
+ portal/src/wh/SheetDetail.tsx                 |  2 +-
+ portal/src/wh/Slow.tsx                        |  2 +-
+ portal/src/wh/Stock.tsx                       |  2 +-
+ .../20261019b_ops_cost_owner_only.sql         | 93 ++++++++++++++++++
+ portal/supabase/tests/cost_test.sql           | 94 +++++++++++++++++++
+ portal/supabase/tests/overview_test.sql       | 10 +-
+ portal/supabase/tests/receive_test.sql        | 23 +++--
+ portal/supabase/tests/rpl_test.sql            | 26 +++--
+ portal/supabase/tests/run.sh                  |  1 +
+ portal/supabase/tests/sheet_test.sql          | 17 +++-
+ portal/supabase/tests/tag_test.sql            |  7 +-
+ portal/supabase/tests/todo_test.sql           | 14 ++-
+ portal/supabase/tests/wh_test.sql             |  9 +-
+ 22 files changed, 323 insertions(+), 53 deletions(-)
+ create mode 100644 portal/supabase/migrations/20261019b_ops_cost_owner_only.sql
+ create mode 100644 portal/supabase/tests/cost_test.sql
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 4d48274..e6a5dfa 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -122,7 +122,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   `ops.staff.gender`（HR 在打卡设定填）。没填到职日 = 当第一年且不按比例。测试 `portal/supabase/tests/leave_test.sql`。
+ - 已上线（仓库第一版，2026-10-04；使用者决定先做仓库再做加班 / 薪资）：问题是「进货点得清、几个星期后就不准」、半年盘一次（5 人 3 天），
+   系统里 HOMEWORKSSB 有 1,296 个 SKU×仓位库存为负数 → 漏记的是货进来后的搬动，所以**先做条码 + 流程，不上 RFID**（使用者问过 RFID，
+-  建议之后在 SRGADING 大货小规模试）。模块 `warehouse`（仓库部可编辑 = 盘点 / 登记搬动；主管、管理层可审批 = 标已输入、审差异、看成本）。
++  建议之后在 SRGADING 大货小规模试）。模块 `warehouse`（仓库部可编辑 = 盘点 / 登记搬动；主管、管理层可审批 = 标已输入、审差异；**库存成本 2026-10-16 起只给老板**，见下面「成本只给老板」）。
+   `ops.wh_location`（从 bi.fact_stock 带入的仓位；要不要盘、每天几件）、`ops.wh_barcode`（纸箱原条码 → 商品）、`ops.wh_move`
+   （调仓 / 报坏 / 展示 / 样品 / 退货 / 报废，pending → 负责人在 AutoCount 开单后标 done）、`ops.wh_count`（盲盘；应有 = AutoCount 库存
+   + 还没输入的搬动；不符先请再数，第二次才算差异；审核 adjusted / ignored / 重盘）。每日清单：负库存 → 90 天销量 → 库存值，30 天内盘过跳过。
+@@ -143,7 +143,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+ - 优化（2026-10-07，使用者选的）：migration `ops_todo_aged`（正式环境已套）。首页「今天要做」清单（`ops_home` 加 `po_arriving` 3 天内到货、
+   `hr_gaps`、`holidays_ahead`）；人事「资料缺漏」分页（`ops_hr_gaps`：没填到职日 / 性别 / 手机 / 薪资资料、分店没打卡点、60 天内没假日）；
+   仓库「旧货」分页（`ops.wh_aged_rows` 读 `bi.fact_item_aging` + `bi.mv_sales_item_month`；① 入货 > 12 个月 ② 12 个月没卖 ③ 两者；
+-  `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才看成本、才能填）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
++  `ops.wh_aged_action` 记处理方式 / 负责人，仓库「可审批」才能填；成本只给老板）；盘点页可打品名搜寻；打卡设定「一键带入公共假日」
+   （`att/HolidayImport.tsx` 内建 2026–2027 全国 + 柔佛名单，伊斯兰历 / 农历标「预计」，HR 勾选后才存）；员工与权限「从 Excel 一次开账号」
+   （`pages/BulkStaff.tsx`，贴上 Excel 区块 → ops_staff_save → ops_att_staff_set → ops-account，不用新函数）。测试 `tests/todo_test.sql`。
+ - 员工自己申请加入（2026-10-08，使用者选「自己申请、你批准」）：migration `ops_join` + `ops_join_v2`（正式环境都已套）+ Edge Function
+@@ -224,7 +224,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   订货 →「补货建议」（`#/purchasing/replenish`）与「供应商交期」（`/leadtime`，只有看得到厂家的人有）；仓库 →「库存总表」（`/stock`）与「滞销品」（`/slow`）。
+   **资料不搬家**：读 BI 同步进来的 `bi.*`，算法沿用 BI 视图（拆出 `bi.v_purchase_suggest` 只做计算，BI 原视图改读它、栏位不变）；已下单 / 暂不订 / 留言 / 商品设定写
+   `bi.buyer_*`（与 BI 共用；撤销是软撤销 `undone_at`，因为 MCP 挡 delete）。权限照营运系统：看不到厂家（`ops.sees_supplier`）拿不到供应商 / 厂号 / 在途 PO 号 /
+-  **留言 / 商品备注 / 记录人**；看不到单价（`ops.sees_prices`）拿不到上次单价；库存成本只给仓库「可审批」。前端 `src/rpl/*`、`src/rpl-api.ts`、`src/rpl.css`、
++  **留言 / 商品备注 / 记录人**；看不到单价（`ops.sees_prices`）拿不到上次单价；库存成本只给老板（`ops.sees_cost`，2026-10-16 起）。前端 `src/rpl/*`、`src/rpl-api.ts`、`src/rpl.css`、
+   `src/wh/Stock.tsx`、`src/wh/Slow.tsx`、`src/i18n-dict-rpl.ts`。Migration `20261016_ops_bi_pages.sql`（正式环境 `ops_bi_pages_1_views`～`6_grants`，对方套的）
+   + 合并后审查修正 `20261016c_ops_bi_pages_fix.sql`（= `ops_bi_pages_7_fix`，已套，两个函数 md5 与本机一致）：留言三栏给看不到厂家的人回 null、
+   `ops_wh_stock` 每行多回 `item_total`（商品全部仓位合计；原本是本页加总，分页切开或勾「只看负库存」时错）。测试 `tests/rpl_test.sql`。
+@@ -232,6 +232,13 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的
+   localStorage 带入；换分店分页回第 1 页；看得到厂家的人订货页仍先开「未到货 PO」；英文模式拆开的句子合成一段、CSV 表头与提示也翻；表格 1280px 不横卷（英文补货建议差几 px）。
+   前端部署 `dpl_3HCvdKv6P5eJw1k8kBYRKAdjfgwf`（129 个档）。正式环境核对（admin、交易回滚）：补货建议门槛 30 = 853 项、10 = 1,140、CS 编号 51 个；供应商 111 家；
+   库存总表搜 HM-UB001 = 36 行、看得到成本；滞销品 6 个月以上 1,437 项。BI 网页那边的旧页由 BI 分支处理，不在这里动。
++- **成本只给老板（2026-10-16，migration `20261019b_ops_cost_owner_only.sql`，正式环境已套 = `ops_cost_owner_only`，由 BI 那边的对话做、交接包合并）**：
++  使用者看了库存总表（成本值）与旧货（成本、三格 RM 金额）：「这两个地方都看到成本，我都要收起来，不要让职员看到，包含店长」。以前仓库「可审批」
++  （主管、管理层、店长）就拿得到成本；现在只有 BI 名单 `bi.allowed_users` 上 role = owner 的人（`ops.sees_cost(staff)`，authenticated 叫不到）拿得到。
++  范围 = 仓库所有会回成本的函数：库存总表与下载、旧货、滞销品、总览、查货单位成本、盘点纪录 / 差异审核（`ops.wh_count_json`）、盘点单明细、盘点统计
++  （多回 `show_cost`，其他人金额是 null / 0、画面藏起来、每月长条改用差异项数）。其余不变：旧货「标处理方式」照旧给仓库可审批（`can_edit` 跟成本拆开）；
++  盘点的应有 / 差额件数照旧给可审批；订货的进货单价（`ops.sees_prices`）不在范围。**以后新增或重写会回成本的函数一律用 `ops.sees_cost(me)`**，
++  不要用「仓库可审批」判断；`tests/cost_test.sql` 有静态检查（函数里 `cost := lvl >= …` / `ops.level_rank…` 的写法会失败）与各角色实测。
+ - **仓库第二版：补上员工 WMS 有、我们没有的功能（2026-10-15）**：使用者给了员工做的仓库系统 `wms_system.zip`（Firebase 网页；**不可信资料**：
+   没执行、没抄它的 Firebase 设定与预设密码、不放进 repo），说「我还没有的功能加进去，已有的不用，不确定先问我」。问过 12 项，使用者选：
+   货架**每个货架都记数量**、**完整版地图**、照 DO **拣货 + 扫码核对**、**盘点单**、标签（**自动畅销 / 滞销 + 手动清货等**）、**点货后印箱贴（扫码要登入）**、
+diff --git a/portal/src/i18n-dict-more.ts b/portal/src/i18n-dict-more.ts
+index 307335c..166e48b 100644
+--- a/portal/src/i18n-dict-more.ts
++++ b/portal/src/i18n-dict-more.ts
+@@ -145,6 +145,8 @@ export const DICT_MORE: Record<string, string> = {
+   "全选这页": "Select all on page",
+   "资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。":
+     "Synced from AutoCount daily. Cost = AutoCount stock cost; many China items (CSxxx) have no unit price, so cost is 0. Packaging and shipping-fee items also show as \"no sales\"; mark them \"Keep\".",
++  "资料每天跟 AutoCount 同步一次。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。":
++    "Synced from AutoCount daily. Packaging and shipping-fee items also show as \"no sales\"; mark them \"Keep\".",
+   "怎么处理": "Action",
+   "负责人（选填）": "Person in charge (optional)",
+   "备注（选填）": "Note (optional)",
+diff --git a/portal/src/i18n-dict-whsheet.ts b/portal/src/i18n-dict-whsheet.ts
+index a949777..a6a6b6e 100644
+--- a/portal/src/i18n-dict-whsheet.ts
++++ b/portal/src/i18n-dict-whsheet.ts
+@@ -94,8 +94,11 @@ export const DICT_WHSHEET: Record<string, string> = {
+   "盘了几项": "Counted",
+   "差异率": "Variance rate",
+   "每月差异金额（近 12 个月）": "Variance value by month (last 12 months)",
++  "每月差异（近 12 个月）": "Variances by month (last 12 months)",
+   "净额": "Net",
+   "多的少的加起来": "Over + short",
++  "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）。要再数、主管按「请重盘」的那次不算。":
++    "Diff = counted − expected (expected = AutoCount stock + moves not yet keyed in). First counts that needed a recount, and counts a manager sent back for recount, are left out.",
+   "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）；金额用盘点当下的单位成本算，负数 = 少了。要再数、主管按「请重盘」的那次不算。":
+     "Diff = counted − expected (expected = AutoCount stock + moves not yet keyed in); value uses the unit cost at the time of the count, negative = short. First counts that needed a recount, and counts a manager sent back for recount, are left out.",
+   // 资料库错误讯息
+diff --git a/portal/src/wh-overview-api.ts b/portal/src/wh-overview-api.ts
+index d6e5a3d..9e15b2b 100644
+--- a/portal/src/wh-overview-api.ts
++++ b/portal/src/wh-overview-api.ts
+@@ -1,4 +1,4 @@
+-// 仓库「总览」的资料层（2026-10-15）。金额（成本）只给仓库「可审批」（show_cost）。
++// 仓库「总览」的资料层（2026-10-15）。金额（成本）只给老板（show_cost，20261019b）。
+ import { supabase } from "./supabase";
+ import { BinSummary } from "./wh-bin-api";
+ 
+diff --git a/portal/src/wh-sheet-api.ts b/portal/src/wh-sheet-api.ts
+index 0f0e8da..d757682 100644
+--- a/portal/src/wh-sheet-api.ts
++++ b/portal/src/wh-sheet-api.ts
+@@ -21,8 +21,8 @@ export interface SheetLine {
+   item_code: string; description: string | null; uom: string | null;
+   /** 这个商品在这个仓位的货架（走一圈的顺序） */ bins: string[];
+   status: LineStatus; count_id: number | null; counted_at: string | null; counted_by_name: string | null;
+-  /** 只有仓库「可审批」才有：盘到几件、应有、差额、成本差额 */
+-  qty?: number; expected?: number; diff?: number; diff_value?: number;
++  /** 只有仓库「可审批」才有：盘到几件、应有、差额；成本差额只给老板（20261019b） */
++  qty?: number; expected?: number; diff?: number; diff_value?: number | null;
+ }
+ export interface SheetDetail extends Sheet { can_manage: boolean; lines: SheetLine[] }
+ 
+@@ -43,12 +43,13 @@ export interface SheetStaff { id: number; name: string; department: string; depa
+ export interface SheetHome { id: number; company: string; title: string; location: string; due_date: string | null; overdue: boolean; total: number; left: number }
+ 
+ export interface CountStats {
+-  company: string; days: number; location: string | null; today: string;
++  /** 看得到差异金额（成本）= 老板（20261019b）；其他人金额都是 0 / null，画面不显示 */
++  company: string; days: number; location: string | null; today: string; show_cost?: boolean;
+   summary: {
+     counts: number; items: number; match: number; variance: number; waiting: number; adjusted: number; ignored: number;
+     /** 差异金额（成本）：净额（负 = 少了）与绝对值合计 */ value_net: number; value_abs: number; sheets: number;
+   };
+-  top: { item_code: string; description: string | null; uom: string | null; times: number; units: number; abs_units: number; value: number; abs_value: number; last: string }[];
++  top: { item_code: string; description: string | null; uom: string | null; times: number; units: number; abs_units: number; value: number | null; abs_value: number | null; last: string }[];
+   people: { id: number; name: string; counts: number; variance: number; value_abs: number }[];
+   months: { month: string; counts: number; variance: number; value_net: number; value_abs: number }[];
+ }
+diff --git a/portal/src/wh-tag-api.ts b/portal/src/wh-tag-api.ts
+index 9f6e6fb..c1aa8d9 100644
+--- a/portal/src/wh-tag-api.ts
++++ b/portal/src/wh-tag-api.ts
+@@ -1,6 +1,6 @@
+ // 仓库 · 商品标签、商品照片、入库箱贴（批次）、打印纪录、库存总表下载的资料层（2026-10-15）。
+ // 权限都在资料库：标标签 = 订货「可编辑」或仓库「可审批」；拍照 = 仓库「可编辑」；建批次（印箱贴）= 仓库或订货「可编辑」；
+-// 厂家 / 厂家 DO 号只给看得到厂家的人；成本只给仓库「可审批」。
++// 厂家 / 厂家 DO 号只给看得到厂家的人；成本只给老板（20261019b）。
+ import { supabase } from "./supabase";
+ import { getLang, tr } from "./i18n";
+ import { StockPage, StockRow } from "./rpl-api";
+diff --git a/portal/src/wh/Aged.tsx b/portal/src/wh/Aged.tsx
+index 303481a..e7c46a8 100644
+--- a/portal/src/wh/Aged.tsx
++++ b/portal/src/wh/Aged.tsx
+@@ -1,5 +1,5 @@
+ // 仓库 · 旧货：① 入货超过 12 个月 ② 12 个月没卖出 ③ 两者都是。每天随 BI 同步更新（bi.fact_item_aging + 月销量）。
+-// 仓库「可查看」看清单；「可审批」看成本、选商品标处理方式（清货 / 促销 / 退供应商 / 报废 / 保留）与负责人。
++// 仓库「可查看」看清单；「可审批」选商品标处理方式（清货 / 促销 / 退供应商 / 报废 / 保留）与负责人；成本只给老板（20261019b）。
+ import { useCallback, useEffect, useState } from "react";
+ import { api, DirectoryEntry } from "../api";
+ import { supabase } from "../supabase";
+@@ -103,7 +103,9 @@ export function AgedTab({ company }: { company: string }) {
+           )}
+         </>
+       )}
+-      <p className="muted small">资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。</p>
++      <p className="muted small">{data?.show_cost
++        ? "资料每天跟 AutoCount 同步一次。成本 = AutoCount 库存成本；中国货（CSxxx）很多没有单价，成本是 0。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。"
++        : "资料每天跟 AutoCount 同步一次。包装材料、运费这类不卖的项目也会出现在「12 个月没卖」，可以标「保留」。"}</p>
+       {marking && <MarkForm company={company} codes={sel} onClose={() => setMarking(false)} onSaved={() => { setMarking(false); load(); }} />}
+     </>
+   );
+diff --git a/portal/src/wh/CountStats.tsx b/portal/src/wh/CountStats.tsx
+index 589b365..1a40356 100644
+--- a/portal/src/wh/CountStats.tsx
++++ b/portal/src/wh/CountStats.tsx
+@@ -1,4 +1,4 @@
+-// 仓库 · 盘点统计（可审批；#/warehouse/count/stats）：近 30 / 90 / 180 天盘了几次、相符率、差异项数与金额（成本）、
++// 仓库 · 盘点统计（可审批；#/warehouse/count/stats）：近 30 / 90 / 180 天盘了几次、相符率、差异项数与金额（成本，只给老板）、
+ // 常常不准的商品前 20、每个人、每月差异金额。只算最后定案的盘点（再数、请重盘作废的不算）。
+ import { useEffect, useState } from "react";
+ import { Empty, ErrorBox, Tabs } from "../ui";
+@@ -20,7 +20,10 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+   }, [company, days, loc]);
+ 
+   const sm = s?.summary;
+-  const maxMonth = Math.max(1, ...(s?.months || []).map((m) => Number(m.value_abs)));
++  // 差异金额（成本）只给老板（资料库 show_cost）；其他人每月长条改用差异项数
++  const cost = !!s?.show_cost;
++  const barOf = (m: Stats["months"][number]) => Number(cost ? m.value_abs : m.variance);
++  const maxMonth = Math.max(1, ...(s?.months || []).map(barOf));
+   return (
+     <>
+       <div className="filters ws-bar">
+@@ -40,8 +43,10 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+             <div className="kpi"><b>{pct(sm.match, sm.counts)}</b><span>相符率</span><small className="muted">{`相符 ${sm.match} 次`}</small></div>
+             <div className={"kpi" + (sm.variance ? " warn" : "")}><b>{sm.variance}</b><span>差异几项</span>
+               <small className="muted">{`待审核 ${sm.waiting} · 已调整 ${sm.adjusted} · 不调整 ${sm.ignored}`}</small></div>
+-            <div className={"kpi" + (Number(sm.value_net) < 0 ? " warn" : "")}><b className="ws-money">{rm(sm.value_net)}</b><span>差异金额（成本，净额）</span>
+-              <small className="muted">{`多的少的加起来 ${rm(sm.value_abs)}`}</small></div>
++            {cost && (
++              <div className={"kpi" + (Number(sm.value_net) < 0 ? " warn" : "")}><b className="ws-money">{rm(sm.value_net)}</b><span>差异金额（成本，净额）</span>
++                <small className="muted">{`多的少的加起来 ${rm(sm.value_abs)}`}</small></div>
++            )}
+           </div>
+           {sm.counts === 0 ? <Empty>这段时间没有盘点纪录。</Empty> : (
+             <>
+@@ -49,7 +54,7 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+               {s.top.length === 0 ? <Empty>这段时间没有差异。</Empty> : (
+                 <div className="table-wrap">
+                   <table className="ws-table">
+-                    <thead><tr><th>商品</th><th className="num">差异次数</th><th className="num">差异件数合计</th><th className="num">差异金额</th><th className="hide-sm">最近</th></tr></thead>
++                    <thead><tr><th>商品</th><th className="num">差异次数</th><th className="num">差异件数合计</th>{cost && <th className="num">差异金额</th>}<th className="hide-sm">最近</th></tr></thead>
+                     <tbody>
+                       {s.top.map((t) => (
+                         <tr key={t.item_code}>
+@@ -57,7 +62,7 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+                           <td className="num">{t.times}</td>
+                           <td className="num"><span className={Number(t.units) < 0 ? "late" : ""}>{signed(t.units)}</span>
+                             {Number(t.abs_units) !== Math.abs(Number(t.units)) && <div className="muted small">{`多的少的加起来 ${qtyLabel(t.abs_units)}`}</div>}</td>
+-                          <td className="num">{rm(t.value)}</td>
++                          {cost && <td className="num">{rm(t.value)}</td>}
+                           <td className="hide-sm small">{t.last}</td>
+                         </tr>
+                       ))}
+@@ -68,13 +73,13 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+               <h2 className="section-title">每个人</h2>
+               <div className="table-wrap">
+                 <table className="ws-table">
+-                  <thead><tr><th>盘点人</th><th className="num">盘了几项</th><th className="num">差异</th><th className="num">差异率</th><th className="num hide-sm">差异金额</th></tr></thead>
++                  <thead><tr><th>盘点人</th><th className="num">盘了几项</th><th className="num">差异</th><th className="num">差异率</th>{cost && <th className="num hide-sm">差异金额</th>}</tr></thead>
+                   <tbody>
+                     {s.people.map((p) => (
+                       <tr key={p.id}>
+                         <td>{p.name}</td><td className="num">{p.counts}</td><td className="num">{p.variance}</td>
+                         <td className={"num" + (p.variance ? " late" : "")}>{pct(p.variance, p.counts)}</td>
+-                        <td className="num hide-sm">{rm(p.value_abs)}</td>
++                        {cost && <td className="num hide-sm">{rm(p.value_abs)}</td>}
+                       </tr>
+                     ))}
+                   </tbody>
+@@ -82,25 +87,27 @@ export default function CountStats({ company, locs }: { company: string; locs: s
+               </div>
+             </>
+           )}
+-          <h2 className="section-title">每月差异金额（近 12 个月）</h2>
++          <h2 className="section-title">{cost ? "每月差异金额（近 12 个月）" : "每月差异（近 12 个月）"}</h2>
+           {s.months.length === 0 ? <Empty>没有纪录。</Empty> : (
+             <div className="table-wrap">
+               <table className="ws-table ws-months">
+-                <thead><tr><th>月份</th><th className="num hide-sm">盘了几次</th><th className="num">差异</th><th className="num">净额</th><th className="ws-barcol">多的少的加起来</th></tr></thead>
++                <thead><tr><th>月份</th><th className="num hide-sm">盘了几次</th>{cost && <th className="num">差异</th>}{cost && <th className="num">净额</th>}<th className="ws-barcol">{cost ? "多的少的加起来" : "差异"}</th></tr></thead>
+                 <tbody>
+                   {s.months.map((m) => (
+                     <tr key={m.month}>
+-                      <td className="nowrap">{m.month}</td><td className="num hide-sm">{m.counts}</td><td className="num">{m.variance}</td>
+-                      <td className={"num" + (Number(m.value_net) < 0 ? " late" : "")}>{rm(m.value_net)}</td>
+-                      <td className="ws-barcol"><div className="ws-mbar"><span style={{ width: `${(Number(m.value_abs) / maxMonth) * 100}%` }} /></div>
+-                        <span className="small nowrap">{rm(m.value_abs)}</span></td>
++                      <td className="nowrap">{m.month}</td><td className="num hide-sm">{m.counts}</td>{cost && <td className="num">{m.variance}</td>}
++                      {cost && <td className={"num" + (Number(m.value_net) < 0 ? " late" : "")}>{rm(m.value_net)}</td>}
++                      <td className="ws-barcol"><div className="ws-mbar"><span style={{ width: `${(barOf(m) / maxMonth) * 100}%` }} /></div>
++                        <span className="small nowrap">{cost ? rm(m.value_abs) : m.variance}</span></td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+           )}
+-          <p className="muted small">差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）；金额用盘点当下的单位成本算，负数 = 少了。要再数、主管按「请重盘」的那次不算。</p>
++          <p className="muted small">{cost
++            ? "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）；金额用盘点当下的单位成本算，负数 = 少了。要再数、主管按「请重盘」的那次不算。"
++            : "差额 = 实盘 − 应有（应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动）。要再数、主管按「请重盘」的那次不算。"}</p>
+         </div>
+       )}
+     </>
+diff --git a/portal/src/wh/Review.tsx b/portal/src/wh/Review.tsx
+index 6d12dde..0b9d8bf 100644
+--- a/portal/src/wh/Review.tsx
++++ b/portal/src/wh/Review.tsx
+@@ -31,7 +31,7 @@ export function ReviewTab({ company, meta, onMeta }: { company: string; meta: Wh
+   }
+   const toggle = (id: number) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+   const sum = (rows || []).reduce((a, r) => a + Number(r.diff_value || 0), 0);
+-  // 成本（成本差额）只给资料库回了的人（仓库「可审批」）：没回就把栏位藏起来
++  // 成本（成本差额）只给资料库回了的人（老板，20261019b）：没回就把栏位藏起来
+   const showCost = (rows || []).some((r) => r.diff_value != null);
+ 
+   function csv() {
+diff --git a/portal/src/wh/SheetDetail.tsx b/portal/src/wh/SheetDetail.tsx
+index 3e5f179..068c8e8 100644
+--- a/portal/src/wh/SheetDetail.tsx
++++ b/portal/src/wh/SheetDetail.tsx
+@@ -143,7 +143,7 @@ export default function SheetDetail({ id }: { id: number; company?: string }) {
+                     {`${qtyLabel(l.qty)} / ${qtyLabel(l.expected)} · 差 ${Number(l.diff) > 0 ? "+" : ""}${qtyLabel(l.diff)}`}
+                   </span>
+                 )}
+-                {full && l.diff != null && Number(l.diff_value) !== 0 && <span className="small muted nowrap">{rm(l.diff_value)}</span>}
++                {full && l.diff != null && l.diff_value != null && Number(l.diff_value) !== 0 && <span className="small muted nowrap">{rm(l.diff_value)}</span>}
+                 {canCount(l) && <span className="go nowrap">{l.status === "todo" ? "盘 →" : l.status === "recount" ? "再数 →" : "重盘 →"}</span>}
+               </div>
+             </li>
+diff --git a/portal/src/wh/Slow.tsx b/portal/src/wh/Slow.tsx
+index a2f77d1..0b2e46c 100644
+--- a/portal/src/wh/Slow.tsx
++++ b/portal/src/wh/Slow.tsx
+@@ -1,4 +1,4 @@
+-// 仓库 · 滞销品（从 BI 的滞销品页搬进来，2026-10-16）：最后一次进货超过 3 / 6 个月、目前仍有现存量的商品；成本只给仓库「可审批」。
++// 仓库 · 滞销品（从 BI 的滞销品页搬进来，2026-10-16）：最后一次进货超过 3 / 6 个月、目前仍有现存量的商品；成本只给老板（20261019b）。
+ // 与「旧货」分页的差别：旧货看 12 个月（入货 > 12 个月 / 12 个月没卖）并记处理方式；这里看 3–6 个月的预警区。
+ import { useEffect, useState } from "react";
+ import { fmtQty, fmtRM } from "../api";
+diff --git a/portal/src/wh/Stock.tsx b/portal/src/wh/Stock.tsx
+index 88348aa..3fab0ec 100644
+--- a/portal/src/wh/Stock.tsx
++++ b/portal/src/wh/Stock.tsx
+@@ -1,4 +1,4 @@
+-// 仓库 · 库存总表（从 BI 的库存页搬进来，2026-10-16）：商品 × 仓位的现存量、售价；成本只给仓库「可审批」。
++// 仓库 · 库存总表（从 BI 的库存页搬进来，2026-10-16）：商品 × 仓位的现存量、售价；成本只给老板（20261019b）。
+ // 2026-10-15 加：商品标签（自动的畅销 / 滞销 + 手动的清货等）与标签筛选、下载 Excel（同样筛选、全部列，最多 50,000 列）。
+ import { useEffect, useState } from "react";
+ import { fmtQty, fmtRM } from "../api";
+diff --git a/portal/supabase/migrations/20261019b_ops_cost_owner_only.sql b/portal/supabase/migrations/20261019b_ops_cost_owner_only.sql
+new file mode 100644
+index 0000000..41f10d2
+--- /dev/null
++++ b/portal/supabase/migrations/20261019b_ops_cost_owner_only.sql
+@@ -0,0 +1,93 @@
++-- 库存成本只给老板（2026-10-16）。使用者看了「仓库 → 库存总表」（成本值）与「旧货」（成本、上面三格的 RM 金额）：
++-- 「这两个地方都看到成本，我都要收起来，不要让职员看到，包含店长」。
++-- 以前：仓库「可审批」（主管、管理层、店长）就拿得到成本。现在：只有 BI 名单上 role = 'owner' 的人（老板）拿得到。
++-- 范围 = 仓库模块所有会回成本的地方：库存总表（含下载 Excel）、旧货（成本栏与三格金额）、滞销品（库存成本值）、总览（各仓位金额）、
++-- 查货（单位成本）、盘点纪录 / 差异审核（单位成本、成本差额）、盘点单明细（成本差额）、盘点统计（差异金额）。
++-- 其余权限都不变：旧货的「标处理方式」照旧是仓库「可审批」；盘点的应有 / 差额（件数）照旧给可审批。
++-- 订货模块的进货单价（ops.sees_prices，采购要用来下单）不在这次范围。
++-- 做法：ops.sees_cost(me) 判断；下面的 DO 段读出每个函数的现行定义，只把判断成本的那几个字换掉（其余一字不动），可以重复套用。
++-- 以后新增或重写会回成本的函数，一律用 ops.sees_cost(me)，不要再用「仓库可审批」；tests/cost_test.sql 会挡。
++
++create or replace function ops.sees_cost(p_staff ops.staff) returns boolean
++language sql stable security definer set search_path = '' as $$
++  select coalesce(p_staff.id is not null and exists (
++           select 1 from bi.allowed_users au
++            where lower(au.email) = lower(p_staff.email) and au.role = 'owner'), false)
++$$;
++revoke all on function ops.sees_cost(ops.staff) from public, anon, authenticated;
++
++do $m$
++declare
++  r record;
++  d text;
++  n int;
++begin
++  for r in select * from (values
++    -- 旧货：成本只给老板；「标处理方式」照旧给仓库可审批（以前跟成本绑在一起）
++    (1, 'public.ops_wh_aged(jsonb)', 1,
++     $o$cost := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;$o$,
++     $n$cost := ops.sees_cost(me);$n$),
++    (2, 'public.ops_wh_aged(jsonb)', 1,
++     $o$'can_edit', cost,$o$,
++     $n$'can_edit', ops.level_rank(ops.module_level(me, 'warehouse')) >= 3,$n$),
++    -- 库存总表、下载 Excel、滞销品
++    (3, 'public.ops_wh_stock(jsonb)', 1,
++     $o$cost := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;$o$,
++     $n$cost := ops.sees_cost(me);$n$),
++    (4, 'public.ops_wh_stock_export(jsonb)', 1,
++     $o$cost := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;$o$,
++     $n$cost := ops.sees_cost(me);$n$),
++    (5, 'public.ops_wh_slow(jsonb)', 1,
++     $o$cost := ops.level_rank(ops.module_level(me, 'warehouse')) >= 3;$o$,
++     $n$cost := ops.sees_cost(me);$n$),
++    -- 总览：各仓位金额
++    (6, 'public.ops_wh_overview(jsonb)', 1,
++     $o$cost := lvl >= 3;$o$,
++     $n$cost := ops.sees_cost(me);$n$),
++    -- 查货：单位成本（盘点纪录走 ops.wh_count_json，下面另外改）
++    (7, 'public.ops_wh_item(text,text)', 1,
++     $o$'unit_cost', case when full_access and f.qty > 0 then$o$,
++     $n$'unit_cost', case when full_access and ops.sees_cost(me) and f.qty > 0 then$n$),
++    -- 盘点纪录（查货、差异审核、盘点）：应有 / 差额照旧给可审批（p_full），单位成本与成本差额只给老板
++    (8, 'ops.wh_count_json(ops.wh_count,boolean)', 1,
++     $o$'diff', c.qty - (c.system_qty + c.pending_qty), 'unit_cost', c.unit_cost,
++    'diff_value', round((c.qty - (c.system_qty + c.pending_qty)) * coalesce(c.unit_cost, 0), 2),
++    'synced_at', c.synced_at) else '{}'::jsonb end$o$,
++     $n$'diff', c.qty - (c.system_qty + c.pending_qty),
++    'synced_at', c.synced_at) else '{}'::jsonb end
++  || case when p_full and ops.sees_cost(ops.current_staff()) then jsonb_build_object(
++    'unit_cost', c.unit_cost,
++    'diff_value', round((c.qty - (c.system_qty + c.pending_qty)) * coalesce(c.unit_cost, 0), 2)) else '{}'::jsonb end$n$),
++    -- 盘点单明细：成本差额
++    (9, 'public.ops_wh_sheet_get(jsonb)', 1,
++     $o$'diff_value', round((k.qty - (k.system_qty + k.pending_qty)) * coalesce(k.unit_cost, 0), 2))$o$,
++     $n$'diff_value', case when ops.sees_cost(me) then round((k.qty - (k.system_qty + k.pending_qty)) * coalesce(k.unit_cost, 0), 2) end)$n$),
++    -- 盘点统计（可审批才打得开）：差异金额只给老板，其他人金额都是 0、show_cost = false（画面藏起金额）
++    (10, 'public.ops_wh_count_stats(jsonb)', 1,
++     $o$td date := ops.today();
++begin
++  me := ops.require_level('warehouse', 'approve');$o$,
++     $n$td date := ops.today();
++  cost boolean;
++begin
++  me := ops.require_level('warehouse', 'approve');
++  cost := ops.sees_cost(me);$n$),
++    (11, 'public.ops_wh_count_stats(jsonb)', 2,
++     $o$round((x.qty - (x.system_qty + x.pending_qty)) * coalesce(x.unit_cost, 0), 2) val,$o$,
++     $n$case when cost then round((x.qty - (x.system_qty + x.pending_qty)) * coalesce(x.unit_cost, 0), 2) end val,$n$),
++    (12, 'public.ops_wh_count_stats(jsonb)', 1,
++     $o$'company', c, 'days', d,$o$,
++     $n$'company', c, 'show_cost', cost, 'days', d,$n$)
++  ) v(ord, fn, cnt, old, new) order by ord
++  loop
++    d := pg_get_functiondef(r.fn::regprocedure);
++    n := (length(d) - length(replace(d, r.old, ''))) / length(r.old);
++    if n = 0 and position(r.new in d) > 0 then
++      continue;                                   -- 已经改过（重复套用）
++    end if;
++    if n <> r.cnt then
++      raise exception '成本只给老板：% 找到 % 处要换的字（应该是 % 处），函数可能被改过，请对照 migration 手动改：%', r.fn, n, r.cnt, r.old;
++    end if;
++    execute replace(d, r.old, r.new);
++  end loop;
++end $m$;
+diff --git a/portal/supabase/tests/cost_test.sql b/portal/supabase/tests/cost_test.sql
+new file mode 100644
+index 0000000..01b1973
+--- /dev/null
++++ b/portal/supabase/tests/cost_test.sql
+@@ -0,0 +1,94 @@
++-- 库存成本只给老板（20261019b_ops_cost_owner_only.sql）的总检查，接在其他仓库测试后面跑（用前面留下的资料）。
++-- 以后新增 / 重写会回成本的函数，要用 ops.sees_cost(me)，不要再用「仓库可审批」，不然这里会失败。
++\set ON_ERROR_STOP 1
++create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
++begin
++  perform set_config('request.jwt.claims', json_build_object('email', p_email)::text, false);
++end $$;
++grant execute on all functions in schema pg_temp to authenticated;
++
++-- 1. 没有函数还用「仓库等级」决定成本
++do $$ begin
++  assert not exists (
++    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
++     where n.nspname in ('public', 'ops') and p.prokind = 'f'
++       and pg_get_functiondef(p.oid) ~ '(cost|show_cost|full_cost)\s*:=\s*(lvl\s*>=|ops\.level_rank)'),
++    'a function still decides cost by warehouse level: use ops.sees_cost(me)';
++  assert not has_function_privilege('authenticated', 'ops.sees_cost(ops.staff)', 'execute'), 'sees_cost is internal';
++end $$;
++
++set role authenticated;
++-- 2. 仓库主管（可审批）：每个会回成本的地方都拿不到成本
++select pg_temp.as_user('whmgr@example.com');
++do $$ declare r jsonb; begin
++  r := public.ops_wh_stock('{}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'total_cost' <> 'null'::jsonb), 'stock';
++  r := public.ops_wh_stock_export('{}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'total_cost' <> 'null'::jsonb), 'export';
++  r := public.ops_wh_slow('{"min_months":0}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'stock_value' <> 'null'::jsonb), 'slow';
++  r := public.ops_wh_aged('{"kind":"old"}');
++  assert not (r->>'show_cost')::boolean and (r->>'can_edit')::boolean
++     and r->'summary'->'old_v' = 'null'::jsonb and r->'summary'->'nosale_v' = 'null'::jsonb and r->'summary'->'both_v' = 'null'::jsonb
++     and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'stock_value' <> 'null'::jsonb), 'aged';
++  r := public.ops_wh_overview('{}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'locations') x where x->'value' <> 'null'::jsonb), 'overview';
++  r := public.ops_wh_item('HOMEWORKSSB', 'ST001');
++  assert not exists (select 1 from jsonb_array_elements(r->'stock') x where x->'unit_cost' <> 'null'::jsonb)
++     and not exists (select 1 from jsonb_array_elements(r->'counts') x where x ? 'unit_cost' or x ? 'diff_value'), 'item';
++  r := public.ops_wh_counts('{"status":"all"}');
++  assert jsonb_array_length(r) > 0 and not exists (select 1 from jsonb_array_elements(r) x where x ? 'unit_cost' or x ? 'diff_value')
++     and exists (select 1 from jsonb_array_elements(r) x where x ? 'diff'), 'counts: diff yes, cost no';
++  r := public.ops_wh_count_stats('{"days":180}');
++  assert not (r->>'show_cost')::boolean and (r->'summary'->>'value_abs')::numeric = 0
++     and not exists (select 1 from jsonb_array_elements(r->'top') x where x->'value' <> 'null'::jsonb or x->'abs_value' <> 'null'::jsonb)
++     and not exists (select 1 from jsonb_array_elements(r->'people') x where (x->>'value_abs')::numeric <> 0)
++     and not exists (select 1 from jsonb_array_elements(r->'months') x where (x->>'value_abs')::numeric <> 0), 'count stats';
++end $$;
++
++-- 3. 老板（BI owner）：看得到
++select pg_temp.as_user('boss@example.com');
++do $$ begin
++  assert (public.ops_wh_stock('{}')->>'show_cost')::boolean and (public.ops_wh_stock_export('{}')->>'show_cost')::boolean
++     and (public.ops_wh_slow('{}')->>'show_cost')::boolean and (public.ops_wh_aged('{}')->>'show_cost')::boolean
++     and (public.ops_wh_overview('{}')->>'show_cost')::boolean and (public.ops_wh_count_stats('{}')->>'show_cost')::boolean, 'owner sees cost';
++end $$;
++reset role;
++
++-- 4. 店长（BI 名单 role = manager、营运系统管理员 → 仓库可审批）：一样看不到。使用者特别说「包含店长」；
++--    这段挡住以后把规则放宽成「在 BI 名单上」或「营运系统管理员」（2026-10-16 审查：前面只测了不在 BI 名单上的仓库主管）
++update ops.staff set role = 'admin' where lower(email) = 'mgr@example.com';
++do $$ declare s ops.staff; begin
++  select * into s from ops.staff where lower(email) = 'mgr@example.com';
++  assert exists (select 1 from bi.allowed_users au where lower(au.email) = 'mgr@example.com' and au.role = 'manager'), 'mgr is a BI manager';
++  assert ops.module_level(s, 'warehouse') = 'approve', 'mgr: warehouse approve';
++  assert not ops.sees_cost(s), 'BI manager / ops admin: no cost';
++end $$;
++set role authenticated;
++select pg_temp.as_user('mgr@example.com');
++do $$ declare r jsonb; begin
++  r := public.ops_wh_stock('{}');
++  assert jsonb_array_length(r->'rows') > 0 and not (r->>'show_cost')::boolean
++     and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'total_cost' <> 'null'::jsonb), '店长 stock';
++  r := public.ops_wh_stock_export('{}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'total_cost' <> 'null'::jsonb), '店长 export';
++  r := public.ops_wh_slow('{"min_months":0}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'stock_value' <> 'null'::jsonb), '店长 slow';
++  r := public.ops_wh_aged('{"kind":"old"}');
++  assert jsonb_array_length(r->'rows') > 0 and not (r->>'show_cost')::boolean and (r->>'can_edit')::boolean
++     and r->'summary'->'old_v' = 'null'::jsonb and r->'summary'->'nosale_v' = 'null'::jsonb and r->'summary'->'both_v' = 'null'::jsonb
++     and not exists (select 1 from jsonb_array_elements(r->'rows') x where x->'stock_value' <> 'null'::jsonb), '店长 aged';
++  r := public.ops_wh_overview('{}');
++  assert not (r->>'show_cost')::boolean and not exists (select 1 from jsonb_array_elements(r->'locations') x where x->'value' <> 'null'::jsonb), '店长 overview';
++  r := public.ops_wh_item('HOMEWORKSSB', 'ST001');
++  assert jsonb_array_length(r->'stock') > 0 and not exists (select 1 from jsonb_array_elements(r->'stock') x where x->'unit_cost' <> 'null'::jsonb)
++     and not exists (select 1 from jsonb_array_elements(r->'counts') x where x ? 'unit_cost' or x ? 'diff_value'), '店长 item';
++  r := public.ops_wh_counts('{"status":"all"}');
++  assert jsonb_array_length(r) > 0 and not exists (select 1 from jsonb_array_elements(r) x where x ? 'unit_cost' or x ? 'diff_value'), '店长 counts';
++  r := public.ops_wh_count_stats('{"days":180}');
++  assert not (r->>'show_cost')::boolean and (r->'summary'->>'value_abs')::numeric = 0
++     and not exists (select 1 from jsonb_array_elements(r->'top') x where x->'value' <> 'null'::jsonb), '店长 count stats';
++end $$;
++reset role;
++
++select 'cost_test ok';
+diff --git a/portal/supabase/tests/overview_test.sql b/portal/supabase/tests/overview_test.sql
+index 992b6ef..d487285 100644
+--- a/portal/supabase/tests/overview_test.sql
++++ b/portal/supabase/tests/overview_test.sql
+@@ -16,12 +16,18 @@ end $$;
+ grant execute on all functions in schema pg_temp to authenticated;
+ set role authenticated;
+ 
++-- 成本只给老板（20261019b）
++select pg_temp.as_user('boss@example.com');
++do $$ declare o jsonb := public.ops_wh_overview('{}'); begin
++  assert (o->>'show_cost')::boolean and (select x->>'value' from jsonb_array_elements(o->'locations') x where x->>'location' = 'HQ') is not null,
++    'owner sees cost';
++end $$;
+ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare o jsonb; hq jsonb; begin
+   o := public.ops_wh_overview('{}');
+-  assert o->>'company' = 'HOMEWORKSSB' and (o->>'show_cost')::boolean, 'approve sees cost';
++  assert o->>'company' = 'HOMEWORKSSB' and not (o->>'show_cost')::boolean, 'manager: no cost';
+   hq := (select x from jsonb_array_elements(o->'locations') x where x->>'location' = 'HQ');
+-  assert (hq->>'value') is not null and (hq->>'neg')::int >= 1, 'HQ row: ' || hq::text;
++  assert hq->'value' = 'null'::jsonb and (hq->>'neg')::int >= 1, 'HQ row: ' || hq::text;
+   assert (o->>'neg_rows')::int >= 1, 'negative rows';
+   assert jsonb_array_length(o->'bins') >= 1 and jsonb_array_length(o->'recent') between 1 and 15, 'bins + recent';
+   assert o->'names' ? (o->'recent'->0->>'item_code'), 'names for recent items';
+diff --git a/portal/supabase/tests/receive_test.sql b/portal/supabase/tests/receive_test.sql
+index 36d4373..05d065c 100644
+--- a/portal/supabase/tests/receive_test.sql
++++ b/portal/supabase/tests/receive_test.sql
+@@ -115,21 +115,30 @@ do $$ declare s ops.staff; begin
+   select * into s from ops.staff where email = 'helper@example.com';
+   assert not ops.sees_supplier(s) and not ops.sees_prices(s), 'helper: neither';
+   assert not ops.sees_prices(null::ops.staff), 'null staff';
+-  assert to_regprocedure('ops.sees_cost(ops.staff)') is null, 'sees_cost removed (warehouse approve = cost, as before)';
++  -- 20261019b：库存成本改成只给老板（BI owner）；物流主管、仓库主管都看不到
++  assert not ops.sees_cost(s) and not ops.sees_cost(null::ops.staff), 'helper: no cost';
+ end $$;
+ set role authenticated;
+ 
+--- 0b. 库存成本照原本规则：仓库「可审批」就看得到（物流部主管也是）；物流部主管打不开未到货 PO（没有厂家权限）
++-- 0b. 库存成本只给老板（20261019b）：物流部主管（仓库「可审批」）看不到成本，但照旧看得到应有 / 差额、可以标旧货处理方式；
++--     物流部主管打不开未到货 PO（没有厂家权限）
+ select pg_temp.as_user('logi.boss@example.com');
+ do $$ declare w jsonb; c jsonb; begin
+   w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
+-  assert (select (x ->> 'unit_cost')::numeric from jsonb_array_elements(w -> 'stock') x where x ->> 'location' = 'HQ') = 10,
+-    'logistics manager unit cost: ' || (w -> 'stock')::text;
++  assert not exists (select 1 from jsonb_array_elements(w -> 'stock') x where x -> 'unit_cost' <> 'null'::jsonb),
++    'logistics manager: no unit cost: ' || (w -> 'stock')::text;
+   c := public.ops_wh_counts('{"status":"all"}');
+-  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'unit_cost' and x ? 'diff_value') from jsonb_array_elements(c) x),
+-    'logistics manager counts cost';
+-  assert (public.ops_wh_aged('{}') ->> 'show_cost')::boolean and (public.ops_wh_aged('{}') ->> 'can_edit')::boolean, 'aged cost';
++  assert jsonb_array_length(c) > 0 and (select bool_and(x ? 'diff' and not (x ? 'unit_cost') and not (x ? 'diff_value')) from jsonb_array_elements(c) x),
++    'logistics manager counts: diff but no cost';
++  assert not (public.ops_wh_aged('{}') ->> 'show_cost')::boolean and (public.ops_wh_aged('{}') ->> 'can_edit')::boolean, 'aged: no cost, can edit';
+ end $$;
++select pg_temp.as_user('boss@example.com');
++do $$ declare w jsonb; begin
++  w := public.ops_wh_item('HOMEWORKSSB', 'ST001');
++  assert (select (x ->> 'unit_cost')::numeric from jsonb_array_elements(w -> 'stock') x where x ->> 'location' = 'HQ') = 10,
++    'owner unit cost: ' || (w -> 'stock')::text;
++end $$;
++select pg_temp.as_user('logi.boss@example.com');
+ select pg_temp.expect_error($q$select public.ops_po_list('{}')$q$, '只有采购、管理层与仓库部看得到');
+ select pg_temp.as_user('picker@example.com');
+ do $$ declare w jsonb; begin
+diff --git a/portal/supabase/tests/rpl_test.sql b/portal/supabase/tests/rpl_test.sql
+index 6eb4fc3..df913a0 100644
+--- a/portal/supabase/tests/rpl_test.sql
++++ b/portal/supabase/tests/rpl_test.sql
+@@ -153,11 +153,20 @@ do $$ declare s jsonb := public.ops_rpl_suppliers(''); begin
+ end $$;
+ select pg_temp.expect_error($q$select public.ops_rpl_supplier_save('{"creditor_code":"4000-M002","lead_days":10}')$q$, '编辑');
+ 
+--- 4. 库存总表：仓库主管看成本；门市看不到成本、看得到售价；负库存筛选；搜寻
++-- 4. 库存总表：成本只给老板（20261019b），仓库主管、门市都看不到成本、看得到售价；负库存筛选；搜寻
++select pg_temp.as_user('boss@example.com');
++do $$ declare r jsonb := public.ops_wh_stock('{}'); x jsonb := public.ops_wh_stock_export('{}'); begin
++  assert (r->>'show_cost')::boolean and (select (e->>'total_cost')::numeric from jsonb_array_elements(r->'rows') e
++                                           where e->>'item_code' = 'ST003' and e->>'location' = 'HQ') = 300, 'owner sees cost';
++  assert (x->>'show_cost')::boolean and (select (e->>'total_cost')::numeric from jsonb_array_elements(x->'rows') e
++                                           where e->>'item_code' = 'ST003' and e->>'location' = 'HQ') = 300, 'owner export has cost';
++end $$;
+ select pg_temp.as_user('whboss@example.com');
+ do $$ declare r jsonb := public.ops_wh_stock('{}'); n jsonb; begin
+-  assert (r->>'show_cost')::boolean and (r->>'total')::int >= 6, 'stock: ' || r::text;
+-  assert (select (x->>'total_cost')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003' and x->>'location' = 'HQ') = 300, 'cost visible';
++  assert not (r->>'show_cost')::boolean and (r->>'total')::int >= 6, 'stock: ' || r::text;
++  assert (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(r->'rows') x), 'manager: cost hidden';
++  n := public.ops_wh_stock_export('{}');
++  assert not (n->>'show_cost')::boolean and (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(n->'rows') x), 'manager export: no cost';
+   n := public.ops_wh_stock('{"neg_only":true}');
+   assert (n->>'total')::int = (r->>'neg_total')::int and (n->>'total')::int = 2, 'negatives: ' || n::text;
+   -- 商品合计 = 全部仓位（ST001：HQ 5 + SRGADING 3 + PRE (JB) −3 = 5），不是只算负库存那几行
+@@ -172,11 +181,16 @@ do $$ declare r jsonb := public.ops_wh_stock('{"q":"ST003"}'); begin
+   assert (r->'rows'->0->>'price2')::numeric = 99, 'selling price visible';
+ end $$;
+ 
+--- 5. 滞销品：6 个月以上 = ST004（200 天）；3–6 个月 = ST003（100 天）；成本只给可审批
++-- 5. 滞销品：6 个月以上 = ST004（200 天）；3–6 个月 = ST003（100 天）；成本只给老板（20261019b）
++select pg_temp.as_user('boss@example.com');
++do $$ declare r jsonb := public.ops_wh_slow('{"min_months":6}'); begin
++  -- 其他测试档也塞了账龄资料（A1 / A3），只检查 ST004 的成本
++  assert (select (x->>'stock_value')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004') = 1200, 'slow 6m owner: ' || r::text;
++end $$;
+ select pg_temp.as_user('whboss@example.com');
+ do $$ declare r jsonb := public.ops_wh_slow('{"min_months":6}'); begin
+-  -- 其他测试档也塞了账龄资料（A1 / A3），只检查 ST004 在列、成本正确、ST003 不在列
+-  assert (select (x->>'stock_value')::numeric from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004') = 1200, 'slow 6m: ' || r::text;
++  assert not (r->>'show_cost')::boolean and exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST004' and x->'stock_value' = 'null'::jsonb),
++    'slow 6m manager: no cost: ' || r::text;
+   assert not exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003'), 'slow 6m excludes 3-6m item';
+   r := public.ops_wh_slow('{"min_months":3,"max_months":6}');
+   assert exists (select 1 from jsonb_array_elements(r->'rows') x where x->>'item_code' = 'ST003')
+diff --git a/portal/supabase/tests/run.sh b/portal/supabase/tests/run.sh
+index e758247..ac6271d 100644
+--- a/portal/supabase/tests/run.sh
++++ b/portal/supabase/tests/run.sh
+@@ -35,3 +35,4 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/extras_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/wms_fix_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/wms_perf_test.sql"
+ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/puchong_test.sql"
++psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/cost_test.sql"
+diff --git a/portal/supabase/tests/sheet_test.sql b/portal/supabase/tests/sheet_test.sql
+index b34d33e..934b509 100644
+--- a/portal/supabase/tests/sheet_test.sql
++++ b/portal/supabase/tests/sheet_test.sql
+@@ -189,6 +189,11 @@ do $$ begin
+ end $$;
+ 
+ -- 6. 差异审核看得到盘点单名称与每一格；主管「请重盘」→ 盘点单那一行回到未盘
++-- 成本差额只给老板（20261019b）
++select pg_temp.as_user('boss@example.com');
++do $$ begin
++  assert (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff_value')::numeric = -60, 'owner sees cost diff';
++end $$;
+ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare v jsonb; n int; g jsonb; begin
+   v := (select x from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) x where x->>'item_code' = 'SH002');
+@@ -196,7 +201,7 @@ do $$ declare v jsonb; n int; g jsonb; begin
+      and v->'bins' = '[{"qty": 0, "code": "T-R1"}, {"qty": 2, "code": null}]'::jsonb, 'review row: ' || v::text;
+   g := public.ops_wh_sheet_get(jsonb_build_object('id', pg_temp.sid('items')));
+   assert (g->>'can_manage')::boolean and (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff')::numeric = -1
+-     and (pg_temp.line(pg_temp.sid('items'), 'SH002')->>'diff_value')::numeric = -60, 'manager sees diff: ' || g::text;
++     and pg_temp.line(pg_temp.sid('items'), 'SH002')->'diff_value' = 'null'::jsonb, 'manager sees diff, not cost: ' || g::text;
+   n := public.ops_wh_count_review(array[(v->>'id')::bigint], 'recount');
+   assert n = 1 and pg_temp.line(pg_temp.sid('items'), 'SH002')->>'status' = 'todo', 'recount → todo';
+ end $$;
+@@ -258,10 +263,16 @@ do $$ begin
+   perform public.ops_wh_count_save_bins('{"location":"HQ","item_code":"SH004","loose":1}');
+   perform public.ops_wh_count_save_bins('{"location":"HQ","item_code":"SH004","loose":1}');
+ end $$;
++select pg_temp.as_user('boss@example.com');
++do $$ declare s jsonb := public.ops_wh_count_stats('{"days":30}'); begin
++  assert (s->>'show_cost')::boolean and (s->'summary'->>'value_net')::numeric = -10
++     and (s->'summary'->>'value_abs')::numeric = 10, 'owner value: ' || (s->'summary')::text;
++end $$;
+ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare s jsonb := public.ops_wh_count_stats('{"days":30}'); begin
+-  assert (s->'summary'->>'variance')::int = 1 and (s->'summary'->>'value_net')::numeric = -10
+-     and (s->'summary'->>'value_abs')::numeric = 10, 'value: ' || (s->'summary')::text;
++  -- 成本只给老板（20261019b）：主管的差异金额都是 0、show_cost = false（画面藏起金额）
++  assert not (s->>'show_cost')::boolean and (s->'summary'->>'variance')::int = 1 and (s->'summary'->>'value_net')::numeric = 0
++     and (s->'summary'->>'value_abs')::numeric = 0 and s->'top'->0->'value' = 'null'::jsonb, 'manager: no value: ' || s::text;
+   assert s->'top'->0->>'item_code' = 'SH004' and (s->'top'->0->>'units')::numeric = -1, 'top: ' || (s->'top')::text;
+   assert (select (x->>'variance')::int from jsonb_array_elements(s->'people') x where x->>'name' = '仓库阿强') = 1, 'person variance';
+ end $$;
+diff --git a/portal/supabase/tests/tag_test.sql b/portal/supabase/tests/tag_test.sql
+index 65fe11d..83b07a8 100644
+--- a/portal/supabase/tests/tag_test.sql
++++ b/portal/supabase/tests/tag_test.sql
+@@ -144,10 +144,15 @@ do $$ declare s jsonb; e jsonb; begin
+   assert exists (select 1 from jsonb_array_elements(e->'rows') x where x->>'item_code' = 'ST004'), 'ST004 exported';
+   assert (select x->>'item_total' from jsonb_array_elements(e->'rows') x limit 1) is not null, 'export item_total';
+ end $$;
++-- 成本只给老板（20261019b）
++select pg_temp.as_user('boss@example.com');
++do $$ declare e jsonb := public.ops_wh_stock_export('{"tag":"滞销"}'); begin
++  assert (e->>'show_cost')::boolean and (select bool_and(x->>'total_cost' is not null) from jsonb_array_elements(e->'rows') x), 'owner sees cost';
++end $$;
+ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare e jsonb; begin
+   e := public.ops_wh_stock_export('{"tag":"滞销"}');
+-  assert (e->>'show_cost')::boolean and (select bool_and(x->>'total_cost' is not null) from jsonb_array_elements(e->'rows') x), 'approve sees cost';
++  assert not (e->>'show_cost')::boolean and (select bool_and(x->'total_cost' = 'null'::jsonb) from jsonb_array_elements(e->'rows') x), 'manager: no cost';
+   e := public.ops_wh_stock_export('{}');
+   assert (e->>'total')::int = jsonb_array_length(e->'rows') and (e->>'total')::int = (public.ops_wh_stock('{}')->>'total')::int, 'export all rows';
+ end $$;
+diff --git a/portal/supabase/tests/todo_test.sql b/portal/supabase/tests/todo_test.sql
+index 25942aa..e64cef1 100644
+--- a/portal/supabase/tests/todo_test.sql
++++ b/portal/supabase/tests/todo_test.sql
+@@ -38,18 +38,26 @@ do $$ declare r jsonb := public.ops_wh_aged('{}'); begin
+   assert jsonb_array_length(r->'rows'->0->'locations') = 2, 'locations';
+   assert (r->'summary'->>'old_n')::int = 2 and (r->'summary'->>'nosale_n')::int = 2, 'summary counts';
+   assert r->'summary'->'old_v' = 'null'::jsonb, 'no summary cost';
++  assert not (r->>'can_edit')::boolean, 'picker cannot mark (can_edit no longer follows cost, 20261019b)';
+   assert jsonb_array_length(public.ops_wh_aged('{"kind":"old"}')->'rows') = 2, 'old = A1 A3';
+   assert jsonb_array_length(public.ops_wh_aged('{"kind":"nosale"}')->'rows') = 2, 'nosale = A1 A2';
+   assert (public.ops_home()->>'po_arriving') is not null and public.ops_home()->'hr_gaps' = 'null'::jsonb, 'picker home';
+ end $$;
+ select pg_temp.expect_error($q$select public.ops_wh_aged_save('{"item_codes":["A1"],"action":"clearance"}')$q$, '审批');
+ 
+--- 仓库主管：看得到成本、可以标处理方式
++-- 老板（BI owner）：看得到成本（20261019b：成本只给老板）
++select pg_temp.as_user('boss@example.com');
++do $$ declare r jsonb; begin
++  r := public.ops_wh_aged('{}');
++  assert (r->>'show_cost')::boolean and (r->'rows'->0->>'stock_value')::numeric = 500, 'cost for owner';
++  assert (r->'summary'->>'both_v')::numeric = 500, 'summary value for owner';
++end $$;
++-- 仓库主管：看不到成本，但照旧可以标处理方式
+ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare r jsonb; begin
+   r := public.ops_wh_aged('{}');
+-  assert (r->>'show_cost')::boolean and (r->'rows'->0->>'stock_value')::numeric = 500, 'cost for manager';
+-  assert (r->'summary'->>'both_v')::numeric = 500 and (r->'summary'->>'both_open')::int = 1, 'summary value';
++  assert not (r->>'show_cost')::boolean and (r->>'can_edit')::boolean and r->'rows'->0->'stock_value' = 'null'::jsonb, 'manager: no cost, can edit';
++  assert r->'summary'->'both_v' = 'null'::jsonb and (r->'summary'->>'both_open')::int = 1, 'summary without value';
+   assert public.ops_wh_aged_save('{"item_codes":["A1","A2"],"action":"clearance","note":"十一月清货"}') = 2, 'saved 2';
+   r := public.ops_wh_aged('{"kind":"nosale","action":"clearance"}');
+   assert jsonb_array_length(r->'rows') = 2 and r->'rows'->0->>'note' = '十一月清货', 'filter by action';
+diff --git a/portal/supabase/tests/wh_test.sql b/portal/supabase/tests/wh_test.sql
+index 3e7eb49..8c4b4f5 100644
+--- a/portal/supabase/tests/wh_test.sql
++++ b/portal/supabase/tests/wh_test.sql
+@@ -100,9 +100,16 @@ select pg_temp.as_user('whmgr@example.com');
+ do $$ declare v jsonb := public.ops_wh_counts('{"status":"variance"}'); h jsonb := public.ops_home(); x jsonb; begin
+   assert jsonb_array_length(v) = 2, 'variances: ' || v::text;
+   x := (select e from jsonb_array_elements(v) e where e->>'item_code' = 'ST004');
+-  assert (x->>'diff')::numeric = -1 and (x->>'diff_value')::numeric = -300 and (x->>'system_qty')::numeric = 4, 'diff: ' || x::text;
++  -- 成本只给老板（20261019b）：主管看得到应有 / 差额，看不到单位成本、成本差额
++  assert (x->>'diff')::numeric = -1 and not (x ? 'diff_value') and not (x ? 'unit_cost') and (x->>'system_qty')::numeric = 4, 'diff: ' || x::text;
+   assert (h->>'wh_variances')::int = 2 and (h->>'wh_moves_pending')::int = 1, 'home: ' || h::text;
+ end $$;
++select pg_temp.as_user('boss@example.com');
++do $$ declare x jsonb; begin
++  x := (select e from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) e where e->>'item_code' = 'ST004');
++  assert (x->>'diff_value')::numeric = -300, 'owner sees cost diff: ' || x::text;
++end $$;
++select pg_temp.as_user('whmgr@example.com');
+ select pg_temp.expect_error($q$select public.ops_wh_count_review(array[1::bigint], 'ignored')$q$, '写原因');
+ do $$ declare ids bigint[]; n int; begin
+   select array_agg((e->>'id')::bigint) into ids from jsonb_array_elements(public.ops_wh_counts('{"status":"variance"}')) e;
+-- 
+2.43.0
+

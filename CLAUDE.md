@@ -192,6 +192,13 @@ AutoCount 同步的、扫码登记 / 报价提醒 / 送货地址都读同一份�
 `bi_customer_signup`（9 参数版）回传实际记下的 `warranty_months`；BI 扫码登记页 `/join.html` 读 `bi_customer_signup_offer()`（anon），月数 > 0 才显示保修那行
 （overlay 改 `src/join/main.tsx`、`join.css`）。**2026-10-16 全部上线**：营运系统前端 dpl_7ZLKpy1qZs416vabQ4LEqsQqbpiB（那边合并成 702c4a7）；BI 网页 dpl_5xZ6ramrok7FBATAXWM7UJvNjgnX（含 10-14 的送货页转走 + 扫码页保修那行；10/15 另一个对话把订货 / 库存 / 滞销品搬走、改了 `src/i18n/index.ts`，overlay 已改以 dpl_6GPMnu… 为底，测试清单 `LIVE_V5`）。延长保修月数仍是 0，等使用者在营运系统设定。**以后在这边改 `bi.customer_signup_apply` / `bi_customer_merge` / `bi_customer` 要保留保修栏位**。
 
+**营运系统仓库成本只给老板（2026-10-16）**：使用者看了营运系统库存总表与旧货：「这两个地方都看到成本，我都要收起来，不要让职员看到，包含店长」。
+portal migration `20261019b_ops_cost_owner_only.sql`（正式环境已套 = `ops_cost_owner_only`）：`ops.sees_cost(staff)` = 在 `bi.allowed_users` 且 role = owner；
+仓库 9 个会回成本的函数改用它（库存总表 / 下载、旧货、滞销品、总览、查货、盘点纪录、盘点单、盘点统计），旧货「标处理方式」与盘点件数照旧给仓库可审批。
+正式环境以 5 个帐号核对过（只有 Leslie 看得到）。前端交接包 `docs/ops_wh_cost/`（HANDOFF + patch，以营运系统 `ffc5cdc` 为底），ZIP
+`HomeWorks-仓库成本只给老板-给营运系统-2026-10-16.zip`。同一天的货架分区收放由营运系统那边自己做好上线（`ffc5cdc`，dpl_3r12WNac…），这边做的版本没交。
+**BI 网页的库存 / 滞销品视图（`public.bi_stock`、`bi_slow_stock`）仍给 BI 名单 role = manager 的人看成本**（`bi_is_allowed()` 放 owner / manager）——还没问使用者要不要一起收。
+
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
 （MCP `mcp__Vercel__*` 可读档案树、内容与建立部署；list_deployments 会 403，用 get_project 拿
