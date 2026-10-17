@@ -5,10 +5,10 @@
 
 使用者（Leslie）2026-10-16 附「库存总表」与「旧货」截图：「这两个地方都看到成本，我都要收起来，不要让职员看到，包含店长」。
 
-ZIP 里有：`wh-cost-owner-only.patch`（1 个 commit，`git am` 用，以 `ffc5cdc 货架清单：区可以展开 / 收起` 为底）、`files/`（同样的改动、
+ZIP 里有：`wh-cost-owner-only.patch`（1 个 commit，`git am` 用，以 `a3f58a4 仓库把关：进货 / 出货都要有人核对，加今天要做与工作量` 为底）、`files/`（同样的改动、
 完整档案，路径照 repo 根目录；你那边若已经改过同一个档，**不要直接覆盖**，照 patch 补那几行）。
 
-（同一天使用者也要货架清单分区收放；你那边的 `ffc5cdc` 已经做好上线，这包**不含**货架的改动。）
+（同一天使用者也要货架清单分区收放；你那边的 `ffc5cdc` 已经做好上线，这包**不含**货架的改动。2026-10-16 先给过一版以 `ffc5cdc` 为底的；你那边之后加了 `gate_test.sql`，`run.sh` 那行会冲突，所以 10-17 重新以 `a3f58a4` 为底再包一次，内容一样。）
 
 ---
 
@@ -79,6 +79,6 @@ Leslie）拿得到。资料库就不回成本，不是只在画面藏。
   ① 原本只测了不在 BI 名单上的仓库主管，把规则改成「在 BI 名单上」或「营运系统管理员」测试照样过 → 加店长（BI manager + 管理员）那段；
   ② 旧货 `can_edit` 跟成本拆开后没有测「只看的人不能标」→ 加了。三种改坏的写法（拿掉 role = owner、改成管理员、`can_edit` 写死 true）现在都会让测试失败。
   被推翻的：采购员读得到 BI 的库存视图（其实 `bi_is_allowed()` 只放 owner / manager，采购员拿不到）；每日盘点清单照库存值排顺序（不回任何金额，是盘点策略）。
-- 本机 PostgreSQL：在 `ffc5cdc` + patch 上 `run.sh` 全部通过（含 `cost_test`）；`npx tsc --noEmit`、`npm run build` 通过；改到的档都 ≤ 35 KB。
+- 本机 PostgreSQL：在 `a3f58a4`（含你的仓库把关 `20261020_ops_wh_gate.sql`）+ patch 上 `run.sh` 全部通过（含 `gate_test`、`cost_test`）；`npx tsc --noEmit`、`npm run build` 通过；改到的档都 ≤ 35 KB。仓库把关的新函数没有回任何成本。2026-10-17 再查正式环境：9 个函数仍用 `ops.sees_cost`、没有函数用旧规则。
 - Playwright（模拟资料，1280 / 390px，中文与 EN）：盘点统计 `show_cost` = false / 旧资料库没有这个栏位：没有任何「RM」、栏位与表头对齐、每月长条用差异项数；
   = true：金额照旧。旧货没有成本时三格没有 RM、说明不提成本、照样可以勾选。EN 没有漏翻的中文。390px 没有横向卷动。
