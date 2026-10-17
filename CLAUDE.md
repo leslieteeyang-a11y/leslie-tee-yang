@@ -197,7 +197,7 @@ portal migration `20261019b_ops_cost_owner_only.sql`（正式环境已套 = `ops
 仓库 9 个会回成本的函数改用它（库存总表 / 下载、旧货、滞销品、总览、查货、盘点纪录、盘点单、盘点统计），旧货「标处理方式」与盘点件数照旧给仓库可审批。
 正式环境以 5 个帐号核对过（只有 Leslie 看得到）。前端交接包 `docs/ops_wh_cost/`（HANDOFF + patch，以营运系统 `ffc5cdc` 为底），ZIP
 `HomeWorks-仓库成本只给老板-给营运系统-2026-10-16.zip`。同一天的货架分区收放由营运系统那边自己做好上线（`ffc5cdc`，dpl_3r12WNac…），这边做的版本没交。
-**BI 网页的库存 / 滞销品视图（`public.bi_stock`、`bi_slow_stock`）仍给 BI 名单 role = manager 的人看成本**（`bi_is_allowed()` 放 owner / manager）——还没问使用者要不要一起收。
+**BI 网页的库存成本本来就只给老板**（2026-10-17 核对；10-16 跟使用者说「店长拿得到」是看错，已更正）：`bi_stock` / `bi_slow_stock` 视图另外排除 manager / sales，`bi_onepager` / `bi_health_*` / `bi_margin_*`（含 RPC `bi_margin_summary` / `_nocost_lines`）只给 owner；以 ZI HONG、JB 店长身分实际查 13 个带成本的视图都是 0 行，只有进货单价（`bi_item_supplier.last_price`、`bi_po_open`、`bi_purchase_suggest`）给 manager——使用者决定进货单价照旧（营运系统 `ops.sees_prices` 也不动）。`bi` schema 没开给 REST API（安全检查没有 bi 的 materialized view / 函数在 API 的警告），所以 `bi.fact_stock` 等表虽然 authenticated 有 select，外面叫不到；**不要把 bi 加进 Exposed schemas**，否则 `bi.mv_*`（没有 RLS）会让任何登入员工读到毛利。
 
 **BI 网页**：Vercel 专案 `homeworks-bi`（team leslie-tee，Vite + React，非 git 部署），
 2026-09-26 已加「电商月报」分页读 `bi_report_month_*`；改法与部署步骤见 `docs/bi_web/README.md`
