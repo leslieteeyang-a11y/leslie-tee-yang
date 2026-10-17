@@ -288,7 +288,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   （`ops.dlv_load` / `_doc`；没拣好 / 没核对的不能装）；⑥ 出车要拍装车照（`ops_dlv_load_depart`，可审批的人可写原因强制出车）；⑦ 仓库「今天」分页
   （`ops_wh_today`，按急迫排序、「我来」认领 `ops.wh_claim`）；⑧「工作量」分页（`ops_wh_workload`，仓库可审批）。分店开关在仓库「复核 → 设定」
   （`ops.wh_gate`，没有那行 = 全开）。前端 `wh/Today|Gate|Putaway|Workload|PickCheck.tsx`、`dlv/Load.tsx`、`podo/RecvPhotos.tsx`、`wh-gate-api.ts`、
-  `wh-gate.css`、`i18n-dict-gate.ts`；清单 `portal/deploy_manifest_20261017.json`（192 个档，全部已上传 Vercel）。测试 `tests/gate_test.sql`
+  `wh-gate.css`、`i18n-dict-gate.ts`；清单 `portal/deploy_manifest_20261017b.json`（192 个档；= 仓库把关 + 成本只给老板的前端。`20261017.json` 那份的档全部已上传 Vercel，`b` 多出的 11 个档（成本只给老板改到的 CountStats / SheetDetail / Aged / Stock / Slow / Review、wh-sheet / wh-overview / wh-tag api、i18n-dict-more / -whsheet）**还没上传**，部署前先照清单 sha 传这 11 个）。测试 `tests/gate_test.sql`
   （`po_do_test.sql` 开头把两间分店的点货复核 / 拍照关掉，旧测试照旧）。
   **前端还没上线**：2026-10-17 `create_deployment` 回 403（production 与 preview 都没有权限，之前可以），所以**三间分店的 4 个开关先全关**（旧画面不会拍照、
   不会复核，开着会卡住点货与开单部）。权限恢复后：用清单部署 → READY → 在「复核 → 设定」打开，或 `update ops.wh_gate set recv_review=true, recv_photo=true,
