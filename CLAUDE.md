@@ -295,7 +295,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   备货核对、要备的 DO…），前端 `src/` 与测试 `supabase/tests/` 一起换；资料库 migration `20261021_ops_pick_to_prep.sql`（正式环境 = `ops_pick_to_prep_1` / `_2`，
   套之前 14 个函数 md5 与本机一致、套之后也一致；只有 create or replace + `ops.module` 一行 update）改错误讯息 / 回传 message / 注解。**代号不改**：
   表 `ops.wh_pick*`、栏位 picked、函数 `ops_wh_pick_*`、网址 `#/warehouse/pick` 照旧；英文仍是 Pick / Picking。以后新增这块的中文一律写「备」。
-  前端清单 `portal/deploy_manifest_20261017c.json`（= 17b 多 32 个改字的档；`dlv/Plan.tsx` 只有一行注解有「拣」，上传被挡下，所以保留原样）。
+  前端部署 `dpl_8UxP2WxNwT1BdhWPHoo8kFTE7k8W`，清单 `portal/deploy_manifest_20261017c.json`（= 17b 多 32 个改字的档；`dlv/Plan.tsx` 只有一行注解有「拣」，上传被挡下，所以保留原样）。
 - **KL Puchong 分店（2026-10-16，使用者：「全部功能，跟 JB 分店一样，它是其中一家分店」，Puchong 用店里自己的电脑开单）**：分店代号 `HOMEWORKSPUCHONG`
   （= `ops.staff.branch` / 各表 company；门市代号 `PUCHONG` 给送货 store / 出发点 / 外包司机），标签「Puchong 分店」。migration `20261019_ops_branch_puchong.sql`
   （= `ops_branch_puchong`，**正式环境已套**，17 个函数 md5 与本机一致）：所有只认两间分店的 check constraint 照原定义加第三间（DO 区块替换，名称不变）、
