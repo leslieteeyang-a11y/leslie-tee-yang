@@ -13,7 +13,7 @@ export interface Overview {
   moves_pending: number; grn_pending: number; grn_pending_do: number; do_to_count: number; variances: number;
   count_today: { counted: number; target: number; people: number };
   bins: BinSummary[];
-  /** 拣货：今天要送几张、已拣好几张、拣到一半几张 */ picks: { today: number; today_done: number; picking: number };
+  /** 备货：今天要送几张、已备好几张、备到一半几张 */ picks: { today: number; today_done: number; picking: number };
   /** 开着的盘点单（最多 10 张） */
   sheets: { id: number; title: string; location: string; due_date: string | null; overdue: boolean; total: number; done: number; recount: number }[];
   recent: OverviewRecent[];
@@ -31,7 +31,7 @@ export interface WhHome {
   picks_left: number | null;
   sheets: { id: number; company: string; title: string; location: string; due_date: string | null; overdue: boolean; total: number; left: number }[];
   bins_over: number | null;
-  /** 仓库把关（2026-10-17）：等我核对的拣货单、等我复核的点货差异、逾期没上架 */
+  /** 仓库把关（2026-10-17）：等我核对的备货单、等我复核的点货差异、逾期没上架 */
   pick_check?: number | null; recv_review?: number | null; putaway_late?: number | null;
 }
 export async function whHome(): Promise<WhHome> {

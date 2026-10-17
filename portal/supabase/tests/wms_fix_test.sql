@@ -1,6 +1,6 @@
 -- 仓库新功能合并后审查的修正（2026-10-15）。接在全部新功能测试之后跑，只用自己建的商品 RF001 / RF002 与货架 R-*。
--- 涵盖：两次上架不丢数、停用货架冲回后还能盘成 0、已开 DO 还没拣算进应有、撤销自己的货架动作、DO 单位不同不从货架扣、
--- 已拣好的拣货单只有可审批能取消、批次号 / 批次 QR 当商品扫、Excel 带入同一个交易叫两次。
+-- 涵盖：两次上架不丢数、停用货架冲回后还能盘成 0、已开 DO 还没备算进应有、撤销自己的货架动作、DO 单位不同不从货架扣、
+-- 已备好的备货单只有可审批能取消、批次号 / 批次 QR 当商品扫、Excel 带入同一个交易叫两次。
 \set ON_ERROR_STOP 1
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
 begin
@@ -26,7 +26,7 @@ create or replace function pg_temp.hq(p_item text) returns jsonb language sql as
 $$;
 grant execute on all functions in schema pg_temp to authenticated;
 
--- 测试资料：RF001 HQ 有 5 件；RF002 单位 PCS；今天开一张 DO（RF001 × 2，还没拣；RF002 × 1 CTN）
+-- 测试资料：RF001 HQ 有 5 件；RF002 单位 PCS；今天开一张 DO（RF001 × 2，还没备；RF002 × 1 CTN）
 insert into bi.dim_item values ('HOMEWORKSSB', 'RF001', 'REVIEW FIX ITEM', 'TAP', 'HEMOS', 'PCS'),
   ('HOMEWORKSSB', 'RF002', 'REVIEW BOX ITEM', 'TAP', 'HEMOS', 'PCS');
 insert into bi.fact_stock values ('HOMEWORKSSB', 'RF001', 'HQ', 5, 50), ('HOMEWORKSSB', 'RF002', 'HQ', 24, 24);
@@ -38,7 +38,7 @@ set role authenticated;
 select pg_temp.as_user('whmgr@example.com');
 select public.ops_wh_bin_bulk('{"location":"HQ","zone":"R","shelves":["F1","F2"]}');
 
--- 1. 已开 DO 还没拣（AutoCount 已扣 2 件）：应有 = 5 + 2 = 7；上架 7 件不用确认，对不上清单不会列 RF001
+-- 1. 已开 DO 还没备（AutoCount 已扣 2 件）：应有 = 5 + 2 = 7；上架 7 件不用确认，对不上清单不会列 RF001
 select pg_temp.as_user('picker@example.com');
 do $$ declare h jsonb; r jsonb; begin
   h := pg_temp.hq('RF001');
@@ -66,7 +66,7 @@ select pg_temp.expect_error($q$select public.ops_wh_bin_undo('', current_setting
 select pg_temp.as_user('whmgr@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_bin_undo('', current_setting('test.ref')::bigint)$q$, '自己做的');
 
--- 3. 拣货：DO 单位 CTN ≠ 商品 PCS → 有选货架就不扣（回 code = uom）；不选货架照样可以拣
+-- 3. 备货：DO 单位 CTN ≠ 商品 PCS → 有选货架就不扣（回 code = uom）；不选货架照样可以备
 select pg_temp.as_user('picker@example.com');
 do $$ declare g jsonb; pid bigint; r jsonb; begin
   g := public.ops_wh_pick_start('', 'DO-RF1');
@@ -78,12 +78,12 @@ do $$ declare g jsonb; pid bigint; r jsonb; begin
   assert (r->>'ok')::boolean, 'pick without bin ok: ' || r::text;
   r := public.ops_wh_pick_scan(jsonb_build_object('pick_id', pid, 'code', 'RF001', 'qty', 2, 'bin', 'R-F1'));
   assert (r->>'ok')::boolean and pg_temp.binqty('R-F1', 'RF001') = 5, 'pick from bin: ' || r::text;
-  -- 拣了以后：DO 未拣变 0，应有回到 5，货架 5
+  -- 备了以后：DO 未备变 0，应有回到 5，货架 5
   assert (pg_temp.hq('RF001')->>'do_unpicked')::numeric = 0 and (pg_temp.hq('RF001')->>'expected')::numeric = 5, 'after pick';
   r := public.ops_wh_pick_done(jsonb_build_object('pick_id', pid));
   assert r->'pick'->>'status' = 'done', 'done: ' || r::text;
 end $$;
--- 已拣好的：开始的人（可编辑）不能取消，可审批可以（货架加回去）
+-- 已备好的：开始的人（可编辑）不能取消，可审批可以（货架加回去）
 select pg_temp.expect_error($q$select public.ops_wh_pick_cancel(jsonb_build_object('pick_id', current_setting('test.pick')::bigint, 'reason', '测试'))$q$, '可审批');
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare r jsonb; begin
@@ -121,7 +121,7 @@ do $$ begin
   assert pg_temp.binqty('R-F2', 'RF001') = 0, 'take from inactive bin';
 end $$;
 
--- 5. 批次号 / 批次 QR 当商品扫：上架、拣货、盘点都认得
+-- 5. 批次号 / 批次 QR 当商品扫：上架、备货、盘点都认得
 reset role;
 insert into ops.wh_lot (lot_no, company, item_code, qty, boxes, location, created_by)
 select 'L261015-9901', 'HOMEWORKSSB', 'RF001', 3, 1, 'HQ', id from ops.staff where email = 'picker@example.com';

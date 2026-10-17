@@ -1,4 +1,4 @@
--- 仓库效能修正（20261017g）：「已开 DO 还没拣」只算一个商品的版本要跟整份清单完全一样；撤销没改到数量的动作。
+-- 仓库效能修正（20261017g）：「已开 DO 还没备」只算一个商品的版本要跟整份清单完全一样；撤销没改到数量的动作。
 -- 接在 wms_fix_test.sql 之后跑，只用自己建的商品 PF001～PF004。
 \set ON_ERROR_STOP 1
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
@@ -50,7 +50,7 @@ end $$;
 set role authenticated;
 select pg_temp.as_user('whmgr@example.com');
 do $$ declare h jsonb; r jsonb; q numeric; begin
-  -- 查货：每个仓位的应有 = AutoCount + 搬动 + DO 未拣，未上架 = 应有 − 货架
+  -- 查货：每个仓位的应有 = AutoCount + 搬动 + DO 未备，未上架 = 应有 − 货架
   r := public.ops_wh_item_bins('{"item":"PF003"}');
   select x into h from jsonb_array_elements(r->'locations') x where x->>'location' = 'HQ';
   assert h is null or ((h->>'expected')::numeric = (h->>'ac_qty')::numeric + (h->>'pending')::numeric + (h->>'do_unpicked')::numeric

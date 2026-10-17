@@ -1,5 +1,5 @@
--- 拣货「今天 / 明天要送」（2026-10-16，migration 20261018_ops_wh_pick_tomorrow）。接在 pick_test.sql 之后跑。
--- 资料：昨天开还没拣 (T-Y)、三天前开但排在明天 (T-RUN)、两天前开没排 (T-OLD)、昨天开已送达 (T-DLV)。
+-- 备货「今天 / 明天要送」（2026-10-16，migration 20261018_ops_wh_pick_tomorrow）。接在 pick_test.sql 之后跑。
+-- 资料：昨天开还没备 (T-Y)、三天前开但排在明天 (T-RUN)、两天前开没排 (T-OLD)、昨天开已送达 (T-DLV)。
 \set ON_ERROR_STOP 1
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
 begin

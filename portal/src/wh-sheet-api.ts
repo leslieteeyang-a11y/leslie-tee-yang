@@ -32,7 +32,7 @@ export interface CountBinsInfo {
   /** 这个仓位所有货架（「加一个货架」用） */ all_bins: { id: number; code: string }[];
   /** 今天第一次数的跟系统不一样，这次是再数 */ recount: boolean;
   /** 开着、有这个商品的盘点单（存的时候会挂上去） */ sheet: { id: number; title: string } | null;
-  /** 已开 DO 还没拣的件数（AutoCount 已经扣了、货可能还在架上） */ do_unpicked: number;
+  /** 已开 DO 还没备的件数（AutoCount 已经扣了、货可能还在架上） */ do_unpicked: number;
 }
 export type CountResult = "match" | "recount" | "variance";
 export interface CountSaveResult {

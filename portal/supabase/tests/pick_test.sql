@@ -1,4 +1,4 @@
--- 照 DO 拣货 + 扫码核对（2026-10-15）。接在 bin_test.sql 之后跑（不依赖其他新功能的测试）。
+-- 照 DO 备货 + 扫码核对（2026-10-15）。接在 bin_test.sql 之后跑（不依赖其他新功能的测试）。
 -- 用到前面测试建的人：picker（仓库可编辑）、whmgr（仓库主管 = 可审批）、hqsales（门市：仓库只看、送货只看）、jbwh（JB 仓库）、hr（没有仓库 / 送货）。
 -- 商品（stub）：ST003 'HEMOS BASIN HM-UB001'、ST004 'HEMOS WC ONE PIECE'、ST001 'RAXON HOSE'。
 \set ON_ERROR_STOP 1
@@ -24,7 +24,7 @@ $$;
 create or replace function pg_temp.binbc(p_code text) returns text language sql as $$
   select x->>'barcode' from jsonb_array_elements(public.ops_wh_bins('{"location":"HQ"}')->'bins') x where x->>'code' = p_code
 $$;
--- 拣货单里第 n 行
+-- 备货单里第 n 行
 create or replace function pg_temp.line(g jsonb, n int) returns jsonb language sql as $$
   select x from jsonb_array_elements(g->'lines') x where (x->>'line_no')::int = n
 $$;
@@ -43,7 +43,7 @@ create or replace function pg_temp.docs(r jsonb) returns text[] language sql as 
 $$;
 grant execute on all functions in schema pg_temp to authenticated;
 
--- 总览数字的基准（前面的测试留下的 DO / 排单 / 拣货单）
+-- 总览数字的基准（前面的测试留下的 DO / 排单 / 备货单）
 select set_config('pick.base', ops.wh_pick_summary('HOMEWORKSSB')::text, false);
 -- 资料：HQ 四张 DO + JB 一张；今天的排单（DO-P002 第 1 站、DO-P001 第 2 站）
 insert into bi.dim_item (company, item_code, description, item_group, item_type, base_uom) values
@@ -69,7 +69,7 @@ insert into bi.delivery_pod (run_id, stop_key, doc_no, status)
 select r.id, 'DO-P004', 'DO-P004', 'delivered' from bi.delivery_run r where r.token = 'pick-test-token-0000000002';
 
 set role authenticated;
--- 送货部只看、没有仓库权限的人（排单用 ops_wh_pick_status）；第二个仓库员工（不是开始拣货的人）
+-- 送货部只看、没有仓库权限的人（排单用 ops_wh_pick_status）；第二个仓库员工（不是开始备货的人）
 select pg_temp.as_user('boss@example.com');
 select public.ops_staff_save('{"email":"dlvonly@example.com","name":"排单小美","department":"delivery","branch":"HOMEWORKSSB","overrides":{"warehouse":"none","delivery":"view"}}');
 select public.ops_staff_save('{"email":"picker2@example.com","name":"仓库阿华","department":"warehouse","branch":"HOMEWORKSSB"}');
@@ -117,7 +117,7 @@ select pg_temp.expect_error($q$select public.ops_wh_pick_list('{"company":"HOMEW
 do $$ begin assert pg_temp.docs(public.ops_wh_pick_list('{}')) = array['DO-PJB1'], 'JB sees own DO'; end $$;
 select pg_temp.expect_error($q$select public.ops_wh_pick_get('', 'DO-P001')$q$, '找不到 DO');
 
--- 3. 开始拣货（可编辑）；两个人同时按 = 同一张
+-- 3. 开始备货（可编辑）；两个人同时按 = 同一张
 select pg_temp.as_user('picker@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_pick_start('', 'DO-P005')$q$, '还没有明细');
 do $$ declare g jsonb; g2 jsonb; begin
@@ -156,7 +156,7 @@ do $$ declare r jsonb; g jsonb; v_bin text := pg_temp.binbc('P-P1'); v_bin2 text
   r := pg_temp.scan('DO-P001', 'ST003', 2);
   assert (r->>'ok')::boolean and (r->'line'->>'done')::boolean and r->'scan'->>'bin_id' is null, 'scan without bin';
   r := pg_temp.scan('DO-P001', 'ST003');
-  assert r->>'code' = 'over' and r->>'message' like '%已经拣够了%', 'full: ' || r::text;
+  assert r->>'code' = 'over' and r->>'message' like '%已经备够了%', 'full: ' || r::text;
   -- 从货架扣，再撤销 → 加回去
   r := pg_temp.scan('DO-P001', 'ST004', 1, v_bin2);
   assert (r->>'ok')::boolean and pg_temp.binqty('P-P2', 'ST004') = 0, 'ST004 from P-P2';
@@ -169,7 +169,7 @@ select pg_temp.expect_error($q$select public.ops_wh_pick_undo(current_setting('p
 select pg_temp.as_user('hqsales@example.com');
 select pg_temp.expect_error($q$select pg_temp.scan('DO-P001', 'ST004')$q$, '编辑');
 select pg_temp.as_user('jbwh@example.com');
-select pg_temp.expect_error($q$select public.ops_wh_pick_scan(jsonb_build_object('pick_id', current_setting('pick.id'), 'code', 'ST004'))$q$, '找不到这张拣货单');
+select pg_temp.expect_error($q$select public.ops_wh_pick_scan(jsonb_build_object('pick_id', current_setting('pick.id'), 'code', 'ST004'))$q$, '找不到这张备货单');
 select pg_temp.expect_error($q$select public.ops_wh_pick_undo(current_setting('pick.undo')::bigint)$q$, '找不到这笔');
 
 -- 5. 对不到的行：扫商品指定 / 撤销还原 / 手动确认 / 略过
@@ -193,7 +193,7 @@ select pg_temp.expect_error($q$select public.ops_wh_pick_line_set(jsonb_build_ob
 select pg_temp.expect_error($q$select public.ops_wh_pick_line_set(jsonb_build_object('pick_id', current_setting('pick.id'), 'line_id', current_setting('pick.l4'), 'action', 'manual', 'qty', 2, 'reason', '没有条码'))$q$, '只差 1');
 select pg_temp.expect_error($q$select public.ops_wh_pick_line_set(jsonb_build_object('pick_id', current_setting('pick.id'), 'line_id', current_setting('pick.l4'), 'action', 'manual', 'qty', 1))$q$, '原因');
 select pg_temp.expect_error($q$select public.ops_wh_pick_line_set(jsonb_build_object('pick_id', current_setting('pick.id'), 'line_id', current_setting('pick.l4'), 'action', 'manual', 'qty', 1, 'reason', 'x', 'bin', 'P-P1'))$q$, '对不到商品');
-select pg_temp.expect_error($q$select public.ops_wh_pick_done(jsonb_build_object('pick_id', current_setting('pick.id')))$q$, '还有 2 行没拣够');
+select pg_temp.expect_error($q$select public.ops_wh_pick_done(jsonb_build_object('pick_id', current_setting('pick.id')))$q$, '还有 2 行没备够');
 do $$ declare r jsonb; begin
   r := public.ops_wh_pick_line_set(jsonb_build_object('pick_id', current_setting('pick.id'), 'line_id', current_setting('pick.l3'),
                                                       'action', 'skip', 'reason', '运费'));
@@ -205,13 +205,13 @@ do $$ declare r jsonb; begin
     'totals exclude skipped: ' || (r->'pick')::text;
 end $$;
 
--- 6. 已拣好；完成后不能再扫；排单的人看得到
+-- 6. 已备好；完成后不能再扫；排单的人看得到
 do $$ declare g jsonb; begin
   g := public.ops_wh_pick_done(jsonb_build_object('pick_id', current_setting('pick.id')));
   assert g->'pick'->>'status' = 'done' and g->'pick'->>'done_by_name' = '仓库阿强' and g->'pick'->>'short_note' = '', 'done: ' || g::text;
 end $$;
-select pg_temp.expect_error($q$select pg_temp.scan('DO-P001', 'ST004')$q$, '已经拣好');
--- 没拣够：要缺货备注
+select pg_temp.expect_error($q$select pg_temp.scan('DO-P001', 'ST004')$q$, '已经备好');
+-- 没备够：要缺货备注
 do $$ begin perform public.ops_wh_pick_start('', 'DO-P002'); end $$;
 select pg_temp.expect_error($q$select public.ops_wh_pick_done(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P002'), 'force', true))$q$, '缺货备注');
 do $$ declare g jsonb; r jsonb; begin
@@ -237,8 +237,8 @@ select pg_temp.expect_error($q$select public.ops_wh_pick_status('', array['DO-P0
 
 -- 7. 重新打开 / 取消：开始的人或可审批；取消 = 货架加回去
 select pg_temp.as_user('picker2@example.com');
-select pg_temp.expect_error($q$select public.ops_wh_pick_reopen(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P001')))$q$, '开始拣货的人');
-select pg_temp.expect_error($q$select public.ops_wh_pick_cancel(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P001'), 'reason', 'x'))$q$, '开始拣货的人');
+select pg_temp.expect_error($q$select public.ops_wh_pick_reopen(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P001')))$q$, '开始备货的人');
+select pg_temp.expect_error($q$select public.ops_wh_pick_cancel(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P001'), 'reason', 'x'))$q$, '开始备货的人');
 do $$ begin assert not (public.ops_wh_pick_get('', 'DO-P001')->>'can_cancel')::boolean, 'picker2 cannot cancel'; end $$;
 select pg_temp.as_user('picker@example.com');
 do $$ declare g jsonb; r jsonb; begin
@@ -251,7 +251,7 @@ select pg_temp.as_user('whmgr@example.com');
 select pg_temp.expect_error($q$select public.ops_wh_pick_cancel(jsonb_build_object('pick_id', pg_temp.pick_id('DO-P001')))$q$, '原因');
 do $$ declare r jsonb; g jsonb; old bigint := pg_temp.pick_id('DO-P001'); begin
   assert pg_temp.binqty('P-P1', 'ST003') = 4, 'before cancel';
-  r := public.ops_wh_pick_cancel(jsonb_build_object('pick_id', old, 'reason', '拣错要重来'));
+  r := public.ops_wh_pick_cancel(jsonb_build_object('pick_id', old, 'reason', '备错要重来'));
   assert (r->>'ok')::boolean and (r->>'reversed')::int = 1, 'cancel: ' || r::text;
   assert pg_temp.binqty('P-P1', 'ST003') = 5, 'cancel puts bins back';
   g := public.ops_wh_pick_get('', 'DO-P001');
@@ -260,7 +260,7 @@ do $$ declare r jsonb; g jsonb; old bigint := pg_temp.pick_id('DO-P001'); begin
   assert (g->'pick'->>'id')::bigint <> old and (g->'pick'->>'picked')::numeric = 0, 'restart after cancel';
 end $$;
 
--- 8. DO 开始后在 AutoCount 改了 / 取消了：画面提醒；取消的 DO 有拣货单还留在待拣清单
+-- 8. DO 开始后在 AutoCount 改了 / 取消了：画面提醒；取消的 DO 有备货单还留在待备清单
 reset role;
 update bi.delivery_doc set lines = '[{"d":"RAXON HOSE","q":2}]' where doc_no = 'DO-P003';
 set role authenticated;

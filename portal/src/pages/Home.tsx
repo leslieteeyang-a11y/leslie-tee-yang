@@ -112,7 +112,7 @@ export default function HomePage({ me }: { me: Me }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState("");
   const [profileMissing, setProfileMissing] = useState<string[]>([]);   // 自己的档案还缺什么（我的资料卡片提醒用）
-  const [wh, setWh] = useState<WhHome | null>(null);   // 仓库：今天要拣的 DO、指派给我的盘点单、货架对不上（2026-10-15）
+  const [wh, setWh] = useState<WhHome | null>(null);   // 仓库：今天要备的 DO、指派给我的盘点单、货架对不上（2026-10-15）
 
   useEffect(() => {
     api.home().then(setHome).catch((e: Error) => setError(e.message));
@@ -163,7 +163,7 @@ export default function HomePage({ me }: { me: Me }) {
             <a className="kpi warn" href="#/warehouse/moves"><b>{home.wh_moves_pending}</b><span>搬动待输入 AutoCount</span></a>
           )}
           {!!wh?.picks_left && (
-            <a className="kpi warn" href="#/warehouse/pick/today"><b>{wh.picks_left}</b><span>要拣的 DO（今天 / 明天送）</span></a>
+            <a className="kpi warn" href="#/warehouse/pick/today"><b>{wh.picks_left}</b><span>要备的 DO（今天 / 明天送）</span></a>
           )}
           {wh?.sheets.map((sh) => (
             <a key={sh.id} className={"kpi" + (sh.overdue ? " warn" : "")} href={`#/warehouse/count/${sh.id}`}>
@@ -171,7 +171,7 @@ export default function HomePage({ me }: { me: Me }) {
             </a>
           ))}
           {!!wh?.pick_check && (
-            <a className="kpi warn" href="#/warehouse/gate/check"><b>{wh.pick_check}</b><span>拣好的 DO 等核对</span></a>
+            <a className="kpi warn" href="#/warehouse/gate/check"><b>{wh.pick_check}</b><span>备好的 DO 等核对</span></a>
           )}
           {!!wh?.recv_review && (
             <a className="kpi warn" href="#/warehouse/gate/recv"><b>{wh.recv_review}</b><span>点货差异等复核</span></a>

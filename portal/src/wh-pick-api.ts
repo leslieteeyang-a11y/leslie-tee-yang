@@ -1,4 +1,4 @@
-// 照 DO 拣货 + 扫码核对的资料层（2026-10-15）。DO 由 SERVER 每 15 分钟从 AutoCount 只读同步（bi.delivery_doc），
+// 照 DO 备货 + 扫码核对的资料层（2026-10-15）。DO 由 SERVER 每 15 分钟从 AutoCount 只读同步（bi.delivery_doc），
 // 明细只有品名 / 数量 / 单位：资料库把品名对到商品（唯一相同才算），对不到的行在画面上「扫商品指定」「手动确认」或「略过」。
 // 扫错 / 扫太多 / 货架不够：ops_wh_pick_scan 不报错，回传 ok:false + code + message（画面红闪 + 震动），什么都不存。
 import { go } from "./router";
@@ -14,7 +14,7 @@ export interface PickRow {
   doc_no: string; doc_date: string; debtor_name: string | null; cancelled: boolean;
   /** DO 明细几行 */ lines: number;
   /** null = 还没开始 */ status: PickStatus | null;
-  /** 已经送达（签收）的不用拣 */ delivered: boolean;
+  /** 已经送达（签收）的不用备 */ delivered: boolean;
   picked: number; total: number; run: PickRun | null;
 }
 export interface PickSummary { today: number; today_done: number; picking: number }
@@ -23,7 +23,7 @@ export interface PickList {
 }
 export interface PickBin { id: number; location: string; code: string; barcode: string; qty: number }
 export interface PickLine {
-  /** 还没开始拣（预览）= null */ id: number | null;
+  /** 还没开始备（预览）= null */ id: number | null;
   line_no: number; description: string; uom: string | null; qty: number;
   item_code: string | null; item_desc: string | null; match: PickMatch;
   /** 商品的基本单位（货架帐照这个单位记）；跟 DO 的单位不同时画面提醒 */ base_uom: string | null;
@@ -41,7 +41,7 @@ export interface Pick {
   done_at: string | null; done_by_name: string | null;
   cancelled_at: string | null; cancel_reason: string; cancelled_by_name: string | null;
   picked: number; total: number; lines_left: number;
-  /** 核对（仓库把关 2026-10-17）：checked = 拣好而且核对过（分店没开核对 = 拣好就算）；touched = 我有拣这张（不能核对） */
+  /** 核对（仓库把关 2026-10-17）：checked = 备好而且核对过（分店没开核对 = 备好就算）；touched = 我有备这张（不能核对） */
   checked_at?: string | null; checked_by_name?: string | null; check_note?: string; check_fails?: number;
   checked?: boolean; needs_check?: boolean; touched?: boolean;
 }
@@ -49,7 +49,7 @@ export interface PickDoc {
   company: string; doc_no: string; doc_date: string | null; debtor_name: string | null;
   cancelled: boolean; missing: boolean; do_remark: string | null; has_lines: boolean; synced_at: string | null;
   runs: PickRun[]; pick: Pick | null; lines: PickLine[]; scans: PickScan[];
-  /** 开始拣货之后 AutoCount 改了这张 DO 的明细 */ do_changed: boolean;
+  /** 开始备货之后 AutoCount 改了这张 DO 的明细 */ do_changed: boolean;
   cancelled_picks: number; can_edit: boolean; can_cancel: boolean;
 }
 /** uom = DO 的单位跟商品基本单位不同（货架帐照基本单位记），不能照 DO 的数量从货架扣 */
@@ -72,10 +72,10 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 export const pick = {
   list: (p: { company: string; when: PickWhen; status: PickFilter; q?: string }) => rpc<PickList>("ops_wh_pick_list", { p }),
   get: (company: string, docNo: string) => rpc<PickDoc>("ops_wh_pick_get", { p_company: company, p_doc_no: docNo }),
-  /** 排单画面：这些 DO 拣好了没（仓库或送货「只看」以上） */
+  /** 排单画面：这些 DO 备好了没（仓库或送货「只看」以上） */
   status: (company: string, docNos: string[]) =>
     rpc<PickStatusMap>("ops_wh_pick_status", { p_company: company, p_doc_nos: docNos }),
-  /** 开始拣货（可编辑）；已经有人开始了就回传那一张 */
+  /** 开始备货（可编辑）；已经有人开始了就回传那一张 */
   start: (company: string, docNo: string) => rpc<PickDoc>("ops_wh_pick_start", { p_company: company, p_doc_no: docNo }),
   /** bin = 目前货架（BIN:<id>），没有就不从货架扣；lineId = 给对不到的行指定商品 */
   scan: (p: { pick_id: number; code: string; qty?: number; bin?: string | null; line_id?: number | null }) =>
@@ -84,7 +84,7 @@ export const pick = {
   /** manual = 手动确认（要原因）；skip = 略过（要原因）；unskip = 取消略过 */
   lineSet: (p: { pick_id: number; line_id: number; action: "manual" | "skip" | "unskip"; qty?: number; reason?: string; bin?: string | null }) =>
     rpc<ScanResult>("ops_wh_pick_line_set", { p }),
-  /** 已拣好；还有没拣够的要 force + short_note（缺货备注） */
+  /** 已备好；还有没备够的要 force + short_note（缺货备注） */
   done: (p: { pick_id: number; force?: boolean; short_note?: string }) => rpc<PickDoc>("ops_wh_pick_done", { p }),
   cancel: (p: { pick_id: number; reason: string }) => rpc<{ ok: boolean; doc_no: string; reversed: number }>("ops_wh_pick_cancel", { p }),
   reopen: (pickId: number) => rpc<PickDoc>("ops_wh_pick_reopen", { p: { pick_id: pickId } }),
@@ -96,7 +96,7 @@ export function pickUomDiff(l: { item_code: string | null; uom: string | null; b
   return !!(l.item_code && l.uom?.trim() && l.base_uom?.trim() && n(l.uom) !== n(l.base_uom));
 }
 
-export const PICK_STATUS_LABEL: Record<PickStatus, string> = { picking: "拣货中", done: "已拣好", cancelled: "已取消" };
+export const PICK_STATUS_LABEL: Record<PickStatus, string> = { picking: "备货中", done: "已备好", cancelled: "已取消" };
 export const MATCH_LABEL: Record<PickMatch, string> = {
   code: "商品代号", desc: "品名对到", manual: "扫码指定", none: "对不到商品",
 };
@@ -126,7 +126,7 @@ export function buzz(ok: boolean): void {
   try { navigator.vibrate?.(ok ? 60 : [200, 80, 200]); } catch { /* 有些浏览器不给震 */ }
 }
 
-/** 开一张 DO 的拣货画面（#/warehouse/pick/<DO 号>） */
+/** 开一张 DO 的备货画面（#/warehouse/pick/<DO 号>） */
 export function openPick(docNo: string): void {
   go(`/warehouse/pick/${encodeURIComponent(docNo)}`);
 }

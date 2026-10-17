@@ -1,5 +1,5 @@
 // 货架（仓 / 区 / 货架 / 层）与货架数量的资料层（2026-10-15）。「仓」= AutoCount 仓位（HQ、SRGADING…）。
-// 货架帐是营运系统自己记的：上架 +、拿下 −、货架之间移、主管改数、Excel 带入；之后的拣货、盘点单也会改它。
+// 货架帐是营运系统自己记的：上架 +、拿下 −、货架之间移、主管改数、Excel 带入；之后的备货、盘点单也会改它。
 // 应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动；未上架 = 应有 − 货架合计；货架合计 > 应有 = 对不上（要去数）。
 import { supabase } from "./supabase";
 
@@ -26,7 +26,7 @@ export interface ItemBinLoc {
   location: string;
   /** AutoCount 库存 */ ac_qty: number;
   /** 还没输入 AutoCount 的搬动（进 + / 出 −） */ pending: number;
-  /** 已开 DO、还没拣的（AutoCount 开 DO 就扣，货还在货架上；只算在主要仓位），已经算进 expected */ do_unpicked: number;
+  /** 已开 DO、还没备的（AutoCount 开 DO 就扣，货还在货架上；只算在主要仓位），已经算进 expected */ do_unpicked: number;
   expected: number; shelved: number; unshelved: number;
   /** 这个仓位有没有建货架 */ has_bins: boolean;
   /** qty = 0 的 = 平常放这里（上架时建议） */ bins: (Bin & { qty: number; updated_at: string })[];
@@ -58,7 +58,7 @@ export interface BinImportResult {
 export type ReconFilter = "over" | "unshelved" | "all";
 export interface ReconRow {
   item_code: string; description: string; uom: string | null; ac_qty: number; pending: number;
-  /** 已开 DO 还没拣（已经算进 expected） */ do_unpicked: number; expected: number;
+  /** 已开 DO 还没备（已经算进 expected） */ do_unpicked: number; expected: number;
   shelved: number; n_bins: number;
 }
 export interface ReconPage {
@@ -121,7 +121,7 @@ export const bins = {
 };
 
 export const BIN_LOG_LABEL: Record<BinLogKind, string> = {
-  putaway: "上架", take: "从货架拿下", move: "移货架", adjust: "主管改数", import: "Excel 带入", count: "盘点", pick: "拣货", reverse: "冲回",
+  putaway: "上架", take: "从货架拿下", move: "移货架", adjust: "主管改数", import: "Excel 带入", count: "盘点", pick: "备货", reverse: "冲回",
 };
 
 /** 「HQ · A-R3-2」 */

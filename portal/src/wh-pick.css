@@ -1,4 +1,4 @@
-/* 仓库 · 拣货（照 DO 拣货 + 扫码核对，2026-10-15）。颜色一律用 style.css 的变数 */
+/* 仓库 · 备货（照 DO 备货 + 扫码核对，2026-10-15）。颜色一律用 style.css 的变数 */
 .pick-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
 .pick-search { display: flex; gap: 8px; margin-bottom: 10px; }
 .pick-search input { flex: 1; min-width: 0; }
@@ -28,7 +28,7 @@
 .pk.today { background: var(--primary); color: var(--on-fill); }
 .pk.none { background: var(--amber-soft); color: var(--amber); }
 
-/* 拣货画面 */
+/* 备货画面 */
 .pick-back { display: inline-block; margin-bottom: 8px; }
 .pick-title { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 4px; }
 .pick-title h2 { margin: 0; font-size: 1.4rem; }
@@ -49,7 +49,7 @@
 .pick-result { padding: 12px 14px; border-radius: 10px; font-size: 1.05rem; font-weight: 600; margin-top: 10px; overflow-wrap: anywhere; }
 .pick-result.ok { background: var(--green-soft); color: var(--green); }
 .pick-result.err { background: var(--red-soft); color: var(--red); }
-/* 记了拣货、可是没从货架扣（这个商品有放在货架上）：琥珀色提醒，不挡 */
+/* 记了备货、可是没从货架扣（这个商品有放在货架上）：琥珀色提醒，不挡 */
 .pick-hint { background: var(--amber-soft); color: var(--amber); padding: 8px 12px; border-radius: 8px; margin-top: 6px; font-size: .9rem; overflow-wrap: anywhere; }
 .pick-total { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .pick-total .pk-bar { flex: 1; height: 10px; }

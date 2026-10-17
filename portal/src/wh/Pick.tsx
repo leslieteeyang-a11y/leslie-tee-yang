@@ -1,7 +1,7 @@
-// 仓库 · 拣货清单（照 DO 拣货 + 扫码核对，2026-10-15）。#/warehouse/pick = 清单；#/warehouse/pick/<DO 号> = 拣货画面（PickDo）；
-// #/warehouse/pick/today = 清单，固定从「今天 / 明天要送 · 待拣」开始（首页 / 总览的「要拣的 DO」用，不改记住的筛选）。
+// 仓库 · 备货清单（照 DO 备货 + 扫码核对，2026-10-15）。#/warehouse/pick = 清单；#/warehouse/pick/<DO 号> = 备货画面（PickDo）；
+// #/warehouse/pick/today = 清单，固定从「今天 / 明天要送 · 待备」开始（首页 / 总览的「要备的 DO」用，不改记住的筛选）。
 // 「今天 / 明天要送」= 昨天或今天开的 DO + 今天或明天的排单（DO 通常隔天送，2026-10-16）。
-// DO 每 15 分钟从 AutoCount 同步；今天的排单排最前面，再来明天的排单。只看的人看进度，可编辑的人拣货。
+// DO 每 15 分钟从 AutoCount 同步；今天的排单排最前面，再来明天的排单。只看的人看进度，可编辑的人备货。
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Empty, ErrorBox, Tabs } from "../ui";
 import { qtyLabel, whenLabel } from "../wh-api";
@@ -18,7 +18,7 @@ function keep(key: string, v: string) {
   try { localStorage.setItem(key, v); } catch { /* 无痕模式存不了就算了 */ }
 }
 
-/** doc / arg = 网址第三段：「today」= 清单从今天要送 · 待拣开始；其他 = DO 号，开拣货画面 */
+/** doc / arg = 网址第三段：「today」= 清单从今天要送 · 待备开始；其他 = DO 号，开备货画面 */
 export function PickTab({ company, canEdit, doc, arg }: { company: string; canEdit: boolean; doc?: string; arg?: string }) {
   const a = arg ?? doc;
   if (a && a !== "today") {
@@ -26,7 +26,7 @@ export function PickTab({ company, canEdit, doc, arg }: { company: string; canEd
     try { no = decodeURIComponent(a); } catch { /* 不是编码过的就照原样 */ }
     return <PickDo key={company + "|" + no} company={company} docNo={no} />;
   }
-  // key：从清单再点「今天要拣」时重新从今天 · 待拣开始
+  // key：从清单再点「今天要备」时重新从今天 · 待备开始
   return <PickListView key={a || "list"} company={company} canEdit={canEdit} today={a === "today"} />;
 }
 
@@ -67,7 +67,7 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
       <div className="pick-filters">
         <Tabs value={when} options={[["today", "今天 / 明天要送"], ["week", "这星期"], ["all", "全部"]]}
               onChange={(v) => { setWhen(v); keep(WHEN_KEY, v); }} />
-        <Tabs value={status} options={[["todo", "待拣"], ["done", "已拣好"], ["all", "全部"]]}
+        <Tabs value={status} options={[["todo", "待备"], ["done", "已备好"], ["all", "全部"]]}
               onChange={(v) => { setStatus(v); keep(STATUS_KEY, v); }} />
         <button className="ghost small" onClick={load} disabled={busy}>重新整理</button>
       </div>
@@ -79,15 +79,15 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
       {s && (
         <p className="pick-sum">
           <span>{`今天 / 明天要送 ${s.today} 张`}</span>
-          <span>{`其中已拣好 ${s.today_done} 张`}</span>
-          <span>{`拣货中 ${s.picking} 张`}</span>
+          <span>{`其中已备好 ${s.today_done} 张`}</span>
+          <span>{`备货中 ${s.picking} 张`}</span>
           {data?.synced && <span>{`DO 同步：${whenLabel(data.synced)}`}</span>}
         </p>
       )}
       {query && <p className="muted small">{`搜寻「${query}」（近 60 天）`}</p>}
       <ErrorBox error={error} />
       {!data ? (!error && <p className="muted">载入中…</p>) : data.rows.length === 0 ? (
-        <Empty>{status === "done" ? "还没有拣好的 DO。" : "没有要拣的 DO。"}<br />
+        <Empty>{status === "done" ? "还没有备好的 DO。" : "没有要备的 DO。"}<br />
           <span className="small">DO 每 15 分钟从 AutoCount 同步一次；今天 / 明天的排单在「送货 → 排单」。</span></Empty>
       ) : (
         <ul className="list card pick-list">
@@ -95,7 +95,7 @@ function PickListView({ company, canEdit, today }: { company: string; canEdit: b
         </ul>
       )}
       {data && data.rows.length >= 300 && <p className="muted small">只列前 300 张，请用搜寻找。</p>}
-      {!canEdit && data && data.rows.length > 0 && <p className="muted small">你是「只看」：可以看进度，拣货要仓库「可编辑」。</p>}
+      {!canEdit && data && data.rows.length > 0 && <p className="muted small">你是「只看」：可以看进度，备货要仓库「可编辑」。</p>}
     </>
   );
 }
@@ -109,7 +109,7 @@ function Row({ r }: { r: PickRow }) {
           <b>{r.doc_no}</b>
           {r.cancelled ? <span className="pk cancelled">DO 已取消</span>
             : r.status ? <span className={"pk " + r.status}>{PICK_STATUS_LABEL[r.status]}</span>
-            : <span className="pk">待拣</span>}
+            : <span className="pk">待备</span>}
           {r.run && <span className={"pk " + (r.run.today || r.run.tomorrow ? "today" : "run")}>{runLabel(r.run)}</span>}
           {r.delivered && <span className="pk done">已送达</span>}
         </div>

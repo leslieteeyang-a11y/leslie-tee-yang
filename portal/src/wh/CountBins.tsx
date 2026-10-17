@@ -1,7 +1,7 @@
 // 盘点一个商品（每日小盘点与盘点单共用）：这个商品在这个仓位有货架帐时，列出那些货架（只有名字、不给数量 = 盲盘）
 // + 「其他地方 / 地上」+「加一个货架」，每格填数，合计 = 实盘数。不符先请再数一次（画面不关、清空重填），第二次才算差异。
 // 相符或差异（定案）时资料库会把列出来的货架改成盘到的数；要再数那次不改。
-// 这个商品有已开、还没拣的 DO（AutoCount 已经扣了、货可能还在货架上）→ 琥珀色提醒照实际看到的数。
+// 这个商品有已开、还没备的 DO（AutoCount 已经扣了、货可能还在货架上）→ 琥珀色提醒照实际看到的数。
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ErrorBox, Modal } from "../ui";
 import { Scanner } from "./Scanner";
@@ -85,7 +85,7 @@ export function CountBins({ company, location, item, sheetId, sheetTitle, onClos
         <p className="cb-item"><b>{item.code}</b><br /><span className="muted">{info?.description || item.desc || ""}</span></p>
         {(sheetId ? sheetTitle : info?.sheet?.title) && <p className="small muted">{`盘点单：${sheetId ? sheetTitle : info?.sheet?.title}`}</p>}
         {recount && <p className="late small">第一次数的跟系统不一样，请再仔细数一次（包括别的货架、坏货、展示品有没有放错）。</p>}
-        {doWait > 0 && <p className="amber small">{`有 ${qtyLabel(doWait)} 件在已开、还没拣的 DO 上：货可能还在货架上，照实际看到的数（已经拣好放在出货区的不要算）。`}</p>}
+        {doWait > 0 && <p className="amber small">{`有 ${qtyLabel(doWait)} 件在已开、还没备的 DO 上：货可能还在货架上，照实际看到的数（已经备好放在出货区的不要算）。`}</p>}
         {!info ? (!error && <p className="muted">载入中…</p>) : (
           <>
             {binMode && (

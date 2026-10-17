@@ -180,7 +180,7 @@ select pg_temp.as_user('g.sales@example.com');
 select pg_temp.expect_error((select format($q$select public.ops_wh_putaway('{"move_id":%s,"bin":"G-R1","qty":1}')$q$, min(m.id))
                              from ops.wh_move m where m.do_id = pg_temp.do_id('GDO-1')), '编辑权限');
 
--- ============================================================ ④ 拣货核对（两个人）
+-- ============================================================ ④ 备货核对（两个人）
 reset role;
 insert into bi.delivery_doc (company, doc_no, doc_date, debtor_code, debtor_name, items, lines) values
   ('HOMEWORKSSB', 'DO-G1', ops.today(), '300-C001', 'GATE SHOP 1', 'x', '[{"d":"RAXON HOSE","q":2}]'),
@@ -279,7 +279,7 @@ do $$ declare r jsonb; w1 jsonb; w2 jsonb; d jsonb; begin
   assert (d->>'loads')::int = 2 and (d->>'departs')::int = 1, 'driver: ' || d::text;
   assert ((select x from jsonb_array_elements(r->'rows') x where x->>'name' = '仓库主管')->>'reviews')::int = 1, 'mgr reviews';
   perform pg_temp.expect_error($q$select public.ops_wh_workload('{"from":"2026-10-20","to":"2026-10-01"}')$q$, '日期范围');
-  -- 关掉拣货核对：拣好就算
+  -- 关掉备货核对：备好就算
   r := public.ops_wh_gate_set('{"pick_check":false,"putaway_days":3}');
   assert not (r->>'pick_check')::boolean and (r->>'putaway_days')::int = 3 and r->>'updated_by_name' = '仓库主管', 'gate set: ' || r::text;
   assert pg_temp.to_check() = 0, 'no to_check when off';

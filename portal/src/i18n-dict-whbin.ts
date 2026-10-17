@@ -29,14 +29,14 @@ export const DICT_WHBIN: Record<string, string> = {
   "货架合计": "On bins",
   "未上架": "Not on bins",
   "货架合计比系统应有多：请去盘点这个商品。": "More on bins than the system expects — please count this item.",
-  // DO 待拣（已开 DO、还没拣：AutoCount 已经扣了，货还在货架上，已经算进应有）
-  "DO 待拣": "DO to pick",
-  "已开 DO、还没拣的（AutoCount 已经扣了，货还在货架上），已经算进应有":
+  // DO 待备（已开 DO、还没备：AutoCount 已经扣了，货还在货架上，已经算进应有）
+  "DO 待备": "DO to pick",
+  "已开 DO、还没备的（AutoCount 已经扣了，货还在货架上），已经算进应有":
     "On DOs already issued but not picked yet (AutoCount has deducted them, the goods are still on the bins) — included in Expected",
-  "货架合计比系统应有多，但有 DO 还没拣：拣完还多再去盘点。":
+  "货架合计比系统应有多，但有 DO 还没备：备完还多再去盘点。":
     "More on bins than the system expects, but a DO isn't picked yet — count this item only if it is still over after picking.",
-  "有 DO 还没拣：拣完还多再去盘点": "DO not picked yet — count only if still over after picking",
-  "DO 待拣 = 近 7 天已开、还没拣的 DO：AutoCount 开 DO 就扣库存，可是货还在货架上，所以加回应有。":
+  "有 DO 还没备：备完还多再去盘点": "DO not picked yet — count only if still over after picking",
+  "DO 待备 = 近 7 天已开、还没备的 DO：AutoCount 开 DO 就扣库存，可是货还在货架上，所以加回应有。":
     "DO to pick = DOs issued in the last 7 days and not picked yet: AutoCount deducts stock as soon as a DO is saved, but the goods are still on the bins, so they are added back to Expected.",
   "从货架": "From bin", "到货架": "To bin", "改数的货架": "Bin to set",
   "有这个商品的货架": "Bins with this item",
@@ -60,7 +60,7 @@ export const DICT_WHBIN: Record<string, string> = {
   "撤销上架": "Undo put-away", "撤销拿下": "Undo take", "撤销移货架": "Undo bin move", "撤销改数": "Undo qty change",
   "撤销": "Undo",
   // 纪录种类（wh-bin-api BIN_LOG_LABEL）与资料库写的备注
-  "从货架拿下": "Taken from bin", "主管改数": "Qty set by manager", "拣货": "Picking", "冲回": "Reversed", "已冲回": "Reversed",
+  "从货架拿下": "Taken from bin", "主管改数": "Qty set by manager", "备货": "Picking", "冲回": "Reversed", "已冲回": "Reversed",
   "搬动取消": "Move cancelled",
   // 货架清单
   "全部仓位": "All locations",
@@ -118,7 +118,7 @@ export const DICT_WHBIN: Record<string, string> = {
   "差": "Diff",
   "货架数": "Bins",
   "请去盘点这个商品": "Please count this item",
-  "应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动 / 进货 + DO 待拣；货架合计 = 这个仓位所有货架加起来；差 = 货架合计 − 应有。":
+  "应有 = AutoCount 库存 + 还没输入 AutoCount 的搬动 / 进货 + DO 待备；货架合计 = 这个仓位所有货架加起来；差 = 货架合计 − 应有。":
     "Expected = AutoCount stock + moves / receipts not yet keyed into AutoCount + DO to pick; On bins = all bins in this location added up; Diff = On bins − Expected.",
   "货架比系统多：多半是卖出去或拿货时没有从货架扣，请盘点这个商品（盘点会把货架改成实际数）。":
     "More on bins than the system: usually goods were sold or taken without being taken off the bin. Count this item (counting sets the bins to the actual quantity).",
@@ -236,7 +236,7 @@ export const PATTERNS_WHBIN: [RegExp, (m: RegExpMatchArray, t: T) => string][] =
   [/^应有 (-?[\d.]+)$/, (m) => `Expected ${m[1]}`],
   [/^货架合计 (-?[\d.]+)$/, (m) => `On bins ${m[1]}`],
   [/^未上架 (-?[\d.]+)$/, (m) => `Not on bins ${m[1]}`],
-  [/^DO 待拣 (-?[\d.]+)$/, (m) => `DO to pick ${m[1]}`],
+  [/^DO 待备 (-?[\d.]+)$/, (m) => `DO to pick ${m[1]}`],
   // Excel 带入
   [/^共 (\d+) 行要带入，(\d+) 个仓位；略过 (\d+) 格（0、空白或没选仓位）。$/,
     (m) => `${m[1]} rows to import into ${m[2]} location(s); ${m[3]} cells skipped (0, blank or no location chosen).`],

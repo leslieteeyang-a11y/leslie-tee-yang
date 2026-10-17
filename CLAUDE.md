@@ -291,6 +291,11 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   `wh-gate.css`、`i18n-dict-gate.ts`；清单 `portal/deploy_manifest_20261017b.json`（192 个档；= 仓库把关 + 成本只给老板的前端。`20261017.json` 那份的档全部已上传 Vercel，`b` 多出的 11 个档（成本只给老板改到的 CountStats / SheetDetail / Aged / Stock / Slow / Review、wh-sheet / wh-overview / wh-tag api、i18n-dict-more / -whsheet）2026-10-17 已上传并部署 `dpl_5GwpEZyBJt2wquaMF1kPj1gpSBNo`）。测试 `tests/gate_test.sql`
   （`po_do_test.sql` 开头把两间分店的点货复核 / 拍照关掉，旧测试照旧）。
   **已上线（2026-10-17）**：另一个 session 用清单 `deploy_manifest_20261017.json`（= a3f58a4 的 `portal/`，部署前逐档核对 SHA1 / 大小、部署后 `list_deployment_files` 核对 uid）部署 `dpl_CckfUkd7499QKrEH9aRT3X5H9LYe`（production，READY）；早上的 403 已经没有了，照常不带 teamId 就能部署。之后 `ops.wh_gate` 三间分店的 4 个开关全开（04:29:21 UTC，`putaway_days` 仍是 2）。之后同日用 `deploy_manifest_20261017b.json` 部署 `dpl_5GwpEZyBJt2wquaMF1kPj1gpSBNo` = 再加上「成本只给老板」的前端。**Vercel MCP 部署不要带 `slug` / `teamId`**：带 `slug: leslie-tee` 会回 403，不带就可以（早上的 403 就是这个原因）。仓库部只有 1 位在职：建议拣货核对由物流部同事做，或先关掉拣货核对。
+- **「拣货」改名「备货」（2026-10-17，使用者看了仓库分页截图：「把这个拣货，改成备货」）**：员工看得到的字全部「拣」→「备」（备货、待备、已备好、备货中、
+  备货核对、要备的 DO…），前端 `src/` 与测试 `supabase/tests/` 一起换；资料库 migration `20261021_ops_pick_to_prep.sql`（正式环境 = `ops_pick_to_prep_1` / `_2`，
+  套之前 14 个函数 md5 与本机一致、套之后也一致；只有 create or replace + `ops.module` 一行 update）改错误讯息 / 回传 message / 注解。**代号不改**：
+  表 `ops.wh_pick*`、栏位 picked、函数 `ops_wh_pick_*`、网址 `#/warehouse/pick` 照旧；英文仍是 Pick / Picking。以后新增这块的中文一律写「备」。
+  前端清单 `portal/deploy_manifest_20261017c.json`（= 17b 多 33 个改字的档）。
 - **KL Puchong 分店（2026-10-16，使用者：「全部功能，跟 JB 分店一样，它是其中一家分店」，Puchong 用店里自己的电脑开单）**：分店代号 `HOMEWORKSPUCHONG`
   （= `ops.staff.branch` / 各表 company；门市代号 `PUCHONG` 给送货 store / 出发点 / 外包司机），标签「Puchong 分店」。migration `20261019_ops_branch_puchong.sql`
   （= `ops_branch_puchong`，**正式环境已套**，17 个函数 md5 与本机一致）：所有只认两间分店的 check constraint 照原定义加第三间（DO 区块替换，名称不变）、

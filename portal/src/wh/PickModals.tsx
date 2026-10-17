@@ -1,4 +1,4 @@
-// 拣货画面的小视窗：手动确认、略过、已拣好（缺货备注）、取消拣货、货架不够 / 单位跟货架帐不同
+// 备货画面的小视窗：手动确认、略过、已备好（缺货备注）、取消备货、货架不够 / 单位跟货架帐不同
 import { FormEvent, useState } from "react";
 import { getLang, tr } from "../i18n";
 import { ErrorBox, Modal } from "../ui";
@@ -16,7 +16,7 @@ function Reasons({ list, onPick }: { list: string[]; onPick: (s: string) => void
   );
 }
 
-/** 手动确认：没有条码的行（或条码坏了）直接填拣了几件；有对到商品、单位跟货架帐相同才可以选从哪个货架扣 */
+/** 手动确认：没有条码的行（或条码坏了）直接填备了几件；有对到商品、单位跟货架帐相同才可以选从哪个货架扣 */
 export function ManualModal({ line, curBin, onClose, onSave }: {
   line: PickLine; curBin: { barcode: string; label: string } | null; onClose: () => void;
   onSave: (qty: number, reason: string, bin: string | null) => Promise<void>;
@@ -41,7 +41,7 @@ export function ManualModal({ line, curBin, onClose, onSave }: {
     <Modal title={`手动确认 · 第 ${line.line_no} 行`} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <p><b>{line.description}</b>{line.item_code && <><br /><span className="muted small">{line.item_code}</span></>}</p>
-        <label>{`拣了几件（还差 ${qtyLabel(left)}）`}
+        <label>{`备了几件（还差 ${qtyLabel(left)}）`}
           <input className="big-num" type="number" inputMode="decimal" min="0" step="any" value={qty} autoFocus
                  onChange={(e) => setQty(e.target.value)} required /></label>
         <label>原因
@@ -82,7 +82,7 @@ export function SkipModal({ line, onClose, onSave }: { line: PickLine; onClose: 
         <label>原因
           <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="例：运费" autoFocus required /></label>
         <Reasons list={SKIP_REASONS} onPick={setReason} />
-        <p className="muted small">略过的行不用拣，也不算缺货。</p>
+        <p className="muted small">略过的行不用备，也不算缺货。</p>
         <ErrorBox error={error} />
         <div className="actions">
           <button type="button" className="ghost" onClick={onClose}>取消</button>
@@ -93,7 +93,7 @@ export function SkipModal({ line, onClose, onSave }: { line: PickLine; onClose: 
   );
 }
 
-/** 还有没拣够的行：写缺货备注才可以完成 */
+/** 还有没备够的行：写缺货备注才可以完成 */
 export function DoneModal({ short, onClose, onSave }: {
   short: PickLine[]; onClose: () => void; onSave: (note: string) => Promise<void>;
 }) {
@@ -106,9 +106,9 @@ export function DoneModal({ short, onClose, onSave }: {
     try { await onSave(note.trim()); } catch (err) { setError((err as Error).message); setBusy(false); }
   }
   return (
-    <Modal title="还没拣够" onClose={onClose}>
+    <Modal title="还没备够" onClose={onClose}>
       <form className="form" onSubmit={submit}>
-        <p className="late">{`还有 ${short.length} 行没拣够：`}</p>
+        <p className="late">{`还有 ${short.length} 行没备够：`}</p>
         <ul className="list">
           {short.map((l) => (
             <li key={l.line_no}><span>{`#${l.line_no} ${l.item_code || l.description}`}</span>
@@ -120,7 +120,7 @@ export function DoneModal({ short, onClose, onSave }: {
                     placeholder="例：HM-UB001 只剩 2 件，第 3 件下次补" required /></label>
         <ErrorBox error={error} />
         <div className="actions">
-          <button type="button" className="ghost" onClick={onClose}>继续拣</button>
+          <button type="button" className="ghost" onClick={onClose}>继续备</button>
           <button disabled={busy || !note.trim()}>{busy ? "储存中…" : "就这样出货"}</button>
         </div>
       </form>
@@ -128,7 +128,7 @@ export function DoneModal({ short, onClose, onSave }: {
   );
 }
 
-/** 取消整张拣货单：从货架扣的全部加回去 */
+/** 取消整张备货单：从货架扣的全部加回去 */
 export function CancelModal({ p, onClose, onSave }: { p: Pick; onClose: () => void; onSave: (reason: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -139,15 +139,15 @@ export function CancelModal({ p, onClose, onSave }: { p: Pick; onClose: () => vo
     try { await onSave(reason.trim()); } catch (err) { setError((err as Error).message); setBusy(false); }
   }
   return (
-    <Modal title={`取消拣货 · ${p.doc_no}`} onClose={onClose}>
+    <Modal title={`取消备货 · ${p.doc_no}`} onClose={onClose}>
       <form className="form" onSubmit={submit}>
-        <p className="muted">从货架扣的数量会全部加回去（货要放回原来的货架）。取消后可以重新开始拣。</p>
+        <p className="muted">从货架扣的数量会全部加回去（货要放回原来的货架）。取消后可以重新开始备。</p>
         <label>原因
-          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="例：DO 取消了、拣错要重来" autoFocus required /></label>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="例：DO 取消了、备错要重来" autoFocus required /></label>
         <ErrorBox error={error} />
         <div className="actions">
           <button type="button" className="ghost" onClick={onClose}>不要取消</button>
-          <button className="danger-fill" disabled={busy || !reason.trim()}>{busy ? "储存中…" : "取消拣货"}</button>
+          <button className="danger-fill" disabled={busy || !reason.trim()}>{busy ? "储存中…" : "取消备货"}</button>
         </div>
       </form>
     </Modal>
@@ -163,7 +163,7 @@ export function BinShortModal({ message, qty, bins, uom, onClose, onBin, onNoBin
   return (
     <Modal title={uom ? "单位跟货架上的不同" : "货架上不够"} onClose={onClose}>
       <p className="late">{message}</p>
-      {uom && <p className="small">这行的单位跟货架上的不同，不能从货架扣；可以选「不从货架扣」记下拣货。</p>}
+      {uom && <p className="small">这行的单位跟货架上的不同，不能从货架扣；可以选「不从货架扣」记下备货。</p>}
       {enough.length > 0 && (
         <>
           <p className="muted small">是从别的货架拿的吗？点那个货架：</p>
@@ -174,10 +174,10 @@ export function BinShortModal({ message, qty, bins, uom, onClose, onBin, onNoBin
           </div>
         </>
       )}
-      {!uom && <p className="muted small">可能是货架帐不准（上次没登记）。如果货真的拿到了，可以不从货架扣、直接记拣货，之后请主管去盘点这个货架。</p>}
+      {!uom && <p className="muted small">可能是货架帐不准（上次没登记）。如果货真的拿到了，可以不从货架扣、直接记备货，之后请主管去盘点这个货架。</p>}
       <div className="actions">
         <button className="ghost" onClick={onClose}>取消</button>
-        <button onClick={onNoBin}>不从货架扣，直接记拣货</button>
+        <button onClick={onNoBin}>不从货架扣，直接记备货</button>
       </div>
     </Modal>
   );

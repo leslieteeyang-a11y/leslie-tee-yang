@@ -1,5 +1,5 @@
-// 每人工作量（仓库把关 2026-10-17，仓库可审批）：点货、拣货、核对、上架、装车、出车各几件，平均时间，核对不符次数。
-// 给主管每周看：谁做得多、谁常被核对出错（错的次数算在拣货的人身上）。
+// 每人工作量（仓库把关 2026-10-17，仓库可审批）：点货、备货、核对、上架、装车、出车各几件，平均时间，核对不符次数。
+// 给主管每周看：谁做得多、谁常被核对出错（错的次数算在备货的人身上）。
 import { useCallback, useEffect, useState } from "react";
 import { fmtQty, todayKL } from "../api";
 import { Empty, ErrorBox } from "../ui";
@@ -32,7 +32,7 @@ export function WorkloadTab({ company }: { company: string }) {
         <button className="ghost small" onClick={() => week(0)}>近 7 天</button>
         <button className="ghost small" onClick={() => week(1)}>上一周</button>
       </div>
-      <p className="muted small">平均时间：点货 = 按「我来」到点完；拣货 = 开始拣到「已拣好」（超过 8 小时的不算）。核对不符算在拣货的人身上。</p>
+      <p className="muted small">平均时间：点货 = 按「我来」到点完；备货 = 开始备到「已备好」（超过 8 小时的不算）。核对不符算在备货的人身上。</p>
       <ErrorBox error={error} />
       {rows === null ? (!error && <p className="muted">载入中…</p>) : !rows.length ? <Empty>这段时间没有纪录。</Empty> : (
         <div className="table-wrap">
@@ -40,7 +40,7 @@ export function WorkloadTab({ company }: { company: string }) {
             <thead>
               <tr>
                 <th>同事</th><th className="num">点货（张 / 型号）</th><th className="num">点货平均</th>
-                <th className="num">拣货（张 / 行）</th><th className="num">拣货平均</th><th className="num">核对不符</th>
+                <th className="num">备货（张 / 行）</th><th className="num">备货平均</th><th className="num">核对不符</th>
                 <th className="num">撤销扫码</th><th className="num">帮人核对</th><th className="num">上架（笔 / 件）</th>
                 <th className="num">装车</th><th className="num">出车</th><th className="num">点货复核</th>
               </tr>

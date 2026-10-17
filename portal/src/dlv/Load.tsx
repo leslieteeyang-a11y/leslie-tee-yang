@@ -1,5 +1,5 @@
-// 装车核对 + 装车照（仓库把关 2026-10-17）：出车前一张一张扫 DO（或打 DO 号），没拣好 / 没核对的不能装；
-// 拍装车照（Storage ops-wh：load/<公司>/<排单>/…）后按「出车」。送货「可审批」可以写原因强制出车（例：DO 没有要拣的货）。
+// 装车核对 + 装车照（仓库把关 2026-10-17）：出车前一张一张扫 DO（或打 DO 号），没备好 / 没核对的不能装；
+// 拍装车照（Storage ops-wh：load/<公司>/<排单>/…）后按「出车」。送货「可审批」可以写原因强制出车（例：DO 没有要备的货）。
 // 分店在「仓库 → 复核 → 设定」关掉装车核对 = 扫不扫都可以出车、不用拍照。
 import { useEffect, useRef, useState } from "react";
 import { ErrorBox } from "../ui";
@@ -35,7 +35,7 @@ export function LoadPanel({ runId, onChange }: { runId: number; onChange?: () =>
       const r = await gate.loadScan(runId, code);
       if (r.ok && r.load) {
         beep(true); set(r.load);
-        setMsg(["ok", r.short_note ? `✓ ${r.doc_no} 已装车（拣货时缺货：${r.short_note}）` : `✓ ${r.doc_no} 已装车`]);
+        setMsg(["ok", r.short_note ? `✓ ${r.doc_no} 已装车（备货时缺货：${r.short_note}）` : `✓ ${r.doc_no} 已装车`]);
       } else { buzz(false); setMsg(["error", r.message ?? "扫不进去。"]); }
     } catch (e) { setError((e as Error).message); }
     setBusy(false); setBox((b) => b + 1);
@@ -66,10 +66,10 @@ export function LoadPanel({ runId, onChange }: { runId: number; onChange?: () =>
           <li key={x.doc_no}>
             <span>
               <b>{x.doc_no}</b> <span className="muted">{x.name}</span>{" "}
-              {!x.pick ? <span className="tag late">还没拣</span>
-                : x.pick.status !== "done" ? <span className="tag late">拣货中</span>
+              {!x.pick ? <span className="tag late">还没备</span>
+                : x.pick.status !== "done" ? <span className="tag late">备货中</span>
                 : !x.pick.checked ? <span className="tag late">等核对</span>
-                : <span className="tag ok-tag">已拣好</span>}
+                : <span className="tag ok-tag">已备好</span>}
               {x.pick?.short_note && <small className="amber">{` 缺货：${x.pick.short_note}`}</small>}
             </span>
             <span>

@@ -43,10 +43,10 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   const co = meta.companies.includes(company) ? company : meta.companies[0];
   const canEdit = meta.level !== "view";
   const canApprove = meta.level === "approve";
-  // 分页顺序照每天用的（2026-10-17 审查）：手机上前几个就是扫码、拣货、货架、盘点、搬动；宽表格的库存总表、地图往后
-  // 仓库把关（2026-10-17）：今天要做的事、待上架、复核（拣货核对 / 点货差异 / 设定）、每人工作量
+  // 分页顺序照每天用的（2026-10-17 审查）：手机上前几个就是扫码、备货、货架、盘点、搬动；宽表格的库存总表、地图往后
+  // 仓库把关（2026-10-17）：今天要做的事、待上架、复核（备货核对 / 点货差异 / 设定）、每人工作量
   const tabs: [Tab, string][] = [["today", "今天"], ["overview", "总览"], ["lookup", "查货"]];
-  tabs.push(["pick", "拣货"]);       // 照 DO 拣货 + 扫码核对（2026-10-15）
+  tabs.push(["pick", "备货"]);       // 照 DO 备货 + 扫码核对（2026-10-15）
   tabs.push(["gate", "复核"]);
   tabs.push(["putaway", "上架"]);
   tabs.push(["bins", "货架"]);       // 货架帐（2026-10-17）

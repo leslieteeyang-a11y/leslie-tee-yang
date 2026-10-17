@@ -1,4 +1,4 @@
-// 查货卡片里的一行：这个商品在各仓位的货架（应有 / 货架合计 / 未上架 / DO 待拣、货架小标签「A-R1-2 × 3」）。
+// 查货卡片里的一行：这个商品在各仓位的货架（应有 / 货架合计 / 未上架 / DO 待备、货架小标签「A-R1-2 × 3」）。
 // 这间公司还没建货架、或这个商品没有放在货架上 → 不显示。可编辑的人有「上架 / 拿下」连到货架分页。
 import { useEffect, useState } from "react";
 import { qtyLabel } from "../wh-api";
@@ -27,7 +27,7 @@ export function ItemBins({ company, item_code, canEdit }: { company: string; ite
           <div key={l.location} className="ib-loc">
             <div className="ib-head">
               <b>{l.location}</b>
-              <span className="muted small">{`应有 ${qtyLabel(l.expected)} · 货架合计 ${qtyLabel(l.shelved)} · 未上架 ${qtyLabel(Math.max(0, Number(l.unshelved)))}${dw > 0 ? ` · DO 待拣 ${qtyLabel(dw)}` : ""}`}</span>
+              <span className="muted small">{`应有 ${qtyLabel(l.expected)} · 货架合计 ${qtyLabel(l.shelved)} · 未上架 ${qtyLabel(Math.max(0, Number(l.unshelved)))}${dw > 0 ? ` · DO 待备 ${qtyLabel(dw)}` : ""}`}</span>
               {canEdit && <a className="ib-go" href={href(l.location)}>上架 / 拿下</a>}
             </div>
             {shown.length > 0 ? (
@@ -39,7 +39,7 @@ export function ItemBins({ company, item_code, canEdit }: { company: string; ite
                 ))}
               </div>
             ) : <p className="muted small">还没放在货架上。</p>}
-            {over && <p className="small late">{dw > 0 ? "货架合计比系统应有多，但有 DO 还没拣：拣完还多再去盘点。" : "货架合计比系统应有多：请去盘点这个商品。"}</p>}
+            {over && <p className="small late">{dw > 0 ? "货架合计比系统应有多，但有 DO 还没备：备完还多再去盘点。" : "货架合计比系统应有多：请去盘点这个商品。"}</p>}
           </div>
         );
       })}

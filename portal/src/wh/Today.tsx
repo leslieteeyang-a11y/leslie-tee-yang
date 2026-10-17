@@ -1,5 +1,5 @@
-// 仓库「今天」（仓库把关 2026-10-17）：今天要点货、复核、拣货、核对、上架、出车，照急迫排（逾期 → 今天 → 其他）。
-// 每一项显示谁接了（拣货 = 开始拣的人、出车 = 开始装车的人、其他 = 按「我来」认领的人）；点进去直接做。
+// 仓库「今天」（仓库把关 2026-10-17）：今天要点货、复核、备货、核对、上架、出车，照急迫排（逾期 → 今天 → 其他）。
+// 每一项显示谁接了（备货 = 开始备的人、出车 = 开始装车的人、其他 = 按「我来」认领的人）；点进去直接做。
 import { useCallback, useEffect, useState } from "react";
 import { fmtQty } from "../api";
 import { go } from "../router";
@@ -7,7 +7,7 @@ import { Empty, ErrorBox, Tabs } from "../ui";
 import { gate, Today, TodayItem, TodayKind } from "../wh-gate-api";
 
 const KIND_LABEL: Record<TodayKind, string> = {
-  load: "出车", pick: "拣货", pick_check: "核对", receive: "点货", recv_review: "点货复核", putaway: "上架",
+  load: "出车", pick: "备货", pick_check: "核对", receive: "点货", recv_review: "点货复核", putaway: "上架",
 };
 type Filter = "all" | "mine" | "open";
 

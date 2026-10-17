@@ -38,7 +38,7 @@ export const DICT_WHSHEET: Record<string, string> = {
   "没有进行中的盘点单。按「＋ 建盘点单」指定要盘的仓位、货架或商品，再指派给同事。":
     "No open count sheets. Tap \"＋ New count sheet\" to pick a location, bins or items and assign colleagues.",
   "没有进行中的盘点单。": "No open count sheets.",
-  "AutoCount 挡不了出货：盘的时候请门市暂停这个仓位出货，或下班后盘。已开、还没拣的 DO 已经算进应有：货还在货架上就照数，已经拣好放在出货区的不要算。":
+  "AutoCount 挡不了出货：盘的时候请门市暂停这个仓位出货，或下班后盘。已开、还没备的 DO 已经算进应有：货还在货架上就照数，已经备好放在出货区的不要算。":
     "AutoCount can't block sales: ask the shop to pause issuing from this location while counting, or count after hours. DOs issued but not picked yet are already included in Expected: count those goods if they are still on the bins, but leave out anything already picked and waiting in the dispatch area.",
   // 建单
   "建盘点单": "New count sheet",
@@ -155,7 +155,7 @@ export const PATTERNS_WHSHEET: [RegExp, (m: RegExpMatchArray, t: T) => string][]
   [/^相符 (\d+) 次$/, (m) => `${m[1]} matched`],
   [/^待审核 (\d+) · 已调整 (\d+) · 不调整 (\d+)$/, (m) => `to review ${m[1]} · adjusted ${m[2]} · not adjusted ${m[3]}`],
   [/^多的少的加起来 (.+)$/, (m) => `over + short ${m[1]}`],
-  [/^有 (-?[\d.]+) 件在已开、还没拣的 DO 上：货可能还在货架上，照实际看到的数（已经拣好放在出货区的不要算）。$/, (m) =>
+  [/^有 (-?[\d.]+) 件在已开、还没备的 DO 上：货可能还在货架上，照实际看到的数（已经备好放在出货区的不要算）。$/, (m) =>
     `${m[1]} pcs are on DOs issued but not picked yet: the goods may still be on the bins — count what is physically there (leave out anything already picked and waiting in the dispatch area).`],
   // 资料库错误讯息
   [/^货架 (\S+) 已经停用，请把数量填在「其他地方 \/ 地上」。$/, (m) => `Bin ${m[1]} is inactive — put the quantity under "Elsewhere / on the floor".`],

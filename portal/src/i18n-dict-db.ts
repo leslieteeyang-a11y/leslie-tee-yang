@@ -19,7 +19,7 @@ export const DICT_DB: Record<string, string> = {
   "跨部门交办事项：指派、期限、进度、留言": "Cross-department tasks: assignee, due date, progress, comments",
   "通用申请与审批：请假、采购、折扣、报销…": "Requests & approvals: leave, purchases, discounts, expenses…",
   "未到货 PO、预计到货日、货柜跟踪、逾期提醒": "Open POs, ETAs, container tracking, overdue alerts",
-  "库存查询、预留、拣货、收货": "Stock lookup, reservations, picking, receiving",
+  "库存查询、预留、备货、收货": "Stock lookup, reservations, picking, receiving",
   "送货排程、签收、安装跟踪": "Delivery schedule, proof of delivery, installation tracking",
   "客户、销售订单、业绩": "Customers, sales orders, performance",
   "门市顾客名单、跟进提醒、一键 WhatsApp、顾客扫码登记、促销活动":
@@ -46,7 +46,7 @@ export const DICT_DB: Record<string, string> = {
   "业务可查某个 SKU 什么时候到货": "Sales can check when a SKU arrives",
   "库存查询（各仓位）": "Stock lookup (by location)",
   "销售订单预留": "Sales order reservations",
-  "拣货单与出货确认": "Pick lists and dispatch confirmation",
+  "备货单与出货确认": "Pick lists and dispatch confirmation",
   "收货登记": "Goods receiving",
   "送货排程（日历）": "Delivery schedule (calendar)",
   "司机 / 安装师傅指派": "Driver / installer assignment",

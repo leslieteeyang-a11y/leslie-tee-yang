@@ -8,7 +8,7 @@ import { BinRow, bins as binApi } from "../wh-bin-api";
 import { SCOPE_LABEL, SHEET_STATUS_LABEL, Sheet, SheetScope, SheetStaff, binsShort, sheets } from "../wh-sheet-api";
 import "../wh-sheet.css";
 
-export const AC_WARN = "AutoCount 挡不了出货：盘的时候请门市暂停这个仓位出货，或下班后盘。已开、还没拣的 DO 已经算进应有：货还在货架上就照数，已经拣好放在出货区的不要算。";
+export const AC_WARN = "AutoCount 挡不了出货：盘的时候请门市暂停这个仓位出货，或下班后盘。已开、还没备的 DO 已经算进应有：货还在货架上就照数，已经备好放在出货区的不要算。";
 
 export default function SheetsTab({ company, locs, canApprove }: { company: string; locs: string[]; canApprove: boolean }) {
   const [status, setStatus] = useState<"open" | "done" | "all">("open");

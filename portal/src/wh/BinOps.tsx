@@ -286,10 +286,10 @@ export function BinOps({ company, canApprove, binLocs, all, item, loc: locParam,
             <div><span>应有</span><b>{qtyLabel(expected)}</b></div>
             <div><span>货架合计</span><b className={shelved > Math.max(expected, 0) ? "late" : ""}>{qtyLabel(shelved)}</b></div>
             <div><span>未上架</span><b className={unshelved > 0 ? "amber" : ""}>{qtyLabel(unshelved)}</b></div>
-            {doWait > 0 && <div title="已开 DO、还没拣的（AutoCount 已经扣了，货还在货架上），已经算进应有"><span>DO 待拣</span><b>{qtyLabel(doWait)}</b></div>}
+            {doWait > 0 && <div title="已开 DO、还没备的（AutoCount 已经扣了，货还在货架上），已经算进应有"><span>DO 待备</span><b>{qtyLabel(doWait)}</b></div>}
           </div>
           {shelved > Math.max(expected, 0) && (
-            <p className="small late">{doWait > 0 ? "货架合计比系统应有多，但有 DO 还没拣：拣完还多再去盘点。" : "货架合计比系统应有多：请去盘点这个商品。"}</p>
+            <p className="small late">{doWait > 0 ? "货架合计比系统应有多，但有 DO 还没备：备完还多再去盘点。" : "货架合计比系统应有多：请去盘点这个商品。"}</p>
           )}
 
           {mode === "move" && (

@@ -1,6 +1,6 @@
-// 拣货核对（仓库把关 2026-10-17）：按「已拣好」之后，要另一个人再数一次（拣过这张单的人不能核对，资料库也会挡）。
-// 每行打数到几件（或扫商品跳出视窗打数量，同一个商品分几箱可以「加上去」）；全部跟拣的数一样才算核对好。
-// 不符：资料库记一次「核对不符」（算在拣货的人身上），画面列出哪几行不一样 → 请拣货的人重开改正，或再数一次。
+// 备货核对（仓库把关 2026-10-17）：按「已备好」之后，要另一个人再数一次（备过这张单的人不能核对，资料库也会挡）。
+// 每行打数到几件（或扫商品跳出视窗打数量，同一个商品分几箱可以「加上去」）；全部跟备的数一样才算核对好。
+// 不符：资料库记一次「核对不符」（算在备货的人身上），画面列出哪几行不一样 → 请备货的人重开改正，或再数一次。
 import { FormEvent, useState } from "react";
 import { ErrorBox, Modal } from "../ui";
 import { gate } from "../wh-gate-api";
@@ -20,7 +20,7 @@ export function PickCheck({ d, onDone }: { d: PickDoc; onDone: (next: PickDoc) =
   const [error, setError] = useState("");
   const [box, setBox] = useState(0);
 
-  if (p.touched) return <p className="muted small">你有拣这张单，请另一位同事核对（拣货和核对要两个人）。</p>;
+  if (p.touched) return <p className="muted small">你有备这张单，请另一位同事核对（备货和核对要两个人）。</p>;
   if (!open) return (
     <div className="pick-check-start">
       <button className="pk-big" onClick={() => setOpen(true)}>开始核对</button>
@@ -49,7 +49,7 @@ export function PickCheck({ d, onDone }: { d: PickDoc; onDone: (next: PickDoc) =
       if (r.ok) { beep(true); onDone(r.pick); return; }
       buzz(false);
       setDiffs(Object.fromEntries((r.diffs ?? []).map((x) => [x.line_id, x.checked])));
-      setError(`有 ${r.diffs?.length ?? 0} 行跟拣的数不一样（已记一次核对不符）。请再数一次，或请拣货的人「重新打开」改正。`);
+      setError(`有 ${r.diffs?.length ?? 0} 行跟备的数不一样（已记一次核对不符）。请再数一次，或请备货的人「重新打开」改正。`);
     } catch (e) { setError((e as Error).message); }
     setBusy(false);
   }

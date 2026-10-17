@@ -1,5 +1,5 @@
 // 仓库「复核」（仓库把关 2026-10-17）：
-//   · 拣货等核对：别人拣好的 DO，点进去「开始核对」再数一次（拣过的人不能核对）；
+//   · 备货等核对：别人备好的 DO，点进去「开始核对」再数一次（备过的人不能核对）；
 //   · 点货差异：点货有少 / 坏 / 多 / 来错 → 仓库主管看照片、确认（点货的人不能复核自己的）；复核前开单部不能标「已输入」；
 //   · 设定（仓库可审批）：每间分店可以关掉复核 / 拍照 / 两人核对 / 装车核对、改上架提醒天数。
 import { useCallback, useEffect, useState } from "react";
@@ -13,7 +13,7 @@ type Sub = "check" | "recv" | "setup";
 
 export function GateTab({ company, canEdit, canApprove, arg }: { company: string; canEdit: boolean; canApprove: boolean; arg?: string }) {
   const [sub, setSub] = useState<Sub>(arg === "recv" || arg === "setup" ? arg : "check");
-  const opts: [Sub, string][] = [["check", "拣货等核对"], ["recv", "点货差异"]];
+  const opts: [Sub, string][] = [["check", "备货等核对"], ["recv", "点货差异"]];
   if (canApprove) opts.push(["setup", "设定"]);
   return (
     <>
@@ -33,7 +33,7 @@ function CheckList({ company, canEdit }: { company: string; canEdit: boolean }) 
   if (!rows) return error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>;
   return (
     <>
-      <p className="muted small">拣好的 DO 要另一个人再数一次，核对相符才算拣好、才能装车。拣过这张单的人不能核对。</p>
+      <p className="muted small">备好的 DO 要另一个人再数一次，核对相符才算备好、才能装车。备过这张单的人不能核对。</p>
       <ErrorBox error={error} />
       {!rows.length ? <Empty>没有等核对的 DO。</Empty> : (
         <ul className="list">
@@ -42,10 +42,10 @@ function CheckList({ company, canEdit }: { company: string; canEdit: boolean }) 
               <span className="main">
                 <span><b>{r.doc_no}</b> <span className="muted">{r.debtor_name}</span>
                   {r.check_fails > 0 && <> <span className="tag late">{`核对不符 ${r.check_fails} 次`}</span></>}</span>
-                <span className="sub">{`拣货：${r.done_by_name ?? r.started_by_name ?? "—"} · ${fmtDate(r.done_at)}`}
+                <span className="sub">{`备货：${r.done_by_name ?? r.started_by_name ?? "—"} · ${fmtDate(r.done_at)}`}
                   {r.claim && ` · ${r.claim.name} 在核对`}</span>
               </span>
-              <span>{r.touched ? <span className="muted small">你有拣，请别人核对</span> : canEdit && <span className="go">核对 →</span>}</span>
+              <span>{r.touched ? <span className="muted small">你有备，请别人核对</span> : canEdit && <span className="go">核对 →</span>}</span>
             </li>
           ))}
         </ul>
@@ -139,8 +139,8 @@ function Setup({ company }: { company: string }) {
       <p className="muted small">这间分店的把关规则。人手不够（例：只有一个人在仓库）可以先关掉两人核对。</p>
       {row("recv_review", "点货有差异要主管复核", "复核前开单部不能把这批进货标「已输入」。")}
       {row("recv_photo", "坏货、来错的货要拍照", "没拍照不能送出点货。")}
-      {row("pick_check", "拣货要另一个人核对", "核对相符才算拣好、才能装车。")}
-      {row("load_check", "装车前扫码核对 + 拍装车照", "没拣好 / 没核对的 DO 不能装车；出车要拍照。")}
+      {row("pick_check", "备货要另一个人核对", "核对相符才算备好、才能装车。")}
+      {row("load_check", "装车前扫码核对 + 拍装车照", "没备好 / 没核对的 DO 不能装车；出车要拍照。")}
       <div className="actions left">
         <label>上架提醒天数<input className="podo-num" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></label>
         <button className="ghost" disabled={busy} onClick={() => save({ putaway_days: Number(days) })}>储存</button>

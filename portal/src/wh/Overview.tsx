@@ -57,7 +57,7 @@ export function OverviewTab({ company, canEdit, canApprove, canGrn, canReceive, 
         {canGrn && (
           <a className={"kpi" + (d.grn_pending ? " warn" : "")} href="#/warehouse/grn"><b>{d.grn_pending_do}</b><span>厂家到货待开进货单</span></a>
         )}
-        <a className={"kpi" + (d.picks.today > d.picks.today_done ? " warn" : "")} href="#/warehouse/pick/today"><b>{`${d.picks.today_done} / ${d.picks.today}`}</b><span>{d.picks.picking ? `今天 / 明天的 DO 已拣好（${d.picks.picking} 张拣到一半）` : "今天 / 明天的 DO 已拣好"}</span></a>
+        <a className={"kpi" + (d.picks.today > d.picks.today_done ? " warn" : "")} href="#/warehouse/pick/today"><b>{`${d.picks.today_done} / ${d.picks.today}`}</b><span>{d.picks.picking ? `今天 / 明天的 DO 已备好（${d.picks.picking} 张备到一半）` : "今天 / 明天的 DO 已备好"}</span></a>
         {transitHref
           ? <a className={"kpi" + (d.do_to_count ? " warn" : "")} href={transitHref}>{transitBody}</a>
           : <div className={"kpi" + (d.do_to_count ? " warn" : "")}>{transitBody}</div>}

@@ -1,4 +1,4 @@
-// 仓库 · 照一张 DO 拣货（手机优先）：扫货架条码 = 换「目前货架」；扫商品 = 记拣货（有目前货架就从那个货架扣）。
+// 仓库 · 照一张 DO 备货（手机优先）：扫货架条码 = 换「目前货架」；扫商品 = 记备货（有目前货架就从那个货架扣）。
 // 扫对绿闪 + 高音；扫错 / 扫太多 / 货架不够红闪 + 震动（资料库什么都不存）。对不到商品的行可以扫商品指定、手动确认或略过。
 // 蓝牙扫描枪扫得很快：扫到的码排队一个一个送，不会漏掉；货架条码排在前面的，后面的商品就从那个货架扣。
 // 焦点不在输入框时（刚点了货架小按键、关了小视窗），扫描枪打的字由整页的 keydown 收下（见 useWedge）。
@@ -128,7 +128,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         apply(r);
         if (j.line != null) setAssign(null);
         const where = r.scan?.bin ? `（${r.scan.bin}）` : "";
-        signal(true, r.done_all ? `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where} — 全部拣好了，按「已拣好」完成。`
+        signal(true, r.done_all ? `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where} — 全部备好了，按「已备好」完成。`
                                 : `✓ ${r.scan?.item_code} × ${qtyLabel(j.qty)}${where}`,
                j.noBin ? "" : noBinHint(r.line, r.scan?.bin));
       } else {
@@ -160,11 +160,11 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
     try { setD(await pick.start(company, d!.doc_no)); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   async function reopen() {
-    if (!d?.pick || !window.confirm(ui("重新打开这张拣货单？之后要再按一次「已拣好」。"))) return;
+    if (!d?.pick || !window.confirm(ui("重新打开这张备货单？之后要再按一次「已备好」。"))) return;
     try { setD(await pick.reopen(d.pick.id)); } catch (e) { setError((e as Error).message); }
   }
 
-  if (!d) return (<><a className="pick-back" href="#/warehouse/pick">← 拣货清单</a>{error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>}</>);
+  if (!d) return (<><a className="pick-back" href="#/warehouse/pick">← 备货清单</a>{error ? <ErrorBox error={error} /> : <p className="muted">载入中…</p>}</>);
   const p = d.pick;
   const picking = p?.status === "picking";
   const canScan = picking && d.can_edit;
@@ -174,10 +174,10 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
   return (
     <>
       {flash && <div key={flash.n} className={"pick-flash " + (flash.ok ? "ok" : "err")} />}
-      <a className="pick-back" href="#/warehouse/pick">← 拣货清单</a>
+      <a className="pick-back" href="#/warehouse/pick">← 备货清单</a>
       <div className="pick-title">
         <h2>{d.doc_no}</h2>
-        {p ? <span className={"pk " + p.status}>{PICK_STATUS_LABEL[p.status]}</span> : <span className="pk">待拣</span>}
+        {p ? <span className={"pk " + p.status}>{PICK_STATUS_LABEL[p.status]}</span> : <span className="pk">待备</span>}
         {d.runs.slice(0, 2).map((r) => (
           <span key={r.run_id} className={"pk " + (r.run_date === today ? "today" : "run")}>
             {runLabel({ ...r, today: r.run_date === today })}
@@ -187,9 +187,9 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
       </div>
       <p className="pick-who">{`${d.debtor_name || "—"} · ${d.doc_date || ""}`}</p>
       {d.do_remark && <p className="pick-note">{`DO 备注：${d.do_remark}`}</p>}
-      {d.cancelled && <div className="error">{p ? "这张 DO 在 AutoCount 已经取消：请把拣好的货放回货架，再按「取消拣货」。" : "这张 DO 在 AutoCount 已经取消，不用拣货。"}</div>}
+      {d.cancelled && <div className="error">{p ? "这张 DO 在 AutoCount 已经取消：请把备好的货放回货架，再按「取消备货」。" : "这张 DO 在 AutoCount 已经取消，不用备货。"}</div>}
       {d.missing && <div className="pick-warn">同步资料里找不到这张 DO 了（可能在 AutoCount 删了或改了单号）。</div>}
-      {d.do_changed && <div className="pick-warn">开始拣货之后，AutoCount 改过这张 DO 的明细。下面是开始时的明细；要照新的拣，请「取消拣货」再重新开始。</div>}
+      {d.do_changed && <div className="pick-warn">开始备货之后，AutoCount 改过这张 DO 的明细。下面是开始时的明细；要照新的备，请「取消备货」再重新开始。</div>}
       <ErrorBox error={error} />
 
       {!p && (
@@ -197,11 +197,11 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
           {!d.has_lines ? <p className="muted">这张 DO 还没有明细（同步还没抓到），请过 15 分钟再看。</p>
             : d.can_edit && !d.cancelled ? (
               <div className="actions left">
-                <button className="pk-big" disabled={busy} onClick={start}>开始拣货</button>
+                <button className="pk-big" disabled={busy} onClick={start}>开始备货</button>
                 <span className="muted small">按了才开始记：之后扫商品条码、扫货架条码。</span>
               </div>
-            ) : !d.can_edit ? <p className="muted">你是「只看」：拣货要仓库「可编辑」。</p> : null}
-          {d.cancelled_picks > 0 && <p className="muted small">{`之前取消过 ${d.cancelled_picks} 次拣货。`}</p>}
+            ) : !d.can_edit ? <p className="muted">你是「只看」：备货要仓库「可编辑」。</p> : null}
+          {d.cancelled_picks > 0 && <p className="muted small">{`之前取消过 ${d.cancelled_picks} 次备货。`}</p>}
         </section>
       )}
 
@@ -236,7 +236,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
       )}
 
       {p?.status === "done" && (
-        <div className="pick-done">{`✓ 已拣好 · ${p.done_by_name || ""} · ${whenLabel(p.done_at)}`}
+        <div className="pick-done">{`✓ 已备好 · ${p.done_by_name || ""} · ${whenLabel(p.done_at)}`}
           {p.short_note && <small>{`缺货：${p.short_note}`}</small>}
           {p.checked_at && <small>{`✓ 已核对 · ${p.checked_by_name || ""} · ${whenLabel(p.checked_at)}`}</small>}
           {p.needs_check && <small className="amber">等另一个人核对</small>}
@@ -263,9 +263,9 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
 
       {p && d.can_edit && (
         <div className="pick-foot">
-          {picking && <button className="pk-big" disabled={busy || d.cancelled} onClick={finish}>已拣好</button>}
+          {picking && <button className="pk-big" disabled={busy || d.cancelled} onClick={finish}>已备好</button>}
           {p.status === "done" && d.can_cancel && <button className="ghost" onClick={reopen}>重新打开</button>}
-          {d.can_cancel && <button className="ghost danger" onClick={() => setCancelOpen(true)}>取消拣货</button>}
+          {d.can_cancel && <button className="ghost danger" onClick={() => setCancelOpen(true)}>取消备货</button>}
           <button className="ghost" onClick={() => load()}>重新整理</button>
         </div>
       )}
@@ -290,7 +290,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         <ManualModal line={manual} curBin={bin} onClose={() => setManual(null)} onSave={async (n, reason, b) => {
           const r = await pick.lineSet({ pick_id: p.id, line_id: manual.id!, action: "manual", qty: n, reason, bin: b });
           apply(r); setManual(null);
-          signal(true, r.done_all ? `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)} — 全部拣好了，按「已拣好」完成。`
+          signal(true, r.done_all ? `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)} — 全部备好了，按「已备好」完成。`
                                   : `✓ 第 ${manual.line_no} 行手动确认 ${qtyLabel(n)}`,
                  noBinHint(r.line ?? manual, b));
         }} />
@@ -299,7 +299,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         <SkipModal line={skip} onClose={() => setSkip(null)} onSave={async (reason) => {
           const r = await pick.lineSet({ pick_id: p.id, line_id: skip.id!, action: "skip", reason });
           apply(r); setSkip(null);
-          setResult({ ok: true, text: r.done_all ? `第 ${skip.line_no} 行已略过 — 全部拣好了，按「已拣好」完成。` : `第 ${skip.line_no} 行已略过` });
+          setResult({ ok: true, text: r.done_all ? `第 ${skip.line_no} 行已略过 — 全部备好了，按「已备好」完成。` : `第 ${skip.line_no} 行已略过` });
         }} />
       )}
       {doneOpen && p && (
@@ -312,7 +312,7 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
         <CancelModal p={p} onClose={() => setCancelOpen(false)} onSave={async (reason) => {
           const r = await pick.cancel({ pick_id: p.id, reason });
           setCancelOpen(false); setBin(null); setAssign(null);
-          setResult({ ok: true, text: `已取消拣货（货架加回 ${r.reversed} 笔）。` });
+          setResult({ ok: true, text: `已取消备货（货架加回 ${r.reversed} 笔）。` });
           await load();
         }} />
       )}
@@ -358,7 +358,7 @@ function Line({ l, canScan, hit, assign, curBin, onBin, onAssign, onManual, onSk
         {l.skip && l.skip_reason && <span>{`原因：${l.skip_reason}`}</span>}
       </div>
       {!l.skip && <span className={"pk-bar" + (l.done ? " full" : "")}><i style={{ width: `${pct}%` }} /></span>}
-      {!l.skip && uomDiff && <div className="pick-note amber">{`DO 的单位是 ${l.uom}，商品基本单位是 ${l.base_uom}：这行不能从货架扣，请「不从货架扣」拣，再到「货架」用「拿下」扣实际件数。`}</div>}
+      {!l.skip && uomDiff && <div className="pick-note amber">{`DO 的单位是 ${l.uom}，商品基本单位是 ${l.base_uom}：这行不能从货架扣，请「不从货架扣」备，再到「货架」用「拿下」扣实际件数。`}</div>}
       {!l.skip && !l.done && l.bins.length > 0 && (
         <div className="pick-bins">
           <span className="lbl">货架</span>

@@ -1,17 +1,17 @@
-// 介面用语：仓库把关（2026-10-17）：今天、复核（拣货核对 / 点货差异 / 设定）、上架、工作量、点货照片、装车核对，与资料库讯息。
+// 介面用语：仓库把关（2026-10-17）：今天、复核（备货核对 / 点货差异 / 设定）、上架、工作量、点货照片、装车核对，与资料库讯息。
 type T = (s: string) => string;
 
 export const DICT_GATE: Record<string, string> = {
   // 分页
-  "复核": "Checks", "工作量": "Workload", "拣货等核对": "Picks to check", "点货差异": "Receiving variances", "设定": "Settings",
+  "复核": "Checks", "工作量": "Workload", "备货等核对": "Picks to check", "点货差异": "Receiving variances", "设定": "Settings",
   // 今天
   "出车": "Depart", "核对": "Check", "点货": "Receive", "点货复核": "Receiving review", "厂家到货": "Supplier delivery",
   "今天的工作都做完了 👍": "Everything for today is done 👍", "全部": "All", "我接的": "Mine", "还没人接": "Unclaimed",
   "没有。": "None.", "逾期": "Overdue", "我接了": "I'm on it", "我来": "I'll do it", "放掉": "Release", "重新整理": "Refresh",
   // 复核
-  "拣好的 DO 要另一个人再数一次，核对相符才算拣好、才能装车。拣过这张单的人不能核对。":
+  "备好的 DO 要另一个人再数一次，核对相符才算备好、才能装车。备过这张单的人不能核对。":
     "A picked DO must be counted again by someone else; only a matching check counts as picked and can be loaded. Whoever picked it cannot check it.",
-  "没有等核对的 DO。": "No DOs waiting to be checked.", "你有拣，请别人核对": "You picked this; ask someone else to check", "核对 →": "Check →",
+  "没有等核对的 DO。": "No DOs waiting to be checked.", "你有备，请别人核对": "You picked this; ask someone else to check", "核对 →": "Check →",
   "点货有差异（少 / 坏 / 多 / 来错）要仓库主管看过照片、确认后才算定案；确认前开单部不能把这批进货标「已输入」。点货的人不能复核自己点的。":
     "Receiving with variances (short / damaged / over / wrong) is final only after a warehouse supervisor checks the photos and confirms; until then Billing can't mark the goods as entered. Whoever counted can't review their own count.",
   "等复核": "Awaiting review", "近 30 天已复核": "Reviewed (last 30 days)", "没有等复核的点货。": "No receiving waiting for review.",
@@ -23,14 +23,14 @@ export const DICT_GATE: Record<string, string> = {
     "Control rules for this branch. If you're short-staffed (e.g. only one person in the warehouse), you can switch off the two-person check.",
   "点货有差异要主管复核": "Receiving variances need supervisor review", "复核前开单部不能把这批进货标「已输入」。": "Billing can't mark the goods as entered until reviewed.",
   "坏货、来错的货要拍照": "Photos required for damaged / wrong items", "没拍照不能送出点货。": "Receiving can't be submitted without the photos.",
-  "拣货要另一个人核对": "Picks must be checked by a second person", "核对相符才算拣好、才能装车。": "Only a matching check counts as picked and can be loaded.",
-  "装车前扫码核对 + 拍装车照": "Scan DOs before loading + truck photo", "没拣好 / 没核对的 DO 不能装车；出车要拍照。":
+  "备货要另一个人核对": "Picks must be checked by a second person", "核对相符才算备好、才能装车。": "Only a matching check counts as picked and can be loaded.",
+  "装车前扫码核对 + 拍装车照": "Scan DOs before loading + truck photo", "没备好 / 没核对的 DO 不能装车；出车要拍照。":
     "DOs not picked / not checked can't be loaded; a photo is needed to depart.",
   "上架提醒天数": "Put-away reminder (days)", "储存": "Save",
-  // 拣货核对
+  // 备货核对
   "等另一个人核对": "Waiting for a second person to check", "开始核对": "Start check",
   "另一个人再数一次：扫商品或直接打每行数到几件。": "A second person counts again: scan items or type each line's count.",
-  "你有拣这张单，请另一位同事核对（拣货和核对要两个人）。": "You picked this DO; ask a colleague to check it (picking and checking need two people).",
+  "你有备这张单，请另一位同事核对（备货和核对要两个人）。": "You picked this DO; ask a colleague to check it (picking and checking need two people).",
   "扫商品，或打型号 / 品名": "Scan an item, or type a model / name", "商品": "Item", "DO 数量": "DO qty", "数到": "Counted",
   "核对完成": "Finish check", "先不核对": "Not now", "数到几件": "How many counted", "请填数到几件（没有填 0）。": "Enter how many you counted (0 if none).",
   "加上去": "Add to it", "取消": "Cancel", "确定": "OK",
@@ -41,22 +41,22 @@ export const DICT_GATE: Record<string, string> = {
   "已经放在：": "Already in:", "几件": "Quantity", "放上去": "Put away", "原因": "Reason", "例：直接送去 JB、放在地上": "e.g. sent straight to JB, kept on the floor",
   // 工作量
   "从": "From", "到": "To", "近 7 天": "Last 7 days", "上一周": "Previous week",
-  "平均时间：点货 = 按「我来」到点完；拣货 = 开始拣到「已拣好」（超过 8 小时的不算）。核对不符算在拣货的人身上。":
+  "平均时间：点货 = 按「我来」到点完；备货 = 开始备到「已备好」（超过 8 小时的不算）。核对不符算在备货的人身上。":
     "Average time: receiving = from \"I'll do it\" to done; picking = from start to \"Picked\" (over 8 hours excluded). Check mismatches count against the picker.",
   "这段时间没有纪录。": "No records in this period.", "同事": "Staff", "点货（张 / 型号）": "Received (DOs / models)", "点货平均": "Receive avg",
-  "拣货（张 / 行）": "Picked (DOs / lines)", "拣货平均": "Pick avg", "核对不符": "Check mismatches", "撤销扫码": "Undone scans", "帮人核对": "Checks done",
+  "备货（张 / 行）": "Picked (DOs / lines)", "备货平均": "Pick avg", "核对不符": "Check mismatches", "撤销扫码": "Undone scans", "帮人核对": "Checks done",
   "上架（笔 / 件）": "Put away (rows / pcs)", "装车": "Loaded", "—": "—",
   // 点货照片
   "📷 拍照": "📷 Photo", "📷 再拍一张": "📷 Another photo", "上传中…": "Uploading…", "要拍照": "Photo required", "拿掉照片": "Remove photo",
   // 装车
   "装车核对": "Loading check", "这间分店没有开装车核对：扫不扫都可以出车。": "Loading checks are off for this branch: you can depart with or without scanning.",
-  "扫 DO，或打 DO 号": "Scan a DO, or type the DO no.", "还没拣": "Not picked", "拣货中": "Picking", "等核对": "Awaiting check", "已拣好": "Picked",
+  "扫 DO，或打 DO 号": "Scan a DO, or type the DO no.", "还没备": "Not picked", "备货中": "Picking", "等核对": "Awaiting check", "已备好": "Picked",
   "没装": "Not loaded", "拿下来": "Unload", "这趟没有 DO（都是手动加的站）。": "No DOs on this trip (all manual stops).",
   "📷 拍装车照": "📷 Truck photo", "📷 再拍一张装车照": "📷 Another truck photo", "出车前要拍": "Required before departing",
   "备注（可空白）": "Note (optional)", "出车备注": "Departure note", "强制出车的原因（还有 DO 没装车核对时才要）": "Reason to force departure (only if DOs aren't checked)",
   "强制出车的原因": "Reason to force departure", "🚚 出车": "🚚 Depart", "扫不进去。": "Couldn't scan that.", "已出车": "Departed",
   // 首页 / 待开进货单
-  "拣好的 DO 等核对": "Picked DOs awaiting check", "点货差异等复核": "Receiving variances to review", "进货超过期限还没上架": "Goods overdue for put-away",
+  "备好的 DO 等核对": "Picked DOs awaiting check", "点货差异等复核": "Receiving variances to review", "进货超过期限还没上架": "Goods overdue for put-away",
   "点货有差异，还在等仓库主管复核；复核后才能标「已输入」。": "Receiving has variances and is waiting for a warehouse supervisor; it can be marked entered after review.",
 
   // 资料库讯息
@@ -65,9 +65,9 @@ export const DICT_GATE: Record<string, string> = {
   "只有拍照的人或仓库「可审批」可以拿掉。": "Only whoever took the photo or a warehouse approver can remove it.",
   "只有送货「可编辑」或这趟的司机可以装车核对。": "Only Delivery editors or this trip's driver can do the loading check.",
   "已经出车了，装车照不能拿掉。": "Already departed; truck photos can't be removed.", "找不到这张照片。": "Photo not found.",
-  "找不到这张等核对的拣货单。": "Pick waiting for check not found.", "找不到这张要点货的厂家 DO。": "Supplier DO to receive not found.",
+  "找不到这张等核对的备货单。": "Pick waiting for check not found.", "找不到这张要点货的厂家 DO。": "Supplier DO to receive not found.",
   "找不到这笔复核。": "Review not found.", "找不到这笔进货。": "Receipt not found.", "找不到这趟排单。": "Trip not found.",
-  "拣货和核对要两个人：你有拣这张单，请找另一位同事核对。": "Picking and checking need two people: you picked this DO, ask a colleague to check it.",
+  "备货和核对要两个人：你有备这张单，请找另一位同事核对。": "Picking and checking need two people: you picked this DO, ask a colleague to check it.",
   "数量要是大于 0 的数字。": "Quantity must be a number above 0.", "日期范围不对（最多一年）。": "Invalid date range (one year max).",
   "未知的工作种类。": "Unknown job type.", "核对数量要是 0 或以上的数字。": "Check quantities must be 0 or more.",
   "点货的人不能复核自己点的货，请找另一位主管。": "Whoever counted can't review their own count; ask another supervisor.",
@@ -75,7 +75,7 @@ export const DICT_GATE: Record<string, string> = {
   "照片要对到型号或品名。": "A photo must belong to a model or item name.", "照片路径不对，请重新拍一次。": "Bad photo path; please take it again.",
   "装车照最多 10 张。": "At most 10 truck photos.", "请先拍装车照再出车。": "Take a truck photo before departing.",
   "请写为什么不用上架（例：直接送去分店）。": "Say why no put-away is needed (e.g. sent straight to the branch).",
-  "还没按「已拣好」的单不能核对。": "A pick can only be checked after \"Picked\".", "还没确认的 DO 不能加点货照片。": "Can't add receiving photos to an unconfirmed DO.",
+  "还没按「已备好」的单不能核对。": "A pick can only be checked after \"Picked\".", "还没确认的 DO 不能加点货照片。": "Can't add receiving photos to an unconfirmed DO.",
   "这批进货点货有差异，还在等仓库主管复核；复核后才能标「已输入」。": "This receipt has variances awaiting a warehouse supervisor; it can be marked entered after review.",
   "这笔已经复核过了。": "Already reviewed.", "这笔进货已经取消了。": "This receipt was cancelled.", "这趟已经出车了。": "This trip has already departed.",
   "请扫或打货架代号。": "Scan or type a bin code.",
@@ -83,7 +83,7 @@ export const DICT_GATE: Record<string, string> = {
 
 export const PATTERNS_GATE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = [
   [/^逾期 (\d+)$/, (m) => `Overdue ${m[1]}`],
-  [/^(出车|拣货|核对|点货|点货复核|上架) (\d+)$/, (m, t) => `${t(m[1])} ${m[2]}`],
+  [/^(出车|备货|核对|点货|点货复核|上架) (\d+)$/, (m, t) => `${t(m[1])} ${m[2]}`],
   [/^期限 (\S+)$/, (m) => `Due ${m[1]}`],
   [/^(.+) 在做$/, (m) => `${m[1]} is on it`],
   [/^· ([\d.,]+) 件 · (.*)$/, (m) => `· ${m[1]} pcs · ${m[2]}`],
@@ -92,7 +92,7 @@ export const PATTERNS_GATE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^· (\d+) 项差异$/, (m) => `· ${m[1]} variances`],
   [/^· (.+) 在核对$/, (m) => `· ${m[1]} is checking`],
   [/^核对不符 (\d+) 次$/, (m) => `${m[1]} check mismatch(es)`],
-  [/^拣货：(.+)$/, (m) => `Picked by: ${m[1]}`],
+  [/^备货：(.+)$/, (m) => `Picked by: ${m[1]}`],
   [/^点货：(.+)$/, (m) => `Counted by: ${m[1]}`],
   [/^应到 ([\d.,]+) · 好货 ([\d.,]+) · 坏货 ([\d.,]+)$/, (m) => `Expected ${m[1]} · good ${m[2]} · damaged ${m[3]}`],
   [/^· 本来应该是 (.+)$/, (m) => `· should have been ${m[1]}`],
@@ -104,7 +104,7 @@ export const PATTERNS_GATE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^「(.+)」对到好几行，请直接在那一行打数量。$/, (m) => `"${m[1]}" matches several lines; type the count on the line itself.`],
   [/^这张 DO 没有「(.+)」。$/, (m) => `"${m[1]}" is not on this DO.`],
   [/^还有 (\d+) 行没核对（第 (.+) 行）。$/, (m) => `${m[1]} line(s) not checked yet (line ${m[2]}).`],
-  [/^有 (\d+) 行跟拣的数不一样（已记一次核对不符）。请再数一次，或请拣货的人「重新打开」改正。$/,
+  [/^有 (\d+) 行跟备的数不一样（已记一次核对不符）。请再数一次，或请备货的人「重新打开」改正。$/,
     (m) => `${m[1]} line(s) differ from what was picked (one mismatch recorded). Count again, or ask the picker to reopen and fix it.`],
   [/^点完货的好货要放上货架：扫货架、打几件就好（货架帐跟著加）。超过 (\d+) 天还没上完会提醒。$/,
     (m) => `Good goods from receiving go onto bins: scan the bin and type the quantity (bin stock updates). You'll be reminded after ${m[1]} days.`],
@@ -122,7 +122,7 @@ export const PATTERNS_GATE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^已装 (\d+) \/ (\d+) 张$/, (m) => `Loaded ${m[1]} / ${m[2]}`],
   [/^装车 (\d+) \/ (\d+)$/, (m) => `Loaded ${m[1]} / ${m[2]}`],
   [/^✓ 已装 (.*)$/, (m) => `✓ Loaded ${m[1]}`],
-  [/^✓ (.+) 已装车（拣货时缺货：(.+)）$/, (m) => `✓ ${m[1]} loaded (short when picked: ${m[2]})`],
+  [/^✓ (.+) 已装车（备货时缺货：(.+)）$/, (m) => `✓ ${m[1]} loaded (short when picked: ${m[2]})`],
   [/^✓ (.+) 已装车$/, (m) => `✓ ${m[1]} loaded`],
   [/^缺货：(.+)$/, (m) => `Short: ${m[1]}`],
   [/^强制出车：(.+)$/, (m) => `Forced departure: ${m[1]}`],
@@ -141,6 +141,6 @@ export const PATTERNS_GATE: [RegExp, (m: RegExpMatchArray, t: T) => string][] = 
   [/^这张单已经核对过了（(.*)）。$/, (m) => `Already checked (${m[1]}).`],
   [/^这笔进货还没上架的只有 ([\d.]+) 件。$/, (m) => `Only ${m[1]} pcs of this receipt are left to put away.`],
   [/^这趟没有 (.+)。$/, (m) => `${m[1]} is not on this trip.`],
-  [/^(.+) 还没拣好，不能装车。$/, (m) => `${m[1]} isn't picked yet and can't be loaded.`],
-  [/^(.+) 拣好了，还没有人核对，不能装车。$/, (m) => `${m[1]} is picked but not checked yet and can't be loaded.`],
+  [/^(.+) 还没备好，不能装车。$/, (m) => `${m[1]} isn't picked yet and can't be loaded.`],
+  [/^(.+) 备好了，还没有人核对，不能装车。$/, (m) => `${m[1]} is picked but not checked yet and can't be loaded.`],
 ];
