@@ -37,7 +37,7 @@ export function PlanTab({ meta, company, readOnly, onSent, seed, onSeedUsed, onC
   stopsRef.current = stops;
   // 出发点、外包司机只有「可审批」（主管、管理层）能在「设定」分页改；其他人的提示改成请主管设定
   const canSetup = meta.level === "approve";
-  // 仓库备货进度（DO 号旁边的小标签；读不到就不显示）
+  // 仓库拣货进度（DO 号旁边的小标签；读不到就不显示）
   const pickSt = usePickStatus(company, [...stops.map((s) => s.doc_no), ...(dayDocs ?? []).map((h) => h.doc_no)]);
   useEffect(() => { onCount?.(stops.length); }, [stops.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
