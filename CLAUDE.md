@@ -290,9 +290,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   （`ops.wh_gate`，没有那行 = 全开）。前端 `wh/Today|Gate|Putaway|Workload|PickCheck.tsx`、`dlv/Load.tsx`、`podo/RecvPhotos.tsx`、`wh-gate-api.ts`、
   `wh-gate.css`、`i18n-dict-gate.ts`；清单 `portal/deploy_manifest_20261017b.json`（192 个档；= 仓库把关 + 成本只给老板的前端。`20261017.json` 那份的档全部已上传 Vercel，`b` 多出的 11 个档（成本只给老板改到的 CountStats / SheetDetail / Aged / Stock / Slow / Review、wh-sheet / wh-overview / wh-tag api、i18n-dict-more / -whsheet）**还没上传**，部署前先照清单 sha 传这 11 个）。测试 `tests/gate_test.sql`
   （`po_do_test.sql` 开头把两间分店的点货复核 / 拍照关掉，旧测试照旧）。
-  **前端还没上线**：2026-10-17 `create_deployment` 回 403（production 与 preview 都没有权限，之前可以），所以**三间分店的 4 个开关先全关**（旧画面不会拍照、
-  不会复核，开着会卡住点货与开单部）。权限恢复后：用清单部署 → READY → 在「复核 → 设定」打开，或 `update ops.wh_gate set recv_review=true, recv_photo=true,
-  pick_check=true, load_check=true`。仓库部只有 1 位在职：建议拣货核对由物流部同事做，或先关掉拣货核对。
+  **已上线（2026-10-17）**：另一个 session 用清单 `deploy_manifest_20261017.json`（= a3f58a4 的 `portal/`，部署前逐档核对 SHA1 / 大小、部署后 `list_deployment_files` 核对 uid）部署 `dpl_CckfUkd7499QKrEH9aRT3X5H9LYe`（production，READY）；早上的 403 已经没有了，照常不带 teamId 就能部署。之后 `ops.wh_gate` 三间分店的 4 个开关全开（04:29:21 UTC，`putaway_days` 仍是 2）。**注意**：这一版**不含**「成本只给老板」的前端（`20261017b.json` 多出的那 11 个档还没上线；资料库早就不给店长成本，只差盘点统计多一格 RM 0.00）。仓库部只有 1 位在职：建议拣货核对由物流部同事做，或先关掉拣货核对。
 - **KL Puchong 分店（2026-10-16，使用者：「全部功能，跟 JB 分店一样，它是其中一家分店」，Puchong 用店里自己的电脑开单）**：分店代号 `HOMEWORKSPUCHONG`
   （= `ops.staff.branch` / 各表 company；门市代号 `PUCHONG` 给送货 store / 出发点 / 外包司机），标签「Puchong 分店」。migration `20261019_ops_branch_puchong.sql`
   （= `ops_branch_puchong`，**正式环境已套**，17 个函数 md5 与本机一致）：所有只认两间分店的 check constraint 照原定义加第三间（DO 区块替换，名称不变）、
@@ -382,6 +380,7 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   纸箱条码 / 箱贴批次（`ops_wh_item` → `ops.wh_resolve`，没有仓库权限就只认型号代号）、品名片段；不在这张 DO 的型号记进「来错的货」。只改前端、不动资料库。
   部署 `dpl_DgCVPzWxWajLSpY56yHbQX2JThYE`，清单 `portal/deploy_manifest_20261016f.json`。
   进货取消只有仓库「可审批」而且要写原因。单价只给订货「可编辑」与 admin（`ops.sees_prices`）。
+  **`execute_sql` 跑没有 `where` 的 `update`（例：`update ops.wh_gate set …`）会被当成要人确认的语句**，云端 session 里确认框不会出现在使用者那边，两次都 60 秒 timeout、什么都没改（2026-10-17）；加上 `where company in (…)` 就直接执行。改设定表一律写明 `where`。
   **Supabase MCP 也挡 `drop function`**（apply_migration 卡 60 秒后 cancelled）：所以 `ops_wh_move_mark` 旧的 3 个参数版本留著转接、新的 4 个参数版本参数全必填。
   **人手**（上线当天）：仓库部 1 位在职、开单部 0 位 → 开单部要先开账号（员工与权限 / 加入申请选「开单部」）才有人开 GRN；在那之前管理层（仓库可审批）也能标已输入。
 - **配色与字体 = HomeWorks BI 同一套（2026-10-14 使用者：「根据 homeworks BI 的颜色和字体」；取代同日稍早的配色 A「清爽水青」，A 的部署 `dpl_3nCoCXPTTjdSateMaZA94UEL7iGP`）**：
