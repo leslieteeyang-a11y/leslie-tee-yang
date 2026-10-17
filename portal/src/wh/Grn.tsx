@@ -12,6 +12,7 @@ import { getLang } from "../i18n";
 import { Empty, ErrorBox, Tabs } from "../ui";
 import { AskModal } from "../podo/common";
 import { GrnGroup, GrnLine, wh } from "../wh-api";
+import { gate } from "../wh-gate-api";
 
 const join = (xs: string[]) => xs.join(getLang() === "en" ? ", " : "、");
 const DAY_OPTIONS = [7, 30, 90];
@@ -24,10 +25,15 @@ export function GrnTab({ company, multi, canCancel }: { company: string; multi: 
   const [groups, setGroups] = useState<GrnGroup[] | null>(null);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
+  const [held, setHeld] = useState<Record<string, true>>({});   // 点货有差异、还在等仓库主管复核的 DO（复核前不能标已输入）
 
   const load = useCallback(() => {
     setError("");
-    wh.grnList({ company, status, days, q: query }).then((r) => setGroups(r.groups)).catch((e: Error) => setError(e.message));
+    wh.grnList({ company, status, days, q: query }).then((r) => {
+      setGroups(r.groups);
+      const ids = r.groups.filter((g) => g.pending_n > 0).map((g) => g.do_id);
+      if (ids.length) gate.reviewPending(ids).then(setHeld).catch(() => setHeld({}));
+    }).catch((e: Error) => setError(e.message));
   }, [company, status, days, query]);
   useEffect(() => { setGroups(null); load(); }, [load]);
 
@@ -55,7 +61,7 @@ export function GrnTab({ company, multi, canCancel }: { company: string; multi: 
       {groups === null ? (!error && <p className="muted">载入中…</p>) : groups.length === 0 ? (
         <Empty>{status === "pending" ? "没有待开的进货单。" : "没有纪录。"}</Empty>
       ) : groups.map((g) => (
-        <GrnCard key={g.do_id} g={g} multi={multi} canCancel={canCancel} onDone={(m) => { setFlash(m); load(); }} />
+        <GrnCard key={g.do_id} g={g} multi={multi} canCancel={canCancel} held={!!held[g.do_id]} onDone={(m) => { setFlash(m); load(); }} />
       ))}
     </>
   );
@@ -86,7 +92,9 @@ function LineHints({ l, busy, onMark }: { l: GrnLine; busy: boolean; onMark: (do
   return null;
 }
 
-function GrnCard({ g, multi, canCancel, onDone }: { g: GrnGroup; multi: boolean; canCancel: boolean; onDone: (msg: string) => void }) {
+function GrnCard({ g, multi, canCancel, held, onDone }: {
+  g: GrnGroup; multi: boolean; canCancel: boolean; held: boolean; onDone: (msg: string) => void;
+}) {
   const pend = g.lines.filter((l) => l.status === "pending");
   const [picked, setPicked] = useState<Set<number>>(() => new Set(pend.map((l) => l.id)));
   const [doc, setDoc] = useState("");
@@ -131,6 +139,7 @@ function GrnCard({ g, multi, canCancel, onDone }: { g: GrnGroup; multi: boolean;
       </p>
       {pre.length > 0 && <div className="podo-sum warn">{`点货时 AutoCount 已经有进货单（GRN ${join(pre)}）：这几笔没有重复算库存，请核对后按那一行的「标已输入」。`}</div>}
       {hinted.length > 0 && <div className="podo-sum warn">{`AutoCount 可能已输入（GRN ${join(hinted)}）：请核对，是的话按那一行的「标已输入」，不要重复开。`}</div>}
+      {held && <div className="podo-sum warn">点货有差异，还在等仓库主管复核；复核后才能标「已输入」。</div>}
       {full > 0 && <div className="podo-sum warn">{`${full} 笔的 PO 在 AutoCount 已经全收：请先核对再开，不要重复进货。`}</div>}
       <div className="table-wrap flat">
         <table>
@@ -173,7 +182,7 @@ function GrnCard({ g, multi, canCancel, onDone }: { g: GrnGroup; multi: boolean;
         <div className="actions left wh-bulk">
           <input placeholder="AutoCount 进货单（GRN）号码" value={doc} onChange={(e) => { setDoc(e.target.value); setError(""); }}
                  aria-label="AutoCount 进货单（GRN）号码" />
-          <button disabled={busy || !sel.length} onClick={() => mark(sel, doc)}>{`✓ 已输入 AutoCount（${sel.length}）`}</button>
+          <button disabled={busy || !sel.length || held} onClick={() => mark(sel, doc)}>{`✓ 已输入 AutoCount（${sel.length}）`}</button>
           {canCancel && <button className="ghost danger" disabled={busy || !sel.length} onClick={() => setAsking(sel)}>取消（点货记错）</button>}
         </div>
       )}

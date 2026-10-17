@@ -20,10 +20,16 @@ import { BinsTab } from "../wh/Bins";
 import { MapLazy } from "../wh/MapLazy";
 import { PickTab } from "../wh/Pick";
 import { OverviewTab } from "../wh/Overview";
+import { TodayTab } from "../wh/Today";
+import { PutawayTab } from "../wh/Putaway";
+import { GateTab } from "../wh/Gate";
+import { WorkloadTab } from "../wh/Workload";
+import "../wh-gate.css";
 import { wh, WhMeta } from "../wh-api";
 
 
-type Tab = "overview" | "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick" | "lot";
+type Tab = "today" | "overview" | "lookup" | "stock" | "bins" | "map" | "count" | "moves" | "grn" | "review" | "aged" | "slow" | "labels" | "pick" | "lot"
+  | "putaway" | "gate" | "work";
 const COMPANY_KEY = "hw-wh-company";
 
 // arg = 网址第三段（#/warehouse/<分页>/<arg>），给分页里的子画面用（例：#/warehouse/bins/recon、#/warehouse/lot/L251015-0001）
@@ -38,8 +44,11 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   const canEdit = meta.level !== "view";
   const canApprove = meta.level === "approve";
   // 分页顺序照每天用的（2026-10-17 审查）：手机上前几个就是扫码、拣货、货架、盘点、搬动；宽表格的库存总表、地图往后
-  const tabs: [Tab, string][] = [["overview", "总览"], ["lookup", "查货"]];
+  // 仓库把关（2026-10-17）：今天要做的事、待上架、复核（拣货核对 / 点货差异 / 设定）、每人工作量
+  const tabs: [Tab, string][] = [["today", "今天"], ["overview", "总览"], ["lookup", "查货"]];
   tabs.push(["pick", "拣货"]);       // 照 DO 拣货 + 扫码核对（2026-10-15）
+  tabs.push(["gate", "复核"]);
+  tabs.push(["putaway", "上架"]);
   tabs.push(["bins", "货架"]);       // 货架帐（2026-10-17）
   if (canEdit) tabs.push(["count", "盘点"]);
   tabs.push(["moves", "搬动"]);
@@ -51,8 +60,10 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
   tabs.push(["labels", "印条码"]);
   tabs.push(["aged", "旧货"]);
   tabs.push(["slow", "滞销品"]);     // 从 BI 搬进来（2026-10-16）
-  // 网址没指定分页时：仓库可审批 = 总览；开单部 = 待开进货单；其他人 = 查货。指定了但没权限 → 总览（照旧）
-  const home: Tab = canApprove ? "overview" : me.staff.department === "billing" && canGrn(me) ? "grn" : "lookup";
+  if (canApprove) tabs.push(["work", "工作量"]);
+  // 网址没指定分页时：仓库可审批 = 总览；开单部 = 待开进货单；仓库可编辑 = 今天（2026-10-17）；其他人 = 查货
+  // 指定了但没权限 → 总览（照旧）
+  const home: Tab = canApprove ? "overview" : me.staff.department === "billing" && canGrn(me) ? "grn" : canEdit ? "today" : "lookup";
   // lot = 批次画面（扫箱贴 QR），不在分页列
   const tab: Tab = sub === "lot" ? "lot" : !sub ? home : tabs.some(([k]) => k === sub) ? (sub as Tab) : "overview";
   const locs = meta.locations.filter((l) => l.company === co);
@@ -85,6 +96,10 @@ export default function Warehouse({ me, sub, arg }: { me: Me; sub?: string; arg?
       {tab === "pick" && <PickTab company={co} canEdit={canEdit} doc={arg} />}
       {tab === "labels" && <Labels company={co} locs={locs.map((l) => l.code)} arg={arg} />}
       {tab === "lot" && <LotView key={arg} lotNo={arg ?? ""} canEdit={canEdit} />}
+      {tab === "today" && <TodayTab key={co} company={co} />}
+      {tab === "putaway" && <PutawayTab key={co} company={co} canEdit={canEdit} />}
+      {tab === "gate" && <GateTab key={co + "|" + (arg ?? "")} company={co} canEdit={canEdit} canApprove={canApprove} arg={arg} />}
+      {tab === "work" && <WorkloadTab key={co} company={co} />}
     </>
   );
 }

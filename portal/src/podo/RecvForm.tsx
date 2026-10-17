@@ -6,6 +6,8 @@ import { Modal } from "../ui";
 import { IssueRequest, joinList, num, podo, RecvFull, RecvItem, requestLabel, ui } from "../podo-api";
 import { ErrorLines, NOT_PICKED, OurItemPicker, Picked, RequestSelect } from "./common";
 import { RecvScan } from "./RecvScan";
+import { missingPhotos, PhotoSlot, useRecvPhotos } from "./RecvPhotos";
+import "../wh-gate.css";
 
 export const r3 = (n: number) => Math.round(n * 1000) / 1000;
 export const sumOf = (xs: number[]) => r3(xs.reduce((s, x) => s + x, 0));
@@ -179,6 +181,7 @@ export function RecvForm({ d, onDone, onRace }: {
   const [confirming, setConfirming] = useState(false);
   const [scanMode, setScanMode] = useState(false);
   const [onlyLeft, setOnlyLeft] = useState(false);
+  const ph = useRecvPhotos(d.id, d.company);   // 坏货 / 来错的货要拍照（仓库把关 2026-10-17）
 
   // 有改没送出：关分页 / 换页前先问
   useEffect(() => {
@@ -230,6 +233,8 @@ export function RecvForm({ d, onDone, onRace }: {
       else if (Number.isNaN(num(w.qty))) out.push(`来错的货第 ${i + 1} 行的数量不是数字。`);
       else if (!(num(w.qty) > 0)) out.push(`来错的货第 ${i + 1} 行请填数量。`);
     });
+    if (!out.length) out.push(...missingPhotos(ph, d.items.map((it) => ({ code: it.item_code, n: num(lines[it.item_code].damaged) || 0 })),
+                                               wrong.filter((w) => !isBlankWrong(w)).map((w) => ({ code: w.pick.code, desc: w.pick.desc }))));
     return [...new Set(out)];
   }
 
@@ -341,6 +346,7 @@ export function RecvForm({ d, onDone, onRace }: {
                     <td className="num">
                       <input className="podo-num" inputMode="decimal" value={l.damaged} aria-label={`${code} 坏货`}
                              onChange={(e) => setLine(code, (x) => ({ ...x, damaged: e.target.value }))} />
+                      {num(l.damaged) > 0 && <PhotoSlot ph={ph} kind="damaged" code={code} />}
                     </td>
                     {outlets.map((o) => {
                       const p = Number(it.alloc?.[o.code] ?? 0);
@@ -416,6 +422,7 @@ export function RecvForm({ d, onDone, onRace }: {
             <label>要厂家怎么处理
               <RequestSelect kind="wrong" value={w.request} onChange={(v) => setW(w.key, { request: v })} />
             </label>
+            {!isBlankWrong(w) && <div className="wide"><PhotoSlot ph={ph} kind="wrong" code={w.pick.code} desc={w.pick.desc} /></div>}
             <label className="wide">备注（会印在给厂家的清单 / 讯息上）<input value={w.note} placeholder="例：订白色收到黑色" aria-label="备注" onChange={(e) => setW(w.key, { note: e.target.value })} /></label>
           </div>
         ))}

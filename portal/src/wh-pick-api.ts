@@ -41,6 +41,9 @@ export interface Pick {
   done_at: string | null; done_by_name: string | null;
   cancelled_at: string | null; cancel_reason: string; cancelled_by_name: string | null;
   picked: number; total: number; lines_left: number;
+  /** 核对（仓库把关 2026-10-17）：checked = 拣好而且核对过（分店没开核对 = 拣好就算）；touched = 我有拣这张（不能核对） */
+  checked_at?: string | null; checked_by_name?: string | null; check_note?: string; check_fails?: number;
+  checked?: boolean; needs_check?: boolean; touched?: boolean;
 }
 export interface PickDoc {
   company: string; doc_no: string; doc_date: string | null; debtor_name: string | null;

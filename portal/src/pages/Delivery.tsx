@@ -13,6 +13,7 @@ import { MineTab } from "../dlv/Mine";
 import { SetupTab } from "../dlv/Setup";
 import "../att.css";
 import "../dlv.css";
+import "../wh-gate.css";
 
 type Tab = "plan" | "runs" | "mine" | "setup";
 const COMPANY_KEY = "hw-dlv-company";

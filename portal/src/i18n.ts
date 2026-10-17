@@ -31,6 +31,7 @@ import { DICT_WHOV, PATTERNS_WHOV } from "./i18n-dict-whov";
 import { DICT_WHTAG, PATTERNS_WHTAG, PATTERNS_WHTAG_LAST } from "./i18n-dict-whtag";
 import { DICT_WHEXTRA, PATTERNS_WHEXTRA } from "./i18n-dict-whextra";
 import { DICT_RECVSCAN, PATTERNS_RECVSCAN } from "./i18n-dict-recvscan";
+import { DICT_GATE, PATTERNS_GATE } from "./i18n-dict-gate";
 
 export type Lang = "zh" | "en";
 const KEY = "hw-lang";
@@ -48,12 +49,13 @@ export function setLang(l: Lang): void {
   window.location.reload();
 }
 
-const DICT: Record<string, string> = { ...DICT_WHEXTRA, ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL, ...DICT_WHBIN, ...DICT_WHMAP, ...DICT_WHPICK, ...DICT_WHSHEET, ...DICT_WHOV, ...DICT_WHTAG, ...DICT_RECVSCAN };
+// DICT_GATE 放最前面：跟别的字典重复的字（全部、取消…）照原本的翻法
+const DICT: Record<string, string> = { ...DICT_GATE, ...DICT_WHEXTRA, ...DICT_DLV, ...DICT_MORE, ...DICT_PAY, ...DICT_A, ...DICT_B, ...DICT_DB, ...DICT_ATT, ...DICT_LEAVE, ...DICT_WH, ...DICT_PROFILE, ...DICT_PODO, ...DICT_RECV, ...DICT_SOP, ...DICT_RPL, ...DICT_WHBIN, ...DICT_WHMAP, ...DICT_WHPICK, ...DICT_WHSHEET, ...DICT_WHOV, ...DICT_WHTAG, ...DICT_RECVSCAN };
 // 顺序 = 先比对先赢：专用的（拣货、总览、查货多的那些）放最前面，比较宽的（盘点单：…、通用「…（N）」）放后面，
 // whtag 的万用 pattern（PATTERNS_WHTAG_LAST）放最后，别的都对不到才用
 const ALL_PATTERNS = [...PATTERNS_RECVSCAN, ...PATTERNS_WHPICK, ...PATTERNS_WHOV, ...PATTERNS_WHEXTRA,
   ...PATTERNS_DLV, ...PATTERNS_MORE, ...PATTERNS_PAY, ...PATTERNS, ...PATTERNS_ATT, ...PATTERNS_LEAVE, ...PATTERNS_WH, ...PATTERNS_SOP, ...PATTERNS_RPL,
-  ...PATTERNS_WHBIN, ...PATTERNS_WHMAP, ...PATTERNS_WHSHEET, ...PATTERNS_WHTAG, ...PATTERNS_WHTAG_LAST];
+  ...PATTERNS_WHBIN, ...PATTERNS_WHMAP, ...PATTERNS_WHSHEET, ...PATTERNS_WHTAG, ...PATTERNS_GATE, ...PATTERNS_WHTAG_LAST];
 const CJK = /[㐀-鿿＀-￯　-〿]/;
 
 /** 翻一段文字；不认识就原样返回。前后空白保留。 */

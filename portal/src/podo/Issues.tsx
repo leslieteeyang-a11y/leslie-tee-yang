@@ -13,6 +13,8 @@ import {
 } from "../podo-api";
 import { AskModal, IssueBadges, NOT_PICKED, OurItemPicker, Picked, RequestSelect } from "./common";
 import { WaModal, waIssuesText, waOwedText } from "./whatsapp";
+import { PhotoThumbs } from "./RecvPhotos";
+import "../wh-gate.css";
 
 // ------------------------------------------------------------------ 共用：问题的文字
 /** 型号栏：发错型号写「订 X 收到 Y」；缺零件写「X 缺「零件」」 */
@@ -148,6 +150,8 @@ export function IssueTable({ rows, onChanged, showDo, picked, onPick }: {
               <td className="pi-model">
                 <b>{issueModel(i)}</b><br /><small>{i.description}</small>
                 {i.note && <><br /><small className="pre">{`备注：${i.note}`}</small></>}
+                {/* 点货时拍的照片（仓库把关 2026-10-17） */}
+                {!!(i as { photos?: string[] }).photos?.length && <><br /><PhotoThumbs paths={(i as { photos?: string[] }).photos!} /></>}
               </td>
               {showDo && (
                 <td className="pi-do small">

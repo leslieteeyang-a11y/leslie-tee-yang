@@ -11,6 +11,7 @@ import { qtyLabel, whenLabel } from "../wh-api";
 import { beep, buzz, MATCH_LABEL, pick, PICK_STATUS_LABEL, PickBin, PickDoc, PickLine, PickScan, pickUomDiff, runLabel, ScanResult } from "../wh-pick-api";
 import { ScanBox } from "./Scanner";
 import { BinShortModal, CancelModal, DoneModal, ManualModal, SkipModal } from "./PickModals";
+import { PickCheck } from "./PickCheck";
 import "../wh-pick.css";
 
 type Bin = { barcode: string; label: string };
@@ -236,8 +237,12 @@ export function PickDo({ company, docNo }: { company: string; docNo: string }) {
 
       {p?.status === "done" && (
         <div className="pick-done">{`✓ 已拣好 · ${p.done_by_name || ""} · ${whenLabel(p.done_at)}`}
-          {p.short_note && <small>{`缺货：${p.short_note}`}</small>}</div>
+          {p.short_note && <small>{`缺货：${p.short_note}`}</small>}
+          {p.checked_at && <small>{`✓ 已核对 · ${p.checked_by_name || ""} · ${whenLabel(p.checked_at)}`}</small>}
+          {p.needs_check && <small className="amber">等另一个人核对</small>}
+          {!!p.check_fails && <small className="late">{`核对不符 ${p.check_fails} 次`}</small>}</div>
       )}
+      {p?.status === "done" && p.needs_check && d.can_edit && <PickCheck d={d} onDone={setD} />}
       {!canScan && result && <div className={"pick-result " + (result.ok ? "ok" : "err")}>{result.text}</div>}
       {picking && !d.can_edit && (
         <div className="pick-total">

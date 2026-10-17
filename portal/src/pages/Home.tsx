@@ -170,6 +170,15 @@ export default function HomePage({ me }: { me: Me }) {
               <b>{sh.left}</b><span>{`盘点单：${sh.title}（还有 ${sh.left} 项）`}</span>
             </a>
           ))}
+          {!!wh?.pick_check && (
+            <a className="kpi warn" href="#/warehouse/gate/check"><b>{wh.pick_check}</b><span>拣好的 DO 等核对</span></a>
+          )}
+          {!!wh?.recv_review && (
+            <a className="kpi warn" href="#/warehouse/gate/recv"><b>{wh.recv_review}</b><span>点货差异等复核</span></a>
+          )}
+          {!!wh?.putaway_late && (
+            <a className="kpi warn" href="#/warehouse/putaway"><b>{wh.putaway_late}</b><span>进货超过期限还没上架</span></a>
+          )}
           {!!wh?.bins_over && (
             <a className="kpi warn" href="#/warehouse/bins/recon?f=over"><b>{wh.bins_over}</b><span>货架比系统多</span></a>
           )}

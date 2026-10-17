@@ -1,8 +1,10 @@
 // 送货 · 我的送货：员工司机登入就看得到派给自己、连结还有效的排单，直接签收（不用点 WhatsApp 里的连结）。
 import { useEffect, useState } from "react";
+import { todayKL } from "../api";
 import { dlv, Run } from "../dlv-api";
 import { Empty, ErrorBox } from "../ui";
 import { DriverSign } from "./DriverSign";
+import { LoadPanel } from "./Load";
 
 export function MineTab() {
   const [runs, setRuns] = useState<Run[] | null>(null);
@@ -22,6 +24,10 @@ export function MineTab() {
           </select>
         </div>
       )}
+      <details className="card" open={run.run_date <= todayKL()}>
+        <summary><b>装车核对</b></summary>
+        <LoadPanel key={run.id} runId={run.id} />
+      </details>
       {run.token && <DriverSign key={run.id} token={run.token} inApp />}
     </>
   );

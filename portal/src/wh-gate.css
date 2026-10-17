@@ -1,0 +1,27 @@
+/* 仓库把关（2026-10-17）：今天、上架、复核、工作量、点货照片、装车核对。颜色一律用 style.css 的变数。 */
+.wh-today-sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; }
+.wh-today li, .wh-put li { align-items: center; }
+.wh-today li.late-row, .wh-put li.late-row { background: var(--red-row); }
+.wh-today li.warm-row { background: var(--warm-row); }
+.wh-today .main, .wh-put .main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.wh-today .sub, .wh-put .sub { color: var(--muted); font-size: 13px; }
+.wh-today-who, .wh-put-act { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.gate-ok { color: var(--green); }
+.gate-switch { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.gate-switch input { margin-top: 4px; width: auto; }
+.gate-review .list li { display: block; }
+table.gate-work td, table.gate-work th { white-space: nowrap; }
+.pick-check { margin-top: 12px; }
+.pick-check tr.red-row td { background: var(--red-row); }
+.pick-check-start { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+.recv-photo-slot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.recv-thumbs { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.recv-thumb { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+.recv-thumb img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.dlv-load { border-top: 1px solid var(--line); margin: 8px 0; padding-top: 8px; }
+.dlv-load h4 { margin: 4px 0 8px; }
+.dlv-load .list li { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dlv-load-photos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.dlv-load-go { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dlv-load-go input { flex: 1 1 200px; }
+.gate-work-bar input[type="date"] { width: auto; }

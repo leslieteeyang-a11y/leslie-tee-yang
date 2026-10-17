@@ -4,6 +4,9 @@
 --   PO-F2（2026-09-01）：105 BS100 HQ 5、106 MR400 DISPLAY 3（= 总部）、107 TP200 JB RESER 2（已取消）、109 SK500 HQ 10
 --   HOMEWORKSSOUTHERN PO-JF1：201 BS100 8（整本 = JB）；另一个厂家 4000-F002 PO-G1。
 \set ON_ERROR_STOP 1
+-- 仓库把关（20261020_ops_wh_gate）：点货差异复核、坏货拍照另外在 gate_test.sql 测；这里与 receive / sop 测试先关掉
+insert into ops.wh_gate (company, recv_review, recv_photo) values ('HOMEWORKSSB', false, false), ('HOMEWORKSSOUTHERN', false, false)
+on conflict (company) do update set recv_review = false, recv_photo = false;
 create or replace function pg_temp.as_user(p_email text) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', json_build_object('email', p_email)::text, false);

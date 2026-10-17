@@ -31,6 +31,8 @@ export interface WhHome {
   picks_left: number | null;
   sheets: { id: number; company: string; title: string; location: string; due_date: string | null; overdue: boolean; total: number; left: number }[];
   bins_over: number | null;
+  /** 仓库把关（2026-10-17）：等我核对的拣货单、等我复核的点货差异、逾期没上架 */
+  pick_check?: number | null; recv_review?: number | null; putaway_late?: number | null;
 }
 export async function whHome(): Promise<WhHome> {
   const { data, error } = await supabase.rpc("ops_wh_home");

@@ -272,6 +272,20 @@ Supabase 专案，员工在外面、在仓库用手机都能开；SERVER 上的 
   · 审查（多人 + 浏览器 e2e，9 个身分 × 31 个网址 × 手机 / 电脑 × 中英）修了：两人同时上架丢数、已开 DO 被列成「货架比系统多」、停用货架、撤销改由服务器照纪录冲回、
     DO 单位不同、已拣好取消权限、批次 QR 在上架 / 拣货 / 盘点也认得、Excel 带入 5,000 行超时（索引 + jsonb[]，不用 truncate）、连结带仓位 / 筛选 / 模式、英文用词等。
   · **前端已上线（2026-10-16）**：部署 `dpl_EvyoQXXEWd2UsFzfYEyHLV64KoY3`（179 个档，清单 `portal/deploy_manifest_20261016.json` = commit 91dfc0f；新 session 补传 11 个档后部署，`list_deployment_files` 核对 uid 与清单 SHA1 一致）。使用者 2026-10-16 回覆：① 物流部首页的「要拣的 DO」**保留**；② 建货架**不用细分到每一格**（层可以空着，只建 区-货架 就好；英文用词照旧）；③ **DO 通常隔天送** → 拣货的「今天要送」改成「今天 / 明天要送」= 昨天或今天开的 DO + 今天或明天的排单，排序今天的排单 → 明天的排单 → 其他（migration `20261018_ops_wh_pick_tomorrow.sql` = `ops_wh_pick_tomorrow`，已套，两个函数 md5 与本机一致；测试 `tests/pick_tomorrow_test.sql`；前端部署 `dpl_459N6AYQphA5jKHTCm6CML8ARLKT`，清单 `portal/deploy_manifest_20261016b.json`）；④ 同意让 SERVER 的 `quote_push.py` 在 DO 明细 lines 加商品代号 `c`（那支程式不在 repo，要使用者把档案传过来才能改；资料库那边已经认得 `c`）。货架清单的区改成可展开 / 收起（使用者 2026-10-16：区多了很乱，5 区 / 6 区 / 3 区按进去才看到货架）：预设收起、记在 localStorage `hw-bin-open:<公司>`、打字找货架时全部展开，「全部展开 / 全部收起」（`wh/BinList.tsx`、`wh/binLoc.ts`；部署 `dpl_3r12WNacJifFTkg7YdyN4soPG4AJ`，清单 `portal/deploy_manifest_20261016e.json`）。**2026-10-16 发现**：`bi.delivery_doc` 最后同步是 2026-10-14 13:00 UTC，SERVER 的 quote_push 可能停了。
+- **仓库把关（2026-10-17，使用者：「进货和出货都有人把关，然后可以有效率的处理」，选了 8 项）**：migration `20261020_ops_wh_gate.sql`
+  （**正式环境已套** = `ops_wh_gate_1`～`_4`，45 个函数 md5 与本机一致）。① 点货有差异（少 / 坏 / 多 / 来错）→ `ops.wh_recv_review` 等仓库「可审批」
+  复核（点货的人不能复核自己），复核前开单部不能标「已输入」（触发器 `wh_move_gate`）；② 坏货 / 来错的货要拍照才能送出点货（`ops.wh_recv_photo`，
+  bucket `ops-wh` 路径 `recv/<公司>/<do_id>/…`，照片是理赔证据、点完不能删；厂家问题页显示缩图）；③ 点完货的好货进「待上架」（`ops_wh_putaway`，扫货架 +
+  打件数，走 `ops.wh_bin_apply` kind `putaway`；可写原因「不用上架」），超过 `putaway_days`（预设 2）天首页提醒，只算 2026-10-17 起的点货（`ops.wh_put_from`）；
+  ④ 拣好的 DO 要另一个人盲核（`ops_wh_pick_check`，只给 DO 数量；不符回 `{ok:false,diffs}` 并记 `check_fails`，算在拣货的人身上）；⑤ 装车前扫 DO
+  （`ops.dlv_load` / `_doc`；没拣好 / 没核对的不能装）；⑥ 出车要拍装车照（`ops_dlv_load_depart`，可审批的人可写原因强制出车）；⑦ 仓库「今天」分页
+  （`ops_wh_today`，按急迫排序、「我来」认领 `ops.wh_claim`）；⑧「工作量」分页（`ops_wh_workload`，仓库可审批）。分店开关在仓库「复核 → 设定」
+  （`ops.wh_gate`，没有那行 = 全开）。前端 `wh/Today|Gate|Putaway|Workload|PickCheck.tsx`、`dlv/Load.tsx`、`podo/RecvPhotos.tsx`、`wh-gate-api.ts`、
+  `wh-gate.css`、`i18n-dict-gate.ts`；清单 `portal/deploy_manifest_20261017.json`（192 个档，全部已上传 Vercel）。测试 `tests/gate_test.sql`
+  （`po_do_test.sql` 开头把两间分店的点货复核 / 拍照关掉，旧测试照旧）。
+  **前端还没上线**：2026-10-17 `create_deployment` 回 403（production 与 preview 都没有权限，之前可以），所以**三间分店的 4 个开关先全关**（旧画面不会拍照、
+  不会复核，开着会卡住点货与开单部）。权限恢复后：用清单部署 → READY → 在「复核 → 设定」打开，或 `update ops.wh_gate set recv_review=true, recv_photo=true,
+  pick_check=true, load_check=true`。仓库部只有 1 位在职：建议拣货核对由物流部同事做，或先关掉拣货核对。
 - **KL Puchong 分店（2026-10-16，使用者：「全部功能，跟 JB 分店一样，它是其中一家分店」，Puchong 用店里自己的电脑开单）**：分店代号 `HOMEWORKSPUCHONG`
   （= `ops.staff.branch` / 各表 company；门市代号 `PUCHONG` 给送货 store / 出发点 / 外包司机），标签「Puchong 分店」。migration `20261019_ops_branch_puchong.sql`
   （= `ops_branch_puchong`，**正式环境已套**，17 个函数 md5 与本机一致）：所有只认两间分店的 check constraint 照原定义加第三间（DO 区块替换，名称不变）、

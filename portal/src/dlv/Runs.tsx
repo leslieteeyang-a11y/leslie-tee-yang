@@ -2,13 +2,22 @@
 import { useEffect, useState } from "react";
 import { dlv, driverLink, fmtPhone, hhmmKL, Run, Stop } from "../dlv-api";
 import { Empty, ErrorBox } from "../ui";
+import { gate } from "../wh-gate-api";
+import { LoadPanel } from "./Load";
 
 export function RunsTab({ company, canEdit, reloadKey, onLoad }: {
   company: string; canEdit: boolean; reloadKey: number; onLoad?: (stops: Stop[]) => void;
 }) {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [error, setError] = useState("");
-  const load = () => { setError(""); dlv.runs(company, 14).then(setRuns).catch((e: Error) => setError(e.message)); };
+  const [ld, setLd] = useState<Record<string, { status: string; loaded: number; docs: number }>>({});   // 装车状态（仓库把关 2026-10-17）
+  const load = () => {
+    setError("");
+    dlv.runs(company, 14).then((rs) => {
+      setRuns(rs);
+      if (rs.length) gate.loadStatus(rs.map((r) => r.id)).then(setLd).catch(() => setLd({}));
+    }).catch((e: Error) => setError(e.message));
+  };
   useEffect(() => { setRuns(null); load(); }, [company, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -20,12 +29,14 @@ export function RunsTab({ company, canEdit, reloadKey, onLoad }: {
       <ErrorBox error={error} />
       {runs === null ? <p className="muted">载入中…</p>
         : runs.length === 0 ? <Empty>最近 14 天没有排单。</Empty>
-        : runs.map((r) => <RunCard key={r.id} r={r} canEdit={canEdit} onLoad={onLoad} />)}
+        : runs.map((r) => <RunCard key={r.id} r={r} canEdit={canEdit} onLoad={onLoad} ld={ld[r.id]} />)}
     </>
   );
 }
 
-export function RunCard({ r, canEdit, onLoad }: { r: Run; canEdit: boolean; onLoad?: (stops: Stop[]) => void }) {
+export function RunCard({ r, canEdit, onLoad, ld }: {
+  r: Run; canEdit: boolean; onLoad?: (stops: Stop[]) => void; ld?: { status: string; loaded: number; docs: number };
+}) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [isOpen, setIsOpen] = useState(false);
   const [msg, setMsg] = useState("");
@@ -55,6 +66,8 @@ export function RunCard({ r, canEdit, onLoad }: { r: Run; canEdit: boolean; onLo
         <b>{r.run_date}</b> · {r.driver_name ?? "（没选司机）"} · <span>{`${r.stops.length} 站`}</span>
         {r.has_link && <> · <span className={"tag" + (done === r.stops.length ? " ok-tag" : "")}>{`已送达 ${done} / ${r.stops.length}`}</span></>}
         {failed > 0 && <> <span className="tag late">{`送不成 ${failed}`}</span></>}
+        {ld?.status === "departed" ? <> <span className="tag ok-tag">已出车</span></>
+          : ld && ld.docs > 0 && <> <span className="tag">{`装车 ${ld.loaded} / ${ld.docs}`}</span></>}
       </summary>
       <p className="muted small">
         {`排单：${r.created_by ?? "—"}`}{r.driver_phone ? ` · ${fmtPhone(r.driver_phone)}` : ""}
@@ -68,6 +81,7 @@ export function RunCard({ r, canEdit, onLoad }: { r: Run; canEdit: boolean; onLo
         </div>
       )}
       {msg && <p className="muted small">{msg}</p>}
+      {isOpen && <LoadPanel runId={r.id} />}
       <div className="table-wrap">
         <table>
           <tbody>
